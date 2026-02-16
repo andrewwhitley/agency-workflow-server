@@ -6,7 +6,15 @@
       "Bash(railway:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(gh repo create:*)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(git -C /home/andrewwhitley/agency-workflow-server add:*)",
+      "Bash(git -C /home/andrewwhitley/agency-workflow-server commit -m \"Remove healthcheck from railway.json\")",
+      "Bash(git -C /home/andrewwhitley/agency-workflow-server push)"
     ]
   }
 }
