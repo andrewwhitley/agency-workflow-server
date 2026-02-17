@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "dotenv/config";
 /**
  * ═══════════════════════════════════════════════════════════════
  *  MCP Agency Workflow Server
@@ -6,17 +7,32 @@
  *    • MCP endpoint at /mcp (Streamable HTTP / SSE)
  *    • Dashboard at /
  *    • REST API at /api/*
+ *    • Google Drive integration + Knowledge Base
  *  Deploy to Railway, Render, or any Node.js host.
  * ═══════════════════════════════════════════════════════════════
  */
 
 import express from "express";
+import cookieSession from "cookie-session";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { WorkflowEngine } from "./workflow-engine.js";
-import { bridgeWorkflowsToMcp } from "./mcp-bridge.js";
+import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
-import { getDashboardHtml } from "./dashboard.js";
+import { getDashboardHtml, getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
+import { GoogleAuthService } from "./google-auth.js";
+import { GoogleDriveService } from "./google-drive.js";
+import { DocumentIndexer } from "./document-indexer.js";
+import { KnowledgeBase } from "./knowledge-base.js";
+import { SOPParser } from "./sop-parser.js";
+import { ClientAgent } from "./client-agent.js";
+import {
+  getOAuth2Client,
+  isOAuthConfigured,
+  isEmailAllowed,
+  requireAuth,
+  type SessionUser,
+} from "./oauth.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -30,17 +46,128 @@ async function main(): Promise<void> {
     console.log(`  • [${wf.category}] ${wf.name}`);
   }
 
-  // ─── 2. Express App ────────────────────────────────
+  // ─── 2. Knowledge Base Services ─────────────────────
+  const authService = new GoogleAuthService();
+  const indexer = new DocumentIndexer();
+  const knowledgeBase = new KnowledgeBase(indexer);
+  const sopParser = new SOPParser();
+  const clientAgent = new ClientAgent(indexer);
+
+  console.log(`✓ Knowledge base loaded: ${indexer.getAll().length} documents, ${indexer.getClients().length} clients`);
+
+  // ─── 3. Express App ────────────────────────────────
   const app = express();
+  app.set("trust proxy", 1);
   app.use(express.json());
 
-  // ─── 3. Dashboard ──────────────────────────────────
-  app.get("/", (_req, res) => {
+  // ─── 3b. Session middleware ───────────────────────
+  app.use(
+    cookieSession({
+      name: "session",
+      secret: process.env.SESSION_SECRET || "dev-secret-not-for-production",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    })
+  );
+
+  // ─── 3c. Auth Routes (public) ────────────────────
+  app.get("/auth/login", (_req, res) => {
+    // If already logged in, redirect to dashboard
+    if (isOAuthConfigured() && ((_req.session as any)?.user)) {
+      res.redirect("/");
+      return;
+    }
     res.setHeader("Content-Type", "text/html");
-    res.send(getDashboardHtml());
+    res.send(getLoginPageHtml());
   });
 
-  // ─── 4. REST API (for dashboard) ───────────────────
+  app.get("/auth/google", (_req, res) => {
+    if (!isOAuthConfigured()) {
+      res.redirect("/");
+      return;
+    }
+    const client = getOAuth2Client();
+    const url = client.generateAuthUrl({
+      access_type: "online",
+      scope: ["openid", "email", "profile"],
+      prompt: "select_account",
+    });
+    res.redirect(url);
+  });
+
+  app.get("/auth/google/callback", async (req, res) => {
+    if (!isOAuthConfigured()) {
+      res.redirect("/");
+      return;
+    }
+    const code = req.query.code as string;
+    if (!code) {
+      res.redirect("/auth/login");
+      return;
+    }
+
+    try {
+      const client = getOAuth2Client();
+      const { tokens } = await client.getToken(code);
+      client.setCredentials(tokens);
+
+      // Verify ID token and extract user info
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token!,
+        audience: process.env.GOOGLE_OAUTH_CLIENT_ID,
+      });
+      const payload = ticket.getPayload()!;
+      const email = payload.email!;
+
+      // Check allow-list
+      if (!isEmailAllowed(email)) {
+        res.setHeader("Content-Type", "text/html");
+        res.status(403).send(getAccessDeniedHtml(email));
+        return;
+      }
+
+      // Set session
+      const user: SessionUser = {
+        email,
+        name: payload.name || email,
+        picture: payload.picture || "",
+      };
+      (req.session as any).user = user;
+
+      res.redirect("/");
+    } catch (err) {
+      console.error("OAuth callback error:", err);
+      res.redirect("/auth/login");
+    }
+  });
+
+  app.get("/auth/logout", (req, res) => {
+    req.session = null;
+    res.redirect("/auth/login");
+  });
+
+  // ─── 3d. Session status (public) ─────────────────
+  app.get("/api/auth/me", (req, res) => {
+    const user = (req.session as any)?.user as SessionUser | undefined;
+    if (user) {
+      res.json({ authenticated: true, user });
+    } else {
+      res.json({ authenticated: !isOAuthConfigured() });
+    }
+  });
+
+  // ─── 4. Dashboard (protected) ──────────────────────
+  app.get("/", requireAuth, (req, res) => {
+    const user = (req.session as any)?.user as SessionUser | undefined;
+    res.setHeader("Content-Type", "text/html");
+    res.send(getDashboardHtml(user));
+  });
+
+  // ─── 5. REST API (for dashboard) ───────────────────
+  // Protect all /api routes except /api/auth/me (already defined above)
+  app.use("/api", requireAuth);
 
   app.get("/api/workflows", (_req, res) => {
     res.json(
@@ -68,19 +195,195 @@ async function main(): Promise<void> {
     res.json(result);
   });
 
-  // ─── 5. Health Check (Railway uses this) ───────────
+  // ─── 6. Auth Status Route ─────────────────────────
+
+  app.get("/api/auth/status", (_req, res) => {
+    res.json({
+      connected: authService.isAuthenticated(),
+      serviceEmail: authService.getServiceEmail(),
+    });
+  });
+
+  // ─── 7. Google Drive Routes ────────────────────────
+
+  app.get("/api/drive/folders", async (req, res) => {
+    if (!authService.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated with Google Drive" });
+      return;
+    }
+    try {
+      const drive = new GoogleDriveService(authService.getClient());
+      const parentId = req.query.parentId as string | undefined;
+      const folders = await drive.listFolders(parentId);
+      res.json(folders);
+    } catch (err) {
+      console.error("Drive folders error:", err);
+      res.status(500).json({ error: "Failed to list folders" });
+    }
+  });
+
+  app.get("/api/drive/files/:folderId", async (req, res) => {
+    if (!authService.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated with Google Drive" });
+      return;
+    }
+    try {
+      const drive = new GoogleDriveService(authService.getClient());
+      const files = await drive.listFiles(req.params.folderId);
+      res.json(files);
+    } catch (err) {
+      console.error("Drive files error:", err);
+      res.status(500).json({ error: "Failed to list files" });
+    }
+  });
+
+  // ─── 8. Document Indexer Routes ────────────────────
+
+  app.post("/api/index/sync", async (req, res) => {
+    if (!authService.isAuthenticated()) {
+      res.status(401).json({ error: "Not authenticated with Google Drive" });
+      return;
+    }
+    try {
+      const drive = new GoogleDriveService(authService.getClient());
+      const folderId = req.body.folderId as string;
+      if (!folderId) {
+        res.status(400).json({ error: "folderId is required" });
+        return;
+      }
+      const count = await indexer.indexFolder(folderId, drive);
+      res.json({ success: true, indexed: count, total: indexer.getAll().length });
+    } catch (err) {
+      console.error("Index sync error:", err);
+      res.status(500).json({ error: "Failed to sync documents" });
+    }
+  });
+
+  app.get("/api/index/documents", (_req, res) => {
+    const docs = indexer.getAll().map((d) => ({
+      id: d.id,
+      name: d.name,
+      path: d.path,
+      client: d.client,
+      type: d.type,
+      contentPreview: d.contentPreview,
+      keywords: d.keywords,
+      lastSyncedAt: d.lastSyncedAt,
+    }));
+    res.json(docs);
+  });
+
+  app.get("/api/index/clients", (_req, res) => {
+    res.json(indexer.getClients());
+  });
+
+  // ─── 9. Knowledge Base Routes ──────────────────────
+
+  app.get("/api/knowledge/search", (req, res) => {
+    const query = (req.query.q as string) || "";
+    const client = req.query.client as string | undefined;
+    const type = req.query.type as "sop" | "client-doc" | undefined;
+    const results = knowledgeBase.search(query, { client, type });
+    res.json(
+      results.map((r) => ({
+        name: r.document.name,
+        path: r.document.path,
+        client: r.document.client,
+        type: r.document.type,
+        score: r.score,
+        matchedTerms: r.matchedTerms,
+        preview: r.document.contentPreview,
+      }))
+    );
+  });
+
+  // ─── 10. SOP Routes ───────────────────────────────
+
+  app.get("/api/sops", (_req, res) => {
+    const sops = knowledgeBase.getSOPs();
+    res.json(
+      sops.map((s) => ({
+        id: s.id,
+        name: s.name,
+        client: s.client,
+        path: s.path,
+        contentPreview: s.contentPreview,
+      }))
+    );
+  });
+
+  app.get("/api/sops/:id/parsed", (req, res) => {
+    const doc = indexer.getById(req.params.id);
+    if (!doc || doc.type !== "sop") {
+      res.status(404).json({ error: "SOP not found" });
+      return;
+    }
+    const parsed = sopParser.parse(doc);
+    res.json(parsed);
+  });
+
+  app.post("/api/sops/:id/register", (req, res) => {
+    const doc = indexer.getById(req.params.id);
+    if (!doc || doc.type !== "sop") {
+      res.status(404).json({ error: "SOP not found" });
+      return;
+    }
+    const parsed = sopParser.parse(doc);
+    const workflow = sopParser.toWorkflow(parsed, doc.client || undefined);
+
+    // Unregister if already exists, then register
+    engine.unregister(workflow.name);
+    engine.register(workflow);
+
+    res.json({ success: true, workflowName: workflow.name, steps: parsed.steps.length });
+  });
+
+  // ─── 11. Client Agent Routes ──────────────────────
+
+  app.get("/api/clients", (_req, res) => {
+    const clients = indexer.getClients();
+    const profiles = clients.map((name) => {
+      const existing = clientAgent.getProfile(name);
+      return existing || { name, documentCount: indexer.getByClient(name).length, sopCount: 0, brandVoice: [], goals: [], kpis: [], services: [], lastUpdated: "" };
+    });
+    res.json(profiles);
+  });
+
+  app.post("/api/clients/:name/build", (req, res) => {
+    const clientName = req.params.name;
+    const docs = indexer.getByClient(clientName);
+    if (!docs.length) {
+      res.status(404).json({ error: `No documents found for client "${clientName}"` });
+      return;
+    }
+    const profile = clientAgent.buildProfile(clientName);
+    res.json(profile);
+  });
+
+  app.post("/api/clients/:name/ask", (req, res) => {
+    const clientName = req.params.name;
+    const question = req.body.question as string;
+    if (!question) {
+      res.status(400).json({ error: "question is required" });
+      return;
+    }
+    const result = clientAgent.answer(clientName, question);
+    res.json(result);
+  });
+
+  // ─── 12. Health Check (Railway uses this) ─────────
   app.get("/health", (_req, res) => {
     res.json({
       status: "healthy",
       workflows: engine.list().length,
+      indexedDocuments: indexer.getAll().length,
+      clients: indexer.getClients().length,
+      driveConnected: authService.isAuthenticated(),
       uptime: process.uptime(),
     });
   });
 
-  // ─── 6. MCP SSE Endpoint ───────────────────────────
-  //   Clients connect via GET /mcp/sse and POST /mcp/messages
-  //   This allows Claude Desktop, Cursor, etc. to connect remotely.
-
+  // ─── 13. MCP SSE Endpoint ─────────────────────────
   const transports = new Map<string, SSEServerTransport>();
 
   app.get("/mcp/sse", async (req, res) => {
@@ -92,6 +395,7 @@ async function main(): Promise<void> {
     });
 
     bridgeWorkflowsToMcp(server, engine);
+    bridgeKnowledgeToMcp(server, knowledgeBase, sopParser, clientAgent);
 
     const transport = new SSEServerTransport("/mcp/messages", res);
     transports.set(transport.sessionId, transport);
@@ -117,7 +421,7 @@ async function main(): Promise<void> {
     await transport.handlePostMessage(req, res);
   });
 
-  // ─── 7. Start ──────────────────────────────────────
+  // ─── 14. Start ────────────────────────────────────
   app.listen(PORT, () => {
     console.log("");
     console.log("═══════════════════════════════════════════════");
@@ -127,6 +431,8 @@ async function main(): Promise<void> {
     console.log(`  API:         http://localhost:${PORT}/api/workflows`);
     console.log(`  MCP (SSE):   http://localhost:${PORT}/mcp/sse`);
     console.log(`  Health:      http://localhost:${PORT}/health`);
+    console.log(`  Drive:       ${authService.isAuthenticated() ? "Connected (" + authService.getServiceEmail() + ")" : "Not configured (set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SERVICE_ACCOUNT_JSON)"}`);
+    console.log(`  Auth:        ${isOAuthConfigured() ? "Google OAuth enabled" : "Disabled (no GOOGLE_OAUTH_CLIENT_ID)"}`);
     console.log("═══════════════════════════════════════════════");
     console.log("");
   });
