@@ -748,6 +748,95 @@ export function getDashboardHtml(user?: SessionUser): string {
       outline: none;
     }
     .ask-box input:focus { border-color: var(--accent); }
+
+    /* ── Discord Log Feed ──────────────────────────────── */
+
+    .chat-entry {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
+    }
+    .chat-entry:hover { border-color: var(--border-accent); }
+
+    .chat-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--surface-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .chat-body { flex: 1; min-width: 0; }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chat-username {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .chat-channel {
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--surface-3);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .chat-time {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    .chat-type-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .chat-type-badge.conversation { background: var(--accent-glow); color: var(--accent); }
+    .chat-type-badge.command { background: var(--amber-dim); color: var(--amber); }
+
+    .chat-user-msg {
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .chat-bot-msg {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--accent);
+      line-height: 1.5;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -785,6 +874,13 @@ export function getDashboardHtml(user?: SessionUser): string {
         </div>
         <div class="nav-item" data-view="sops" onclick="switchView('sops')">
           <span>&#9776;</span> SOPs <span class="count" id="sops-count">0</span>
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Integrations</div>
+        <div class="nav-item" data-view="discord-logs" onclick="switchView('discord-logs')">
+          <span>&#9993;</span> Discord Logs
         </div>
       </nav>
 
@@ -909,6 +1005,23 @@ export function getDashboardHtml(user?: SessionUser): string {
           <p>Your SOPs parsed into structured steps</p>
         </div>
         <div id="sops-grid" class="workflow-grid"></div>
+      </div>
+
+      <!-- ═══ Discord Logs View ═══ -->
+      <div id="view-discord-logs" class="hidden">
+        <div class="page-header">
+          <h1>Discord Logs</h1>
+          <p>Live conversation feed from the Discord bot</p>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <div class="filter-pills" id="discord-type-filter">
+            <button class="pill active" onclick="setDiscordFilter('all')">All</button>
+            <button class="pill" onclick="setDiscordFilter('conversation')">Conversations</button>
+            <button class="pill" onclick="setDiscordFilter('command')">Commands</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="loadDiscordLogs()" style="margin-left:auto;">Refresh</button>
+        </div>
+        <div id="discord-logs-feed"></div>
       </div>
     </main>
   </div>
@@ -1191,6 +1304,13 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (view === "drive") { checkDriveStatus(); loadIndexedDocs(); }
       if (view === "clients") loadClients();
       if (view === "sops") loadSOPs();
+      if (view === "discord-logs") {
+        loadDiscordLogs();
+        if (discordRefreshTimer) clearInterval(discordRefreshTimer);
+        discordRefreshTimer = setInterval(loadDiscordLogs, 15000);
+      } else {
+        if (discordRefreshTimer) { clearInterval(discordRefreshTimer); discordRefreshTimer = null; }
+      }
     }
 
     // ─── Google Drive ───────────────────────────────────
@@ -1454,6 +1574,59 @@ export function getDashboardHtml(user?: SessionUser): string {
       } catch (err) {
         console.error("Register SOP error:", err);
       }
+    }
+
+    // ─── Discord Logs ────────────────────────────────────
+    let discordFilter = "all";
+    let discordRefreshTimer = null;
+
+    function setDiscordFilter(type) {
+      discordFilter = type;
+      document.querySelectorAll("#discord-type-filter .pill").forEach(p => p.classList.remove("active"));
+      event.target.classList.add("active");
+      loadDiscordLogs();
+    }
+
+    async function loadDiscordLogs() {
+      try {
+        const params = discordFilter !== "all" ? "?type=" + discordFilter : "";
+        const logs = await api("/discord/logs" + params);
+        const feed = document.getElementById("discord-logs-feed");
+
+        if (!logs.length) {
+          feed.innerHTML = '<div class="empty-state"><div class="icon">&#9993;</div><p>No Discord messages yet. Send a message to the bot!</p></div>';
+          return;
+        }
+
+        // Show newest first
+        const sorted = logs.slice().reverse();
+        feed.innerHTML = sorted.map(entry => {
+          const initials = entry.username.slice(0, 2).toUpperCase();
+          const time = new Date(entry.timestamp).toLocaleString();
+          const botText = entry.botResponse.length > 500 ? entry.botResponse.slice(0, 500) + "..." : entry.botResponse;
+          return \`<div class="chat-entry">
+            <div class="chat-avatar">\${initials}</div>
+            <div class="chat-body">
+              <div class="chat-header">
+                <span class="chat-username">@\${entry.username}</span>
+                <span class="chat-channel">#\${entry.channelName}</span>
+                <span class="chat-type-badge \${entry.type}">\${entry.type}</span>
+                <span class="chat-time">\${time}</span>
+              </div>
+              <div class="chat-user-msg">\${escapeHtml(entry.userMessage)}</div>
+              <div class="chat-bot-msg">\${escapeHtml(botText)}</div>
+            </div>
+          </div>\`;
+        }).join("");
+      } catch (err) {
+        console.error("Failed to load Discord logs:", err);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     // ─── Keyboard shortcut ──────────────────────────────

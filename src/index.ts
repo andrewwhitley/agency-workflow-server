@@ -372,7 +372,21 @@ async function main(): Promise<void> {
     res.json(result);
   });
 
-  // ─── 12. Health Check (Railway uses this) ─────────
+  // ─── 12. Discord Logs Route ─────────────────────────
+  app.get("/api/discord/logs", (_req, res) => {
+    let logs = discordBot.getChatLog();
+    const channel = _req.query.channel as string | undefined;
+    const type = _req.query.type as string | undefined;
+    if (channel) {
+      logs = logs.filter((l) => l.channelName === channel || l.channelId === channel);
+    }
+    if (type === "command" || type === "conversation") {
+      logs = logs.filter((l) => l.type === type);
+    }
+    res.json(logs);
+  });
+
+  // ─── 13. Health Check (Railway uses this) ──────────
   app.get("/health", (_req, res) => {
     res.json({
       status: "healthy",
@@ -384,7 +398,7 @@ async function main(): Promise<void> {
     });
   });
 
-  // ─── 13. MCP SSE Endpoint ─────────────────────────
+  // ─── 14. MCP SSE Endpoint ─────────────────────────
   const transports = new Map<string, SSEServerTransport>();
 
   app.get("/mcp/sse", async (req, res) => {
@@ -422,7 +436,7 @@ async function main(): Promise<void> {
     await transport.handlePostMessage(req, res);
   });
 
-  // ─── 14. Discord Bot ───────────────────────────────
+  // ─── 15. Discord Bot ───────────────────────────────
   const discordBot = new DiscordBot({
     engine,
     knowledgeBase,
@@ -430,7 +444,7 @@ async function main(): Promise<void> {
     clientAgent,
   });
 
-  // ─── 15. Start ────────────────────────────────────
+  // ─── 16. Start ────────────────────────────────────
   app.listen(PORT, async () => {
     console.log("");
     console.log("═══════════════════════════════════════════════");

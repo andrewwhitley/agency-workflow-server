@@ -17,8 +17,21 @@ interface ConversationMessage {
   content: string;
 }
 
+interface ChatLogEntry {
+  id: string;
+  timestamp: string;
+  channelId: string;
+  channelName: string;
+  userId: string;
+  username: string;
+  userMessage: string;
+  botResponse: string;
+  type: "command" | "conversation";
+}
+
 const MAX_HISTORY = 20;
 const MAX_DISCORD_LENGTH = 2000;
+const MAX_CHAT_LOG = 200;
 
 export class DiscordBot {
   private client: Client;
@@ -26,6 +39,7 @@ export class DiscordBot {
   private services: Services;
   private channelId: string | undefined;
   private conversationHistory = new Map<string, ConversationMessage[]>();
+  private chatLog: ChatLogEntry[] = [];
 
   constructor(services: Services) {
     this.services = services;
@@ -52,6 +66,31 @@ export class DiscordBot {
 
     await this.client.login(token);
     console.log(`  Discord:   Connected as ${this.client.user?.tag}${this.channelId ? ` (channel: ${this.channelId})` : " (mentions only)"}`);
+  }
+
+  getChatLog(): ChatLogEntry[] {
+    return [...this.chatLog];
+  }
+
+  private logChat(message: Message, userMessage: string, botResponse: string, type: "command" | "conversation"): void {
+    const channelName = "name" in message.channel ? (message.channel as any).name : message.channelId;
+    const entry: ChatLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      channelId: message.channelId,
+      channelName,
+      userId: message.author.id,
+      username: message.author.username,
+      userMessage,
+      botResponse,
+      type,
+    };
+    this.chatLog.push(entry);
+    while (this.chatLog.length > MAX_CHAT_LOG) {
+      this.chatLog.shift();
+    }
+    const preview = botResponse.length > 80 ? botResponse.slice(0, 80) + "..." : botResponse;
+    console.log(`[Discord] #${channelName} | @${message.author.username}: ${userMessage} → (${type}) ${preview}`);
   }
 
   private shouldRespond(message: Message): boolean {
@@ -97,34 +136,46 @@ export class DiscordBot {
     const command = parts[0].toLowerCase();
     const args = parts.slice(1).join(" ");
 
+    let response = "";
     switch (command) {
       case "!help":
         await this.cmdHelp(message);
+        response = "Showed help menu";
         break;
       case "!workflows":
         await this.cmdWorkflows(message);
+        response = `Listed ${this.services.engine.list().length} workflows`;
         break;
       case "!run":
         await this.cmdRun(message, args);
+        response = `Ran workflow: ${args}`;
         break;
       case "!stats":
         await this.cmdStats(message);
+        response = "Showed workflow statistics";
         break;
       case "!history":
         await this.cmdHistory(message);
+        response = "Showed run history";
         break;
       case "!search":
         await this.cmdSearch(message, args);
+        response = `Search results for: ${args}`;
         break;
       case "!clients":
         await this.cmdClients(message);
+        response = "Listed clients";
         break;
       case "!health":
         await this.cmdHealth(message);
+        response = "Showed health status";
         break;
       default:
         await message.reply(`Unknown command: \`${command}\`. Use \`!help\` to see available commands.`);
+        response = `Unknown command: ${command}`;
     }
+
+    this.logChat(message, content, response, "command");
   }
 
   // ─── Commands ─────────────────────────────────────────
@@ -338,6 +389,7 @@ export class DiscordBot {
     }
 
     await this.sendLong(message, assistantText);
+    this.logChat(message, content, assistantText, "conversation");
   }
 
   private buildSystemPrompt(): string {
