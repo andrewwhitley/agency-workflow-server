@@ -26,6 +26,7 @@ import { DocumentIndexer } from "./document-indexer.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
+import { DiscordBot } from "./discord-bot.js";
 import {
   getOAuth2Client,
   isOAuthConfigured,
@@ -421,8 +422,16 @@ async function main(): Promise<void> {
     await transport.handlePostMessage(req, res);
   });
 
-  // ─── 14. Start ────────────────────────────────────
-  app.listen(PORT, () => {
+  // ─── 14. Discord Bot ───────────────────────────────
+  const discordBot = new DiscordBot({
+    engine,
+    knowledgeBase,
+    indexer,
+    clientAgent,
+  });
+
+  // ─── 15. Start ────────────────────────────────────
+  app.listen(PORT, async () => {
     console.log("");
     console.log("═══════════════════════════════════════════════");
     console.log("  Agency Workflow Server");
@@ -433,6 +442,10 @@ async function main(): Promise<void> {
     console.log(`  Health:      http://localhost:${PORT}/health`);
     console.log(`  Drive:       ${authService.isAuthenticated() ? "Connected (" + authService.getServiceEmail() + ")" : "Not configured (set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SERVICE_ACCOUNT_JSON)"}`);
     console.log(`  Auth:        ${isOAuthConfigured() ? "Google OAuth enabled" : "Disabled (no GOOGLE_OAUTH_CLIENT_ID)"}`);
+
+    // Start Discord bot (logs its own status line)
+    await discordBot.start();
+
     console.log("═══════════════════════════════════════════════");
     console.log("");
   });
