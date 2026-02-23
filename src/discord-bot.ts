@@ -72,6 +72,10 @@ export class DiscordBot {
     console.log(`  Discord:   Connected as ${this.client.user?.tag}${this.channelId ? ` (channel: ${this.channelId})` : " (mentions only)"}`);
   }
 
+  isConnected(): boolean {
+    return this.client.isReady();
+  }
+
   getChatLog(): ChatLogEntry[] {
     return [...this.chatLog];
   }

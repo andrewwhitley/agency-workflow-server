@@ -1048,6 +1048,58 @@ export function getDashboardHtml(user?: SessionUser): string {
     }
     .search-box input:focus { border-color: var(--accent); }
 
+    /* ── System Status Bar ─────────────────────────── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+    .status-bar .status-pills {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .status-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-pill .dot.ok { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .status-pill .dot.down { background: var(--red); box-shadow: 0 0 4px var(--red); }
+    .status-pill .dot.warn { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+    .status-pill .dot.unknown { background: var(--text-dim); }
+    .status-bar .status-meta {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+    }
+    .status-bar .stale-badge {
+      color: var(--amber);
+      font-weight: 600;
+      display: none;
+    }
+    .status-bar .stale-badge.visible { display: inline; }
+
     ${chatCss}
   </style>
 </head>
@@ -1140,6 +1192,15 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     <!-- Main Content -->
     <main class="main">
+
+      <!-- System Status Bar -->
+      <div class="status-bar" id="status-bar">
+        <div class="status-pills" id="status-pills"></div>
+        <div class="status-meta">
+          <span class="stale-badge" id="stale-badge">STALE</span>
+          <span id="last-updated">—</span>
+        </div>
+      </div>
 
       ${chatHtml}
 
@@ -1478,6 +1539,70 @@ export function getDashboardHtml(user?: SessionUser): string {
     let activeFilter = "all";
     let driveConnected = false;
     let folderStack = []; // for breadcrumb navigation
+    let summaryData = null;
+
+    // ─── Auto-refresh ────────────────────────────────────
+    const REFRESH_BASE = 15000;   // 15 seconds
+    const REFRESH_MAX = 120000;   // 2 minutes
+    let refreshInterval = REFRESH_BASE;
+    let refreshTimer = null;
+    let consecutiveFailures = 0;
+
+    function scheduleRefresh() {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        await fetchSummary(true);
+        scheduleRefresh();
+      }, refreshInterval);
+    }
+
+    async function fetchSummary(isRefresh) {
+      try {
+        const r = await fetch("/api/summary");
+        if (r.status === 401) { window.location.href = "/auth/login"; return; }
+        summaryData = await r.json();
+
+        // Unpack into existing state vars for compatibility
+        workflows = summaryData.workflows || [];
+        stats = summaryData.workflowStats || {};
+        history = summaryData.workflowHistory || [];
+
+        // Update status bar
+        renderStatusBar(summaryData);
+
+        // Reset backoff on success
+        consecutiveFailures = 0;
+        refreshInterval = REFRESH_BASE;
+        document.getElementById("stale-badge").classList.remove("visible");
+
+        if (isRefresh) {
+          renderStats();
+          renderHistory();
+          document.getElementById("wf-count").textContent = workflows.length;
+          document.getElementById("hist-count").textContent = history.length;
+        }
+      } catch (err) {
+        consecutiveFailures++;
+        refreshInterval = Math.min(REFRESH_BASE * Math.pow(2, consecutiveFailures), REFRESH_MAX);
+        document.getElementById("stale-badge").classList.add("visible");
+        console.warn("Summary fetch failed, backing off to " + (refreshInterval / 1000) + "s", err);
+      }
+    }
+
+    function renderStatusBar(data) {
+      const pills = document.getElementById("status-pills");
+      if (!data || !data.services) return;
+
+      pills.innerHTML = Object.values(data.services).map(svc =>
+        '<span class="status-pill">' +
+          '<span class="dot ' + svc.status + '"></span>' +
+          svc.label +
+        '</span>'
+      ).join("");
+
+      const ts = data.generatedAt ? new Date(data.generatedAt).toLocaleTimeString() : "—";
+      document.getElementById("last-updated").textContent = "Updated " + ts;
+    }
 
     // ─── API ────────────────────────────────────────────
     const api = (path) => fetch("/api" + path).then(r => {
@@ -1495,11 +1620,7 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     // ─── Init ───────────────────────────────────────────
     async function init() {
-      [workflows, stats, history] = await Promise.all([
-        api("/workflows"),
-        api("/stats"),
-        api("/history"),
-      ]);
+      await fetchSummary(false);
       render();
       checkDriveStatus();
       loadKBCounts();
@@ -1513,13 +1634,8 @@ export function getDashboardHtml(user?: SessionUser): string {
         switchView("workspace");
       }
 
-      // Poll for updates
-      setInterval(async () => {
-        [stats, history] = await Promise.all([api("/stats"), api("/history")]);
-        renderStats();
-        renderHistory();
-        document.getElementById("hist-count").textContent = history.length;
-      }, 5000);
+      // Start auto-refresh with backoff
+      scheduleRefresh();
     }
 
     // ─── Render ─────────────────────────────────────────

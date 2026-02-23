@@ -31,6 +31,7 @@ import { ClientAgent } from "./client-agent.js";
 import { DiscordBot } from "./discord-bot.js";
 import { runMigrations, closePool } from "./database.js";
 import { apiRouter } from "./api-routes.js";
+import { redactionMiddleware } from "./redaction.js";
 import {
   getOAuth2Client,
   isOAuthConfigured,
@@ -109,6 +110,7 @@ async function main(): Promise<void> {
     message: { error: "Too many requests, please try again later." },
   });
   app.use("/api", apiLimiter);
+  app.use("/api", redactionMiddleware as any);
 
   // ─── 3d. Auth Routes (public) ────────────────────
   app.get("/auth/login", (_req, res) => {
@@ -433,7 +435,87 @@ async function main(): Promise<void> {
     app.use("/api", apiRouter(engine, knowledgeBase, authService));
   }
 
-  // ─── 13. Health Check (Railway uses this) ──────────
+  // ─── 13. Dashboard Summary (single endpoint) ──────
+  app.get("/api/summary", requireAuth, async (_req, res) => {
+    const reasons: string[] = [];
+    let healthState: "ok" | "warn" | "down" = "ok";
+
+    // Service health
+    const dbConnected = !!process.env.DATABASE_URL;
+    const driveConnected = authService.isAuthenticated();
+    const discordConnected = discordBot.isConnected();
+    const oracleConfigured = !!process.env.ORACLE_FOLDER_ID;
+
+    if (!dbConnected) { healthState = "warn"; reasons.push("Database not configured"); }
+    if (!driveConnected) { reasons.push("Google Drive not connected"); }
+
+    // Agents count (safe — returns 0 if DB is down)
+    let agentCount = 0;
+    let threadCount = 0;
+    let taskCounts = { open: 0, in_progress: 0, completed: 0, blocked: 0 };
+    let memoryCount = 0;
+
+    if (dbConnected) {
+      try {
+        const { agentService } = await import("./agent-service.js");
+        const { threadService } = await import("./thread-service.js");
+        const { taskService } = await import("./task-service.js");
+        const { memoryService } = await import("./memory-service.js");
+
+        const [agents, threads, tasks, memories] = await Promise.all([
+          agentService.list().catch(() => []),
+          threadService.list().catch(() => []),
+          taskService.list().catch(() => []),
+          memoryService.list().catch(() => []),
+        ]);
+
+        agentCount = agents.length;
+        threadCount = threads.length;
+        memoryCount = memories.length;
+        for (const t of tasks) {
+          const s = t.status as keyof typeof taskCounts;
+          if (s in taskCounts) taskCounts[s]++;
+        }
+      } catch {
+        healthState = "warn";
+        reasons.push("Database query failed");
+      }
+    }
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      health: { state: healthState, reasons },
+      services: {
+        database: { status: dbConnected ? "ok" : "down", label: "Database" },
+        drive: { status: driveConnected ? "ok" : "down", label: "Google Drive", email: authService.getServiceEmail() || null },
+        discord: { status: discordConnected ? "ok" : "down", label: "Discord" },
+        oracle: { status: oracleConfigured && driveConnected ? "ok" : "down", label: "Oracle Folder" },
+        mcp: { status: "ok", label: "MCP Endpoint" },
+      },
+      stats: {
+        workflows: engine.list().length,
+        agents: agentCount,
+        threads: threadCount,
+        tasks: taskCounts,
+        memories: memoryCount,
+        documents: indexer.getAll().length,
+        clients: indexer.getClients().length,
+      },
+      workflows: engine.list().map((w) => ({
+        name: w.name,
+        description: w.description,
+        category: w.category,
+        tags: w.tags,
+        steps: w.steps.map((s) => ({ id: s.id, description: s.description })),
+        inputs: w.inputs,
+      })),
+      workflowStats: engine.getStats(),
+      workflowHistory: engine.getHistory().slice(0, 50),
+      uptime: process.uptime(),
+    });
+  });
+
+  // ─── 14. Health Check (Railway uses this) ──────────
   app.get("/health", (_req, res) => {
     res.json({
       status: "healthy",
