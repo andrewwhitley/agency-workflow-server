@@ -1,10 +1,14 @@
 import type { SessionUser } from "./oauth.js";
+import { getChatViewHtml, getChatViewCss, getChatViewJs } from "./dashboard-chat.js";
 
 /**
  * Returns the full HTML for the dashboard UI.
  * Self-contained: all CSS and JS are inline.
  */
 export function getDashboardHtml(user?: SessionUser): string {
+  const chatHtml = getChatViewHtml();
+  const chatCss = getChatViewCss();
+  const chatJs = getChatViewJs();
   const userHtml = user
     ? `<div class="user-info">
         <img class="user-avatar" src="${user.picture}" alt="" referrerpolicy="no-referrer" />
@@ -66,9 +70,46 @@ export function getDashboardHtml(user?: SessionUser): string {
       min-height: 100vh;
     }
 
+    .mobile-header {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .mobile-header .logo { gap: 8px; }
+    .hamburger {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 20px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 998;
+    }
+    .sidebar-overlay.open { display: block; }
+
     @media (max-width: 768px) {
       .app { grid-template-columns: 1fr; }
-      .sidebar { display: none; }
+      .mobile-header { display: flex; }
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 999;
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+      }
+      .sidebar.open { transform: translateX(0); }
     }
 
     /* ── Sidebar ────────────────────────────────────────── */
@@ -837,12 +878,192 @@ export function getDashboardHtml(user?: SessionUser): string {
       max-height: 150px;
       overflow-y: auto;
     }
+
+    /* ── Agent Management ───────────────────────────── */
+
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+
+    .agent-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .agent-card:hover { border-color: var(--accent); }
+
+    .agent-card-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .agent-card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .agent-card-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .agent-card-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ── Priority & Status Badges ─────────────────────── */
+
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-urgent  { background: var(--red-dim);   color: var(--red);   }
+    .badge-high    { background: var(--amber-dim);  color: var(--amber); }
+    .badge-medium  { background: #60a5fa22;         color: var(--blue);  }
+    .badge-low     { background: var(--surface-3);  color: var(--text-dim); }
+
+    .badge-open        { background: #60a5fa22;        color: var(--blue);  }
+    .badge-in_progress { background: var(--amber-dim);  color: var(--amber); }
+    .badge-completed   { background: var(--green-dim);  color: var(--green); }
+    .badge-blocked     { background: var(--red-dim);    color: var(--red);   }
+
+    .task-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+    .task-tag {
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 10px;
+      background: var(--surface-3);
+      color: var(--text-muted);
+    }
+
+    /* ── Task Card ─────────────────────────────────────── */
+
+    .task-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .task-card:hover { border-color: var(--accent); }
+
+    .task-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .task-card-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      flex: 1;
+    }
+
+    .task-card-badges { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .task-card-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 10px;
+    }
+    .task-card-meta span { display: flex; align-items: center; gap: 4px; }
+
+    /* ── Memory Card ──────────────────────────────────── */
+
+    .memory-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .memory-card:hover { border-color: var(--accent); }
+
+    .memory-card-key {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: -0.2px;
+    }
+
+    .memory-card-content {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+      max-height: 60px;
+      overflow: hidden;
+    }
+
+    .memory-card-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      align-items: center;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .search-box input {
+      flex: 1;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+
+    ${chatCss}
   </style>
 </head>
 <body>
   <div class="app">
+    <!-- Mobile Header -->
+    <div class="mobile-header">
+      <div class="logo">
+        <div class="logo-icon" style="width:28px;height:28px;font-size:14px;">W</div>
+        <div class="logo-text" style="font-size:14px;">Workflow Server</div>
+      </div>
+      <button class="hamburger" onclick="toggleMobileSidebar()">&#9776;</button>
+    </div>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="main-sidebar">
       <div class="logo">
         <div class="logo-icon">W</div>
         <div>
@@ -852,8 +1073,18 @@ export function getDashboardHtml(user?: SessionUser): string {
       </div>
 
       <nav class="nav-section">
-        <div class="nav-label">Navigation</div>
-        <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+        <div class="nav-label">AI</div>
+        <div class="nav-item active" data-view="workspace" onclick="switchView('workspace')">
+          <span>&#128172;</span> Workspace
+        </div>
+        <div class="nav-item" data-view="agents" onclick="switchView('agents')">
+          <span>&#9881;</span> Agents <span class="count" id="agents-count">0</span>
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Workflows</div>
+        <div class="nav-item" data-view="dashboard" onclick="switchView('dashboard')">
           <span>&#9673;</span> Dashboard
         </div>
         <div class="nav-item" data-view="workflows" onclick="switchView('workflows')">
@@ -884,6 +1115,16 @@ export function getDashboardHtml(user?: SessionUser): string {
         </div>
       </nav>
 
+      <nav class="nav-section">
+        <div class="nav-label">Productivity</div>
+        <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">
+          <span>&#9745;</span> Tasks <span class="count" id="tasks-count">0</span>
+        </div>
+        <div class="nav-item" data-view="memories" onclick="switchView('memories')">
+          <span>&#128278;</span> Memories <span class="count" id="memories-count">0</span>
+        </div>
+      </nav>
+
       <nav class="nav-section" id="category-nav">
         <div class="nav-label">Categories</div>
       </nav>
@@ -900,8 +1141,81 @@ export function getDashboardHtml(user?: SessionUser): string {
     <!-- Main Content -->
     <main class="main">
 
+      ${chatHtml}
+
+      <!-- ═══ Agents View ═══ -->
+      <div id="view-agents" class="hidden">
+        <div class="page-header">
+          <h1>AI Agents</h1>
+          <p>Manage your AI agents and their training data</p>
+        </div>
+        <div style="margin-bottom:20px;">
+          <button class="btn btn-primary" onclick="openAgentModal()">+ Create Agent</button>
+        </div>
+        <div id="agents-grid" class="agent-grid"></div>
+      </div>
+
+      <!-- Agent Modal -->
+      <div class="modal-overlay" id="agent-modal-overlay" onclick="if(event.target===this)closeAgentModal()">
+        <div class="modal" style="max-width:640px;">
+          <h2 id="agent-modal-title">Create Agent</h2>
+          <div class="subtitle">Configure your AI agent's personality and behavior</div>
+          <form id="agent-form" onsubmit="saveAgent(event)">
+            <input type="hidden" id="agent-edit-id" />
+            <div class="form-group">
+              <label>Name *</label>
+              <input type="text" id="agent-name" required maxlength="100" placeholder="e.g. Content Writer" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" id="agent-description" maxlength="500" placeholder="Brief description of this agent's role" />
+            </div>
+            <div class="form-group">
+              <label>System Prompt *</label>
+              <textarea id="agent-system-prompt" rows="6" required placeholder="You are a helpful assistant..."></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Model</label>
+                <select id="agent-model">
+                  <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
+                  <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperature</label>
+                <input type="number" id="agent-temperature" min="0" max="1" step="0.1" value="0.7" />
+              </div>
+              <div class="form-group">
+                <label>Max Tokens</label>
+                <input type="number" id="agent-max-tokens" min="1" max="64000" value="4096" />
+              </div>
+            </div>
+
+            <!-- Training Docs Section (only shown when editing) -->
+            <div id="agent-training-section" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px;">
+              <h3 style="font-size:14px;margin-bottom:12px;">Training Documents</h3>
+              <div id="agent-training-list" style="margin-bottom:12px;"></div>
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <div style="flex:1;">
+                  <input type="text" id="training-doc-title" placeholder="Document title" style="width:100%;padding:8px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:12px;margin-bottom:6px;" />
+                  <textarea id="training-doc-content" rows="3" placeholder="Paste content here..." style="width:100%;padding:8px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:12px;resize:vertical;"></textarea>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="addTrainingDoc()" style="margin-top:0;">Add</button>
+              </div>
+            </div>
+
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="agent-save-btn">Create Agent</button>
+              <button type="button" class="btn btn-ghost" onclick="closeAgentModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="agent-delete-btn" onclick="deleteAgent()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- ═══ Dashboard View ═══ -->
-      <div id="view-dashboard">
+      <div id="view-dashboard" class="hidden">
         <div class="page-header">
           <h1>Dashboard</h1>
           <p>Overview of your workflow engine</p>
@@ -1023,6 +1337,131 @@ export function getDashboardHtml(user?: SessionUser): string {
         </div>
         <div id="discord-logs-feed"></div>
       </div>
+
+      <!-- ═══ Tasks View ═══ -->
+      <div id="view-tasks" class="hidden">
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1>Tasks</h1>
+            <p>Track and manage your team's work</p>
+          </div>
+          <button class="btn btn-primary" onclick="openTaskModal()">+ New Task</button>
+        </div>
+        <div class="filter-pills" id="task-filter-pills" style="margin-bottom:20px;">
+          <button class="pill active" onclick="setTaskFilter('all')">All</button>
+          <button class="pill" onclick="setTaskFilter('open')">Open</button>
+          <button class="pill" onclick="setTaskFilter('in_progress')">In Progress</button>
+          <button class="pill" onclick="setTaskFilter('completed')">Completed</button>
+          <button class="pill" onclick="setTaskFilter('blocked')">Blocked</button>
+        </div>
+        <div id="tasks-grid" class="agent-grid"></div>
+      </div>
+
+      <!-- Task Modal -->
+      <div class="modal-overlay" id="task-modal-overlay" onclick="if(event.target===this)closeTaskModal()">
+        <div class="modal" style="max-width:640px;">
+          <h2 id="task-modal-title">New Task</h2>
+          <div class="subtitle">Create or edit a task</div>
+          <form id="task-form" onsubmit="saveTask(event)">
+            <input type="hidden" id="task-edit-id" />
+            <div class="form-group">
+              <label>Title *</label>
+              <input type="text" id="task-title" required maxlength="300" placeholder="What needs to be done?" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="task-description" rows="4" maxlength="10000" placeholder="Add details, notes, or context..."></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Status</label>
+                <select id="task-status">
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Priority</label>
+                <select id="task-priority">
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="task-due-date" />
+              </div>
+              <div class="form-group">
+                <label>Assigned To</label>
+                <input type="text" id="task-assigned-to" maxlength="200" placeholder="e.g. Andrew" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Tags</label>
+              <input type="text" id="task-tags" placeholder="comma-separated, e.g. marketing, urgent" />
+              <div class="hint">Separate with commas</div>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="task-save-btn">Create Task</button>
+              <button type="button" class="btn btn-ghost" onclick="closeTaskModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="task-delete-btn" onclick="deleteTask()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ═══ Memories View ═══ -->
+      <div id="view-memories" class="hidden">
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1>Memories</h1>
+            <p>Persistent key-value knowledge for your agents</p>
+          </div>
+          <button class="btn btn-primary" onclick="openMemoryModal()">+ Save Memory</button>
+        </div>
+        <div class="search-box">
+          <input type="text" id="memory-search-input" placeholder="Search memories..." onkeydown="if(event.key==='Enter')searchMemories()" />
+          <button class="btn btn-ghost btn-sm" onclick="searchMemories()">Search</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('memory-search-input').value='';loadMemories()">Clear</button>
+        </div>
+        <div class="filter-pills" id="memory-category-pills" style="margin-bottom:20px;"></div>
+        <div id="memories-grid" class="agent-grid"></div>
+      </div>
+
+      <!-- Memory Modal -->
+      <div class="modal-overlay" id="memory-modal-overlay" onclick="if(event.target===this)closeMemoryModal()">
+        <div class="modal" style="max-width:640px;">
+          <h2 id="memory-modal-title">Save Memory</h2>
+          <div class="subtitle">Store a key-value pair for your agents to recall</div>
+          <form id="memory-form" onsubmit="saveMemory(event)">
+            <input type="hidden" id="memory-edit-original-key" />
+            <div class="form-group">
+              <label>Key *</label>
+              <input type="text" id="memory-key" required maxlength="300" placeholder="e.g. brand_voice_guidelines" />
+            </div>
+            <div class="form-group">
+              <label>Content *</label>
+              <textarea id="memory-content" rows="6" required maxlength="50000" placeholder="The information to remember..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <input type="text" id="memory-category" maxlength="100" placeholder="e.g. brand, client, process" />
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="memory-save-btn">Save Memory</button>
+              <button type="button" class="btn btn-ghost" onclick="closeMemoryModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="memory-delete-btn" onclick="deleteMemory()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -1065,8 +1504,14 @@ export function getDashboardHtml(user?: SessionUser): string {
       checkDriveStatus();
       loadKBCounts();
 
-      // Handle hash-based navigation
-      if (window.location.hash === "#drive") switchView("drive");
+      // Default to workspace view, or handle hash navigation
+      if (window.location.hash === "#drive") {
+        switchView("drive");
+      } else if (window.location.hash) {
+        switchView(window.location.hash.slice(1));
+      } else {
+        switchView("workspace");
+      }
 
       // Poll for updates
       setInterval(async () => {
@@ -1293,23 +1738,200 @@ export function getDashboardHtml(user?: SessionUser): string {
       document.getElementById("modal-overlay").classList.remove("open");
     }
 
+    // ─── Mobile Sidebar ────────────────────────────────
+    function toggleMobileSidebar() {
+      document.getElementById("main-sidebar").classList.toggle("open");
+      document.getElementById("sidebar-overlay").classList.toggle("open");
+    }
+
     // ─── View Switching ─────────────────────────────────
     function switchView(view) {
+      // Close mobile sidebar when navigating
+      document.getElementById("main-sidebar")?.classList.remove("open");
+      document.getElementById("sidebar-overlay")?.classList.remove("open");
       document.querySelectorAll("[id^='view-']").forEach(el => el.classList.add("hidden"));
-      document.getElementById("view-" + view).classList.remove("hidden");
+      const viewEl = document.getElementById("view-" + view);
+      if (viewEl) viewEl.classList.remove("hidden");
       document.querySelectorAll(".nav-item[data-view]").forEach(el => el.classList.remove("active"));
       document.querySelector(\`.nav-item[data-view="\${view}"]\`)?.classList.add("active");
 
-      // Load data for knowledge base views
+      // Load data for views
+      if (view === "workspace") initChat();
+      if (view === "agents") loadAgents();
       if (view === "drive") { checkDriveStatus(); loadIndexedDocs(); }
       if (view === "clients") loadClients();
       if (view === "sops") loadSOPs();
+      if (view === "tasks") loadTasks();
+      if (view === "memories") loadMemories();
       if (view === "discord-logs") {
         loadDiscordLogs();
         if (discordRefreshTimer) clearInterval(discordRefreshTimer);
         discordRefreshTimer = setInterval(loadDiscordLogs, 15000);
       } else {
         if (discordRefreshTimer) { clearInterval(discordRefreshTimer); discordRefreshTimer = null; }
+      }
+    }
+
+    // ─── Agent Management ────────────────────────────────
+    let agentsList = [];
+
+    async function loadAgents() {
+      try {
+        agentsList = await api("/agents");
+        document.getElementById("agents-count").textContent = agentsList.length;
+        const grid = document.getElementById("agents-grid");
+        if (!agentsList.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#9881;</div><p>No agents yet. Create one to get started.</p></div>';
+          return;
+        }
+        grid.innerHTML = agentsList.map(a => \`
+          <div class="agent-card" onclick="openAgentModal('\${a.id}')">
+            <div class="agent-card-name">\${escapeHtml(a.name)}</div>
+            <div class="agent-card-desc">\${escapeHtml(a.description || 'No description')}</div>
+            <div class="agent-card-meta">
+              <span>\${a.model.replace('claude-', '').replace(/-20[0-9]+$/, '')}</span>
+              <span>temp: \${a.temperature}</span>
+              <span>\${a.training_doc_count || 0} docs</span>
+            </div>
+          </div>
+        \`).join("");
+      } catch (err) {
+        console.error("Load agents error:", err);
+      }
+    }
+
+    async function openAgentModal(agentId) {
+      const form = document.getElementById("agent-form");
+      form.reset();
+      document.getElementById("agent-edit-id").value = "";
+      document.getElementById("agent-training-section").classList.add("hidden");
+      document.getElementById("agent-delete-btn").classList.add("hidden");
+
+      if (agentId) {
+        try {
+          const agent = await api("/agents/" + agentId);
+          document.getElementById("agent-modal-title").textContent = "Edit Agent";
+          document.getElementById("agent-save-btn").textContent = "Save Changes";
+          document.getElementById("agent-edit-id").value = agent.id;
+          document.getElementById("agent-name").value = agent.name;
+          document.getElementById("agent-description").value = agent.description || "";
+          document.getElementById("agent-system-prompt").value = agent.system_prompt;
+          document.getElementById("agent-model").value = agent.model;
+          document.getElementById("agent-temperature").value = agent.temperature;
+          document.getElementById("agent-max-tokens").value = agent.max_tokens;
+          document.getElementById("agent-delete-btn").classList.remove("hidden");
+
+          // Training docs
+          document.getElementById("agent-training-section").classList.remove("hidden");
+          renderTrainingDocs(agent.training_docs || []);
+        } catch (err) {
+          console.error("Load agent error:", err);
+          return;
+        }
+      } else {
+        document.getElementById("agent-modal-title").textContent = "Create Agent";
+        document.getElementById("agent-save-btn").textContent = "Create Agent";
+        document.getElementById("agent-system-prompt").value = "You are a helpful assistant.";
+      }
+
+      document.getElementById("agent-modal-overlay").classList.add("open");
+    }
+
+    function closeAgentModal() {
+      document.getElementById("agent-modal-overlay").classList.remove("open");
+    }
+
+    async function saveAgent(e) {
+      e.preventDefault();
+      const id = document.getElementById("agent-edit-id").value;
+      const data = {
+        name: document.getElementById("agent-name").value,
+        description: document.getElementById("agent-description").value,
+        system_prompt: document.getElementById("agent-system-prompt").value,
+        model: document.getElementById("agent-model").value,
+        temperature: parseFloat(document.getElementById("agent-temperature").value),
+        max_tokens: parseInt(document.getElementById("agent-max-tokens").value),
+      };
+
+      try {
+        if (id) {
+          await fetch("/api/agents/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+        } else {
+          await apiPost("/agents", data);
+        }
+        closeAgentModal();
+        loadAgents();
+      } catch (err) {
+        console.error("Save agent error:", err);
+        alert("Failed to save agent");
+      }
+    }
+
+    async function deleteAgent() {
+      const id = document.getElementById("agent-edit-id").value;
+      if (!id || !confirm("Delete this agent? This cannot be undone.")) return;
+
+      try {
+        await fetch("/api/agents/" + id, { method: "DELETE" });
+        closeAgentModal();
+        loadAgents();
+      } catch (err) {
+        console.error("Delete agent error:", err);
+        alert("Failed to delete agent");
+      }
+    }
+
+    function renderTrainingDocs(docs) {
+      const list = document.getElementById("agent-training-list");
+      if (!docs.length) {
+        list.innerHTML = '<div style="font-size:12px;color:var(--text-dim);">No training documents yet.</div>';
+        return;
+      }
+      list.innerHTML = docs.map(d => \`
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);margin-bottom:4px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:500;">\${escapeHtml(d.title)}</div>
+            <div style="font-size:11px;color:var(--text-dim);">\${d.doc_type} &bull; \${d.content.length} chars</div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="deleteTrainingDoc('\${d.id}')" style="color:var(--red);font-size:11px;">Remove</button>
+        </div>
+      \`).join("");
+    }
+
+    async function addTrainingDoc() {
+      const agentId = document.getElementById("agent-edit-id").value;
+      if (!agentId) return;
+
+      const title = document.getElementById("training-doc-title").value.trim();
+      const content = document.getElementById("training-doc-content").value.trim();
+      if (!title || !content) { alert("Title and content are required"); return; }
+
+      try {
+        await apiPost("/agents/" + agentId + "/training", { title, content });
+        document.getElementById("training-doc-title").value = "";
+        document.getElementById("training-doc-content").value = "";
+        const agent = await api("/agents/" + agentId);
+        renderTrainingDocs(agent.training_docs || []);
+      } catch (err) {
+        console.error("Add training doc error:", err);
+        alert("Failed to add training document");
+      }
+    }
+
+    async function deleteTrainingDoc(docId) {
+      const agentId = document.getElementById("agent-edit-id").value;
+      if (!confirm("Remove this training document?")) return;
+
+      try {
+        await fetch("/api/agents/" + agentId + "/training/" + docId, { method: "DELETE" });
+        const agent = await api("/agents/" + agentId);
+        renderTrainingDocs(agent.training_docs || []);
+      } catch (err) {
+        console.error("Delete training doc error:", err);
       }
     }
 
@@ -1337,7 +1959,7 @@ export function getDashboardHtml(user?: SessionUser): string {
           badge.textContent = "&#10007;";
           badge.style.color = "var(--red)";
         }
-      } catch { /* ignore */ }
+      } catch (err) { console.error('Drive status check failed:', err); }
     }
 
     async function loadFolders(parentId) {
@@ -1623,6 +2245,273 @@ export function getDashboardHtml(user?: SessionUser): string {
       }
     }
 
+    // ─── Tasks Management ─────────────────────────────
+    let tasksList = [];
+    let taskFilter = "all";
+
+    async function loadTasks() {
+      try {
+        const params = taskFilter !== "all" ? "?status=" + taskFilter : "";
+        tasksList = await api("/tasks" + params);
+        document.getElementById("tasks-count").textContent = tasksList.length;
+        renderTasks();
+      } catch (err) {
+        console.error("Load tasks error:", err);
+      }
+    }
+
+    function renderTasks() {
+      const grid = document.getElementById("tasks-grid");
+      if (!tasksList.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="icon">&#9745;</div><p>No tasks found. Create one to get started.</p></div>';
+        return;
+      }
+      grid.innerHTML = tasksList.map(t => {
+        const due = t.due_date ? new Date(t.due_date).toLocaleDateString() : "";
+        const tags = (t.tags || []).map(tag => '<span class="task-tag">' + escapeHtml(tag) + '</span>').join("");
+        return '<div class="task-card" onclick="openTaskModal(\\'' + t.id + '\\')">' +
+          '<div class="task-card-header">' +
+            '<div class="task-card-title">' + escapeHtml(t.title) + '</div>' +
+            '<div class="task-card-badges">' +
+              '<span class="badge badge-' + t.priority + '">' + t.priority + '</span>' +
+              '<span class="badge badge-' + t.status + '">' + t.status.replace("_", " ") + '</span>' +
+            '</div>' +
+          '</div>' +
+          (t.description ? '<div style="font-size:13px;color:var(--text-muted);line-height:1.4;margin-bottom:8px;max-height:40px;overflow:hidden;">' + escapeHtml(t.description.slice(0, 150)) + '</div>' : '') +
+          (tags ? '<div class="task-tags">' + tags + '</div>' : '') +
+          '<div class="task-card-meta">' +
+            (due ? '<span>&#128197; ' + due + '</span>' : '') +
+            (t.assigned_to ? '<span>&#9823; ' + escapeHtml(t.assigned_to) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    function setTaskFilter(status) {
+      taskFilter = status;
+      document.querySelectorAll("#task-filter-pills .pill").forEach(p => p.classList.remove("active"));
+      event.target.classList.add("active");
+      loadTasks();
+    }
+
+    async function openTaskModal(taskId) {
+      const form = document.getElementById("task-form");
+      form.reset();
+      document.getElementById("task-edit-id").value = "";
+      document.getElementById("task-delete-btn").classList.add("hidden");
+
+      if (taskId) {
+        try {
+          const task = await api("/tasks/" + taskId);
+          document.getElementById("task-modal-title").textContent = "Edit Task";
+          document.getElementById("task-save-btn").textContent = "Save Changes";
+          document.getElementById("task-edit-id").value = task.id;
+          document.getElementById("task-title").value = task.title;
+          document.getElementById("task-description").value = task.description || "";
+          document.getElementById("task-status").value = task.status;
+          document.getElementById("task-priority").value = task.priority;
+          document.getElementById("task-due-date").value = task.due_date ? task.due_date.split("T")[0] : "";
+          document.getElementById("task-assigned-to").value = task.assigned_to || "";
+          document.getElementById("task-tags").value = (task.tags || []).join(", ");
+          document.getElementById("task-delete-btn").classList.remove("hidden");
+        } catch (err) {
+          console.error("Load task error:", err);
+          return;
+        }
+      } else {
+        document.getElementById("task-modal-title").textContent = "New Task";
+        document.getElementById("task-save-btn").textContent = "Create Task";
+      }
+
+      document.getElementById("task-modal-overlay").classList.add("open");
+    }
+
+    function closeTaskModal() {
+      document.getElementById("task-modal-overlay").classList.remove("open");
+    }
+
+    async function saveTask(e) {
+      e.preventDefault();
+      const id = document.getElementById("task-edit-id").value;
+      const tagsRaw = document.getElementById("task-tags").value.trim();
+      const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(Boolean) : [];
+      const dueDate = document.getElementById("task-due-date").value;
+
+      const data = {
+        title: document.getElementById("task-title").value,
+        description: document.getElementById("task-description").value,
+        status: document.getElementById("task-status").value,
+        priority: document.getElementById("task-priority").value,
+        tags: tags,
+        assigned_to: document.getElementById("task-assigned-to").value || undefined,
+      };
+      if (dueDate) data.due_date = dueDate;
+
+      try {
+        if (id) {
+          await fetch("/api/tasks/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+        } else {
+          await apiPost("/tasks", data);
+        }
+        closeTaskModal();
+        loadTasks();
+      } catch (err) {
+        console.error("Save task error:", err);
+        alert("Failed to save task");
+      }
+    }
+
+    async function deleteTask() {
+      const id = document.getElementById("task-edit-id").value;
+      if (!id || !confirm("Delete this task? This cannot be undone.")) return;
+
+      try {
+        await fetch("/api/tasks/" + id, { method: "DELETE" });
+        closeTaskModal();
+        loadTasks();
+      } catch (err) {
+        console.error("Delete task error:", err);
+        alert("Failed to delete task");
+      }
+    }
+
+    // ─── Memories Management ─────────────────────────────
+    let memoriesList = [];
+    let memoryCategory = "all";
+
+    async function loadMemories() {
+      try {
+        const params = memoryCategory !== "all" ? "?category=" + encodeURIComponent(memoryCategory) : "";
+        memoriesList = await api("/memories" + params);
+        document.getElementById("memories-count").textContent = memoriesList.length;
+        renderMemoryCategories();
+        renderMemories();
+      } catch (err) {
+        console.error("Load memories error:", err);
+      }
+    }
+
+    function renderMemoryCategories() {
+      const cats = ["all", ...new Set(memoriesList.map(m => m.category).filter(Boolean))];
+      const pills = document.getElementById("memory-category-pills");
+      pills.innerHTML = cats.map(c =>
+        '<button class="pill ' + (memoryCategory === c ? 'active' : '') + '" onclick="setMemoryCategory(\\'' + c + '\\')">' + (c === "all" ? "All" : escapeHtml(c)) + '</button>'
+      ).join("");
+    }
+
+    function setMemoryCategory(cat) {
+      memoryCategory = cat;
+      loadMemories();
+    }
+
+    function renderMemories() {
+      const grid = document.getElementById("memories-grid");
+      const filtered = memoryCategory === "all" ? memoriesList : memoriesList.filter(m => m.category === memoryCategory);
+      if (!filtered.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="icon">&#128278;</div><p>No memories found. Save one to get started.</p></div>';
+        return;
+      }
+      grid.innerHTML = filtered.map(m => {
+        const preview = m.content.length > 200 ? m.content.slice(0, 200) + "..." : m.content;
+        const updated = new Date(m.updated_at).toLocaleDateString();
+        return '<div class="memory-card" onclick="openMemoryModal(\\'' + escapeHtml(m.key).replace(/'/g, "\\\\'") + '\\')">' +
+          '<div class="memory-card-key">' + escapeHtml(m.key) + '</div>' +
+          '<div class="memory-card-content">' + escapeHtml(preview) + '</div>' +
+          '<div class="memory-card-meta">' +
+            (m.category ? '<span class="badge badge-medium">' + escapeHtml(m.category) + '</span>' : '') +
+            '<span>Updated: ' + updated + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    async function searchMemories() {
+      const q = document.getElementById("memory-search-input").value.trim();
+      if (!q) { loadMemories(); return; }
+      try {
+        memoriesList = await api("/memories/search?q=" + encodeURIComponent(q));
+        document.getElementById("memories-count").textContent = memoriesList.length;
+        renderMemoryCategories();
+        renderMemories();
+      } catch (err) {
+        console.error("Search memories error:", err);
+      }
+    }
+
+    async function openMemoryModal(memoryKey) {
+      const form = document.getElementById("memory-form");
+      form.reset();
+      document.getElementById("memory-edit-original-key").value = "";
+      document.getElementById("memory-delete-btn").classList.add("hidden");
+      document.getElementById("memory-key").removeAttribute("readonly");
+
+      if (memoryKey) {
+        try {
+          const mem = await api("/memories/" + encodeURIComponent(memoryKey));
+          document.getElementById("memory-modal-title").textContent = "Edit Memory";
+          document.getElementById("memory-save-btn").textContent = "Save Changes";
+          document.getElementById("memory-edit-original-key").value = mem.key;
+          document.getElementById("memory-key").value = mem.key;
+          document.getElementById("memory-key").setAttribute("readonly", "readonly");
+          document.getElementById("memory-content").value = mem.content;
+          document.getElementById("memory-category").value = mem.category || "";
+          document.getElementById("memory-delete-btn").classList.remove("hidden");
+        } catch (err) {
+          console.error("Load memory error:", err);
+          return;
+        }
+      } else {
+        document.getElementById("memory-modal-title").textContent = "Save Memory";
+        document.getElementById("memory-save-btn").textContent = "Save Memory";
+      }
+
+      document.getElementById("memory-modal-overlay").classList.add("open");
+    }
+
+    function closeMemoryModal() {
+      document.getElementById("memory-modal-overlay").classList.remove("open");
+    }
+
+    async function saveMemory(e) {
+      e.preventDefault();
+      const data = {
+        key: document.getElementById("memory-key").value,
+        content: document.getElementById("memory-content").value,
+        category: document.getElementById("memory-category").value || undefined,
+      };
+
+      try {
+        await fetch("/api/memories", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        closeMemoryModal();
+        loadMemories();
+      } catch (err) {
+        console.error("Save memory error:", err);
+        alert("Failed to save memory");
+      }
+    }
+
+    async function deleteMemory() {
+      const key = document.getElementById("memory-edit-original-key").value;
+      if (!key || !confirm("Delete this memory? This cannot be undone.")) return;
+
+      try {
+        await fetch("/api/memories/" + encodeURIComponent(key), { method: "DELETE" });
+        closeMemoryModal();
+        loadMemories();
+      } catch (err) {
+        console.error("Delete memory error:", err);
+        alert("Failed to delete memory");
+      }
+    }
+
     function escapeHtml(text) {
       const div = document.createElement("div");
       div.textContent = text;
@@ -1631,8 +2520,11 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     // ─── Keyboard shortcut ──────────────────────────────
     document.addEventListener("keydown", e => {
-      if (e.key === "Escape") closeModal();
+      if (e.key === "Escape") { closeModal(); closeTaskModal(); closeMemoryModal(); }
     });
+
+    // ─── Chat View JS ─────────────────────────────────
+    ` + chatJs + `
 
     // ─── Boot ───────────────────────────────────────────
     init();

@@ -60,8 +60,8 @@ export class DocumentIndexer {
         doc.keywords = this.extractKeywords(content);
         doc.lastSyncedAt = new Date().toISOString();
         refreshed++;
-      } catch {
-        // File may have been deleted or permissions changed
+      } catch (err) {
+        console.error(`Failed to refresh document ${doc.id} (${doc.name}):`, err);
       }
     }
     this.saveToFile();
@@ -129,7 +129,8 @@ export class DocumentIndexer {
         const entries: [string, IndexedDocument][] = JSON.parse(raw);
         this.documents = new Map(entries);
       }
-    } catch {
+    } catch (err) {
+      console.error("Failed to load document cache:", err);
       this.documents = new Map();
     }
   }

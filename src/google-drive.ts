@@ -3,7 +3,7 @@
  * List folders, read files, export Google Docs, handle PDFs and docx.
  */
 
-import { google, drive_v3 } from "googleapis";
+import { google, drive_v3, docs_v1, sheets_v4 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
@@ -25,9 +25,11 @@ export interface DriveFolder {
 
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
+  private authClient: OAuth2Client;
 
   constructor(authClient: OAuth2Client) {
     this.drive = google.drive({ version: "v3", auth: authClient });
+    this.authClient = authClient;
   }
 
   async listFolders(parentId?: string): Promise<DriveFolder[]> {
@@ -132,5 +134,133 @@ export class GoogleDriveService {
     }
 
     return results;
+  }
+
+  // ── Write methods for The Oracle folder ──────────────
+
+  async createGoogleDoc(
+    title: string,
+    folderId: string,
+    content?: string
+  ): Promise<{ id: string; url: string }> {
+    const docs = google.docs({ version: "v1", auth: this.authClient });
+
+    // Create an empty Doc via Drive (so we can set the parent folder)
+    const fileRes = await this.drive.files.create({
+      requestBody: {
+        name: title,
+        mimeType: "application/vnd.google-apps.document",
+        parents: [folderId],
+      },
+      fields: "id, webViewLink",
+    });
+
+    const docId = fileRes.data.id!;
+    const url = fileRes.data.webViewLink!;
+
+    // If content provided, insert it
+    if (content) {
+      await docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: {
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 },
+                text: content,
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    return { id: docId, url };
+  }
+
+  async createGoogleSheet(
+    title: string,
+    folderId: string,
+    headers?: string[],
+    data?: string[][]
+  ): Promise<{ id: string; url: string }> {
+    const sheets = google.sheets({ version: "v4", auth: this.authClient });
+
+    // Create an empty Sheet via Drive (to set parent folder)
+    const fileRes = await this.drive.files.create({
+      requestBody: {
+        name: title,
+        mimeType: "application/vnd.google-apps.spreadsheet",
+        parents: [folderId],
+      },
+      fields: "id, webViewLink",
+    });
+
+    const sheetId = fileRes.data.id!;
+    const url = fileRes.data.webViewLink!;
+
+    // Populate headers and data if provided
+    const rows: string[][] = [];
+    if (headers) rows.push(headers);
+    if (data) rows.push(...data);
+
+    if (rows.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: "Sheet1!A1",
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: rows },
+      });
+    }
+
+    return { id: sheetId, url };
+  }
+
+  async updateGoogleDoc(docId: string, content: string): Promise<void> {
+    const docs = google.docs({ version: "v1", auth: this.authClient });
+
+    // Get current document to find end index
+    const doc = await docs.documents.get({ documentId: docId });
+    const endIndex = doc.data.body?.content?.slice(-1)?.[0]?.endIndex || 1;
+
+    const requests: docs_v1.Schema$Request[] = [];
+
+    // Delete existing content (if any beyond the initial newline)
+    if (endIndex > 2) {
+      requests.push({
+        deleteContentRange: {
+          range: { startIndex: 1, endIndex: endIndex - 1 },
+        },
+      });
+    }
+
+    // Insert new content
+    requests.push({
+      insertText: {
+        location: { index: 1 },
+        text: content,
+      },
+    });
+
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: { requests },
+    });
+  }
+
+  async appendToGoogleSheet(
+    sheetId: string,
+    rows: string[][]
+  ): Promise<{ updatedRows: number }> {
+    const sheets = google.sheets({ version: "v4", auth: this.authClient });
+
+    const res = await sheets.spreadsheets.values.append({
+      spreadsheetId: sheetId,
+      range: "Sheet1!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: rows },
+    });
+
+    return { updatedRows: res.data.updates?.updatedRows || 0 };
   }
 }

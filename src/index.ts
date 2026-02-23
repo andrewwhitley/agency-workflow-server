@@ -8,16 +8,18 @@ import "dotenv/config";
  *    • Dashboard at /
  *    • REST API at /api/*
  *    • Google Drive integration + Knowledge Base
+ *    • AI Agent conversations with persistent threads
  *  Deploy to Railway, Render, or any Node.js host.
  * ═══════════════════════════════════════════════════════════════
  */
 
 import express from "express";
 import cookieSession from "cookie-session";
+import rateLimit from "express-rate-limit";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { WorkflowEngine } from "./workflow-engine.js";
-import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp } from "./mcp-bridge.js";
+import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
 import { getDashboardHtml, getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
 import { GoogleAuthService } from "./google-auth.js";
@@ -27,6 +29,8 @@ import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
 import { DiscordBot } from "./discord-bot.js";
+import { runMigrations, closePool } from "./database.js";
+import { apiRouter } from "./api-routes.js";
 import {
   getOAuth2Client,
   isOAuthConfigured,
@@ -37,7 +41,30 @@ import {
 
 const PORT = Number(process.env.PORT) || 3000;
 
+function validateEnv(): void {
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) {
+    const secret = process.env.SESSION_SECRET;
+    if (!secret || secret === "dev-secret-not-for-production") {
+      console.error("FATAL: SESSION_SECRET must be set to a secure value in production.");
+      process.exit(1);
+    }
+  }
+}
+
 async function main(): Promise<void> {
+  // ─── 0. Environment Validation ──────────────────────
+  validateEnv();
+
+  // ─── 0b. Database ───────────────────────────────────
+  if (process.env.DATABASE_URL) {
+    console.log("Connecting to PostgreSQL...");
+    await runMigrations();
+    console.log("✓ Database ready");
+  } else {
+    console.log("⚠ DATABASE_URL not set — AI agents/threads features disabled");
+  }
+
   // ─── 1. Workflow Engine ─────────────────────────────
   const engine = new WorkflowEngine();
   registerAgencyWorkflows(engine);
@@ -73,7 +100,17 @@ async function main(): Promise<void> {
     })
   );
 
-  // ─── 3c. Auth Routes (public) ────────────────────
+  // ─── 3c. Rate limiting ──────────────────────────
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later." },
+  });
+  app.use("/api", apiLimiter);
+
+  // ─── 3d. Auth Routes (public) ────────────────────
   app.get("/auth/login", (_req, res) => {
     // If already logged in, redirect to dashboard
     if (isOAuthConfigured() && ((_req.session as any)?.user)) {
@@ -192,6 +229,11 @@ async function main(): Promise<void> {
   });
 
   app.post("/api/run/:name", async (req, res) => {
+    const wf = engine.get(req.params.name);
+    if (!wf) {
+      res.status(404).json({ error: `Workflow "${req.params.name}" not found` });
+      return;
+    }
     const result = await engine.run(req.params.name, req.body || {});
     res.json(result);
   });
@@ -386,6 +428,11 @@ async function main(): Promise<void> {
     res.json(logs);
   });
 
+  // ─── 12b. AI Agent Routes ──────────────────────────
+  if (process.env.DATABASE_URL) {
+    app.use("/api", apiRouter(engine, knowledgeBase, authService));
+  }
+
   // ─── 13. Health Check (Railway uses this) ──────────
   app.get("/health", (_req, res) => {
     res.json({
@@ -411,6 +458,9 @@ async function main(): Promise<void> {
 
     bridgeWorkflowsToMcp(server, engine);
     bridgeKnowledgeToMcp(server, knowledgeBase, sopParser, clientAgent);
+    bridgeThreadsToMcp(server);
+    bridgeTasksToMcp(server);
+    bridgeMemoriesToMcp(server);
 
     const transport = new SSEServerTransport("/mcp/messages", res);
     transports.set(transport.sessionId, transport);
@@ -445,7 +495,7 @@ async function main(): Promise<void> {
   });
 
   // ─── 16. Start ────────────────────────────────────
-  app.listen(PORT, async () => {
+  const server = app.listen(PORT, async () => {
     console.log("");
     console.log("═══════════════════════════════════════════════");
     console.log("  Agency Workflow Server");
@@ -456,6 +506,9 @@ async function main(): Promise<void> {
     console.log(`  Health:      http://localhost:${PORT}/health`);
     console.log(`  Drive:       ${authService.isAuthenticated() ? "Connected (" + authService.getServiceEmail() + ")" : "Not configured (set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SERVICE_ACCOUNT_JSON)"}`);
     console.log(`  Auth:        ${isOAuthConfigured() ? "Google OAuth enabled" : "Disabled (no GOOGLE_OAUTH_CLIENT_ID)"}`);
+    console.log(`  Database:    ${process.env.DATABASE_URL ? "Connected" : "Not configured"}`);
+    console.log(`  Oracle:      ${process.env.ORACLE_FOLDER_ID ? "Configured" : "Not configured (set ORACLE_FOLDER_ID)"}`);
+
 
     // Start Discord bot (logs its own status line)
     await discordBot.start();
@@ -463,6 +516,31 @@ async function main(): Promise<void> {
     console.log("═══════════════════════════════════════════════");
     console.log("");
   });
+
+  // ─── 17. Graceful Shutdown ────────────────────────
+  const shutdown = async (signal: string) => {
+    console.log(`\n${signal} received — shutting down gracefully...`);
+    const forceTimer = setTimeout(() => {
+      console.error("Forced shutdown after 10s timeout");
+      process.exit(1);
+    }, 10000);
+
+    try {
+      server.close();
+      indexer.stopPeriodicSync();
+      await closePool();
+      console.log("Shutdown complete.");
+      clearTimeout(forceTimer);
+      process.exit(0);
+    } catch (err) {
+      console.error("Error during shutdown:", err);
+      clearTimeout(forceTimer);
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 main().catch((err) => {

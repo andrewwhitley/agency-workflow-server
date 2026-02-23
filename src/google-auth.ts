@@ -28,10 +28,15 @@ export class GoogleAuthService {
     }
 
     if (credentials) {
+      const subject = process.env.GOOGLE_IMPERSONATE_EMAIL || undefined;
       this.jwtClient = new JWT({
         email: credentials.client_email,
         key: credentials.private_key,
-        scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+        scopes: [
+          "https://www.googleapis.com/auth/drive.readonly",
+          "https://www.googleapis.com/auth/drive.file",
+        ],
+        subject,
       });
       this.serviceEmail = credentials.client_email;
     }

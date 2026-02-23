@@ -4,6 +4,9 @@ import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
 import type { DocumentIndexer } from "./document-indexer.js";
 import type { ClientAgent } from "./client-agent.js";
+import { threadService } from "./thread-service.js";
+import { agentService } from "./agent-service.js";
+import { streamChat } from "./chat-engine.js";
 
 interface Services {
   engine: WorkflowEngine;
@@ -40,6 +43,7 @@ export class DiscordBot {
   private channelId: string | undefined;
   private conversationHistory = new Map<string, ConversationMessage[]>();
   private chatLog: ChatLogEntry[] = [];
+  private useDatabase = !!process.env.DATABASE_URL;
 
   constructor(services: Services) {
     this.services = services;
@@ -346,6 +350,70 @@ export class DiscordBot {
   // ─── Claude Conversation ──────────────────────────────
 
   private async handleConversation(message: Message, content: string): Promise<void> {
+    // Show typing indicator
+    if ("sendTyping" in message.channel) {
+      await message.channel.sendTyping();
+    }
+
+    // Try persistent thread approach (if database is available)
+    if (this.useDatabase) {
+      try {
+        await this.handlePersistentConversation(message, content);
+        return;
+      } catch (err) {
+        console.error("Persistent conversation fallback to in-memory:", err);
+        // Fall through to in-memory
+      }
+    }
+
+    await this.handleInMemoryConversation(message, content);
+  }
+
+  private async handlePersistentConversation(message: Message, content: string): Promise<void> {
+    const channelId = message.channelId;
+
+    // Find or create a thread for this Discord channel
+    let thread = await threadService.findByDiscordChannel(channelId);
+    if (!thread) {
+      // Use the General Assistant agent
+      const agents = await agentService.list();
+      const defaultAgent = agents.find((a) => a.name === "General Assistant") || agents[0];
+      if (!defaultAgent) {
+        throw new Error("No agents configured");
+      }
+
+      const channelName = "name" in message.channel ? (message.channel as any).name : channelId;
+      thread = await threadService.create({
+        title: `Discord: #${channelName}`,
+        agent_id: defaultAgent.id,
+        created_by: `discord:${channelId}`,
+      });
+    }
+
+    // Stream the response using the chat engine
+    let fullResponse = "";
+    const generator = streamChat(
+      thread.id,
+      content,
+      this.services.engine,
+      this.services.knowledgeBase
+    );
+
+    for await (const event of generator) {
+      if (event.type === "text") {
+        fullResponse += event.content;
+      } else if (event.type === "error") {
+        fullResponse = `Error: ${event.content}`;
+      }
+    }
+
+    if (!fullResponse) fullResponse = "_(no response)_";
+
+    await this.sendLong(message, fullResponse);
+    this.logChat(message, content, fullResponse, "conversation");
+  }
+
+  private async handleInMemoryConversation(message: Message, content: string): Promise<void> {
     const channelId = message.channelId;
 
     // Get or initialize channel history
@@ -360,11 +428,6 @@ export class DiscordBot {
     // Cap history
     while (history.length > MAX_HISTORY) {
       history.shift();
-    }
-
-    // Show typing indicator
-    if ("sendTyping" in message.channel) {
-      await message.channel.sendTyping();
     }
 
     const systemPrompt = this.buildSystemPrompt();

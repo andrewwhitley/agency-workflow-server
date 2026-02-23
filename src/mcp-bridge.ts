@@ -10,17 +10,10 @@ import { WorkflowEngine, InputType, InputDef } from "./workflow-engine.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
-
-function inputTypeToZod(type: InputType): z.ZodTypeAny {
-  switch (type) {
-    case "string":  return z.string();
-    case "number":  return z.number();
-    case "boolean": return z.boolean();
-    case "array":   return z.array(z.unknown());
-    case "object":  return z.record(z.unknown());
-    default:        return z.string();
-  }
-}
+import { inputTypeToZod } from "./validation.js";
+import { threadService } from "./thread-service.js";
+import { taskService } from "./task-service.js";
+import { memoryService } from "./memory-service.js";
 
 function buildZodShape(inputs: Record<string, InputType | InputDef> | undefined): ZodRawShape {
   const shape: ZodRawShape = {};
@@ -229,6 +222,238 @@ export function bridgeKnowledgeToMcp(
           type: "text" as const,
           text: JSON.stringify(parsed, null, 2),
         }],
+      };
+    }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Thread MCP Bridge
+// ═══════════════════════════════════════════════════════════════
+
+export function bridgeThreadsToMcp(server: McpServer): void {
+  server.tool(
+    "list_threads",
+    "List conversation threads, optionally filtered by agent_id, client, or archived status",
+    {
+      agent_id: z.string().uuid().optional().describe("Filter by agent ID"),
+      client: z.string().optional().describe("Filter by client name"),
+      archived: z.boolean().optional().describe("Filter by archived status"),
+    },
+    async ({ agent_id, client, archived }) => {
+      const threads = await threadService.list({ agent_id, client, archived });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(threads, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "get_thread",
+    "Get a thread with its recent messages",
+    {
+      thread_id: z.string().uuid().describe("The thread ID"),
+      message_limit: z.number().int().min(1).max(200).optional().describe("Max messages to return (default 50)"),
+    },
+    async ({ thread_id, message_limit }) => {
+      const thread = await threadService.getById(thread_id);
+      if (!thread) {
+        return { content: [{ type: "text" as const, text: `Thread not found: "${thread_id}"` }], isError: true };
+      }
+      const messages = await threadService.getMessages(thread_id, message_limit ?? 50);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ ...thread, messages }, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_thread",
+    "Create a new conversation thread with an agent",
+    {
+      agent_id: z.string().uuid().describe("The agent ID to use"),
+      title: z.string().max(200).optional().describe("Thread title"),
+      client: z.string().max(100).optional().describe("Client name"),
+      created_by: z.string().max(200).optional().describe("Who created this thread"),
+    },
+    async ({ agent_id, title, client, created_by }) => {
+      const thread = await threadService.create({ agent_id, title, client, created_by });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(thread, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "add_message",
+    "Add a message to a thread",
+    {
+      thread_id: z.string().uuid().describe("The thread ID"),
+      role: z.enum(["user", "assistant"]).describe("Message role"),
+      content: z.string().min(1).describe("Message content"),
+    },
+    async ({ thread_id, role, content }) => {
+      const thread = await threadService.getById(thread_id);
+      if (!thread) {
+        return { content: [{ type: "text" as const, text: `Thread not found: "${thread_id}"` }], isError: true };
+      }
+      const message = await threadService.addMessage(thread_id, role, content);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(message, null, 2) }],
+      };
+    }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Task MCP Bridge
+// ═══════════════════════════════════════════════════════════════
+
+export function bridgeTasksToMcp(server: McpServer): void {
+  server.tool(
+    "list_tasks",
+    "List tasks, optionally filtered by status, priority, tags, thread_id, or assigned_to",
+    {
+      status: z.enum(["open", "in_progress", "completed", "blocked"]).optional().describe("Filter by status"),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional().describe("Filter by priority"),
+      tags: z.array(z.string()).optional().describe("Filter by tags (all must match)"),
+      thread_id: z.string().uuid().optional().describe("Filter by linked thread"),
+      assigned_to: z.string().optional().describe("Filter by assignee"),
+    },
+    async ({ status, priority, tags, thread_id, assigned_to }) => {
+      const tasks = await taskService.list({ status, priority, tags, thread_id, assigned_to });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(tasks, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "create_task",
+    "Create a new task with title, priority, tags, and optional thread link",
+    {
+      title: z.string().min(1).max(300).describe("Task title"),
+      description: z.string().max(10000).optional().describe("Task description"),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional().describe("Priority (default: medium)"),
+      due_date: z.string().optional().describe("Due date (ISO 8601)"),
+      tags: z.array(z.string()).optional().describe("Tags for categorization"),
+      thread_id: z.string().uuid().optional().describe("Link to a thread"),
+      created_by: z.string().optional().describe("Who created this task"),
+      assigned_to: z.string().optional().describe("Who is assigned"),
+    },
+    async (args) => {
+      const task = await taskService.create(args);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(task, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "update_task",
+    "Update any fields on an existing task",
+    {
+      task_id: z.string().uuid().describe("The task ID"),
+      title: z.string().min(1).max(300).optional().describe("New title"),
+      description: z.string().max(10000).optional().describe("New description"),
+      status: z.enum(["open", "in_progress", "completed", "blocked"]).optional().describe("New status"),
+      priority: z.enum(["low", "medium", "high", "urgent"]).optional().describe("New priority"),
+      due_date: z.string().optional().describe("New due date (ISO 8601)"),
+      tags: z.array(z.string()).optional().describe("Replace tags"),
+      assigned_to: z.string().optional().describe("New assignee"),
+    },
+    async ({ task_id, ...updates }) => {
+      const task = await taskService.update(task_id, updates);
+      if (!task) {
+        return { content: [{ type: "text" as const, text: `Task not found: "${task_id}"` }], isError: true };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(task, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "complete_task",
+    "Mark a task as completed",
+    {
+      task_id: z.string().uuid().describe("The task ID to complete"),
+    },
+    async ({ task_id }) => {
+      const task = await taskService.update(task_id, { status: "completed" });
+      if (!task) {
+        return { content: [{ type: "text" as const, text: `Task not found: "${task_id}"` }], isError: true };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(task, null, 2) }],
+      };
+    }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Memory MCP Bridge
+// ═══════════════════════════════════════════════════════════════
+
+export function bridgeMemoriesToMcp(server: McpServer): void {
+  server.tool(
+    "save_memory",
+    "Save or update a memory by key. Use this to persist information across sessions and devices.",
+    {
+      key: z.string().min(1).max(300).describe("Unique key for this memory"),
+      content: z.string().min(1).max(50000).describe("The content to remember"),
+      category: z.string().max(100).optional().describe("Category for organization"),
+      created_by: z.string().optional().describe("Who saved this memory"),
+    },
+    async (args) => {
+      const memory = await memoryService.upsert(args);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(memory, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "recall_memory",
+    "Search memories by keyword across keys, content, and categories",
+    {
+      query: z.string().min(1).describe("Search keyword or phrase"),
+    },
+    async ({ query }) => {
+      const results = await memoryService.search(query);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "list_memories",
+    "List all saved memories, optionally filtered by category",
+    {
+      category: z.string().optional().describe("Filter by category"),
+    },
+    async ({ category }) => {
+      const memories = await memoryService.list(category);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(memories, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    "delete_memory",
+    "Delete a memory by its key",
+    {
+      key: z.string().min(1).describe("The memory key to delete"),
+    },
+    async ({ key }) => {
+      const deleted = await memoryService.delete(key);
+      if (!deleted) {
+        return { content: [{ type: "text" as const, text: `Memory not found: "${key}"` }], isError: true };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ success: true, deleted_key: key }) }],
       };
     }
   );
