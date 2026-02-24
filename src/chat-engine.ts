@@ -7,7 +7,7 @@ import { agentService, type Agent } from "./agent-service.js";
 import { threadService, type Message } from "./thread-service.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { WorkflowEngine } from "./workflow-engine.js";
-import { GoogleDriveService } from "./google-drive.js";
+import { GoogleDriveService, extractGoogleId, type FormatOperation, type DocEdit } from "./google-drive.js";
 
 const anthropic = new Anthropic();
 
@@ -117,6 +117,94 @@ function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveS
     );
   }
 
+  // Drive read/edit/format tools — available when Drive is configured (no folder required)
+  if (driveService) {
+    tools.push(
+      {
+        name: "read_google_doc",
+        description: "Read a Google Doc and return its structured content with paragraph indices, styles, and formatting. Use this to inspect a doc before editing or formatting. Accepts a Google Docs URL or document ID.",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            doc_id: { type: "string", description: "Google Doc URL or document ID" },
+          },
+          required: ["doc_id"],
+        },
+      },
+      {
+        name: "read_google_sheet",
+        description: "Read a Google Sheet and return its metadata and cell values. Accepts a Google Sheets URL or spreadsheet ID.",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            sheet_id: { type: "string", description: "Google Sheets URL or spreadsheet ID" },
+            range: { type: "string", description: "Optional range in A1 notation (e.g. 'Sheet1!A1:D10'). Reads the first sheet if omitted." },
+          },
+          required: ["sheet_id"],
+        },
+      },
+      {
+        name: "format_google_doc",
+        description: "Apply rich formatting to a Google Doc. First use read_google_doc to get paragraph indices, then specify formatting operations using those indices. Supported operations: heading (level 1-6), bold, italic, underline, fontSize (pt), fontColor (hex), backgroundColor (hex), fontFamily, alignment (START/CENTER/END/JUSTIFIED), bullets, removeBullets, indent (level).",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            doc_id: { type: "string", description: "Google Doc URL or document ID" },
+            operations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["heading", "bold", "italic", "underline", "fontSize", "fontColor", "backgroundColor", "fontFamily", "alignment", "bullets", "removeBullets", "indent"], description: "The formatting operation type" },
+                  startIndex: { type: "number", description: "Start character index in the document" },
+                  endIndex: { type: "number", description: "End character index in the document" },
+                  level: { type: "number", description: "Heading level (1-6) or indent level" },
+                  size: { type: "number", description: "Font size in points" },
+                  color: { type: "string", description: "Hex color (e.g. '#FF0000')" },
+                  family: { type: "string", description: "Font family name (e.g. 'Arial')" },
+                  align: { type: "string", enum: ["START", "CENTER", "END", "JUSTIFIED"], description: "Paragraph alignment" },
+                  bulletPreset: { type: "string", description: "Bullet preset name (default: BULLET_DISC_CIRCLE_SQUARE)" },
+                },
+                required: ["type", "startIndex", "endIndex"],
+              },
+              description: "Array of formatting operations to apply",
+            },
+          },
+          required: ["doc_id", "operations"],
+        },
+      },
+      {
+        name: "edit_google_doc_section",
+        description: "Edit sections of a Google Doc: replace text at index range, insert text at index, delete a range, or find-and-replace across the document. First use read_google_doc to get indices.",
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            doc_id: { type: "string", description: "Google Doc URL or document ID" },
+            edits: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["replace_text", "insert_text", "delete_range", "find_replace"], description: "The edit operation type" },
+                  startIndex: { type: "number", description: "Start index for replace_text or delete_range" },
+                  endIndex: { type: "number", description: "End index for replace_text or delete_range" },
+                  index: { type: "number", description: "Insertion index for insert_text" },
+                  text: { type: "string", description: "Text to insert or replace with" },
+                  find: { type: "string", description: "Text to find (for find_replace)" },
+                  replaceWith: { type: "string", description: "Replacement text (for find_replace)" },
+                  matchCase: { type: "boolean", description: "Whether find_replace is case-sensitive (default true)" },
+                },
+                required: ["type"],
+              },
+              description: "Array of edit operations to apply",
+            },
+          },
+          required: ["doc_id", "edits"],
+        },
+      }
+    );
+  }
+
   // Web search tool — available when Tavily is configured
   if (process.env.TAVILY_API_KEY) {
     tools.push({
@@ -206,7 +294,73 @@ async function executeToolCall(
     );
   }
 
-  // Drive tools
+  // Drive read/edit/format tools (no folder required)
+  if (driveService) {
+    try {
+      if (toolName === "read_google_doc") {
+        const result = await driveService.readGoogleDoc(toolInput.doc_id as string);
+        // Format paragraphs for AI readability
+        let output = `Document: ${result.title}\nID: ${result.documentId}\nTotal length: ${result.totalLength}\n\nParagraphs:\n`;
+        for (const p of result.paragraphs) {
+          const formattingInfo: string[] = [];
+          for (const run of p.textRuns) {
+            const attrs: string[] = [];
+            if (run.bold) attrs.push("bold");
+            if (run.italic) attrs.push("italic");
+            if (run.underline) attrs.push("underline");
+            if (run.fontSize) attrs.push(`${run.fontSize}pt`);
+            if (run.fontFamily) attrs.push(run.fontFamily);
+            if (run.foregroundColor) attrs.push(run.foregroundColor);
+            if (run.link) attrs.push(`link:${run.link}`);
+            if (attrs.length > 0) formattingInfo.push(`"${run.text.replace(/\n/g, "\\n")}" [${attrs.join(", ")}]`);
+          }
+          const bullet = p.isBullet ? " BULLET" : "";
+          output += `[${p.startIndex}-${p.endIndex}] (${p.style}${bullet}) "${p.text.replace(/\n/g, "\\n")}"`;
+          if (formattingInfo.length > 0) output += ` | Runs: ${formattingInfo.join("; ")}`;
+          output += "\n";
+        }
+        // Truncate large docs
+        if (output.length > 30000) {
+          output = output.slice(0, 30000) + "\n\n[Content truncated — 30k char limit. Use specific ranges for large docs.]";
+        }
+        return output;
+      }
+
+      if (toolName === "read_google_sheet") {
+        const result = await driveService.readGoogleSheet(
+          toolInput.sheet_id as string,
+          toolInput.range as string | undefined
+        );
+        let output = JSON.stringify(result, null, 2);
+        if (output.length > 30000) {
+          output = output.slice(0, 30000) + "\n\n[Content truncated — 30k char limit. Use a specific range parameter.]";
+        }
+        return output;
+      }
+
+      if (toolName === "format_google_doc") {
+        const result = await driveService.formatGoogleDoc(
+          toolInput.doc_id as string,
+          toolInput.operations as FormatOperation[]
+        );
+        return JSON.stringify({ success: true, ...result });
+      }
+
+      if (toolName === "edit_google_doc_section") {
+        const result = await driveService.editGoogleDocSection(
+          toolInput.doc_id as string,
+          toolInput.edits as DocEdit[]
+        );
+        return JSON.stringify({ success: true, ...result });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Drive tool "${toolName}" error:`, message);
+      return JSON.stringify({ error: `Google Drive error: ${message}` });
+    }
+  }
+
+  // Drive tools (folder-gated)
   const oracleFolderId = process.env.ORACLE_FOLDER_ID;
   if (driveService && oracleFolderId) {
     try {
