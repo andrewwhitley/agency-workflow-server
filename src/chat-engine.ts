@@ -550,14 +550,19 @@ function trimMessages(
   return formatted.slice(startIndex);
 }
 
+// ── Types ─────────────────────────────────────────────
+
+export type UserContent = string | Anthropic.MessageCreateParams["messages"][number]["content"];
+
 // ── Main chat function ────────────────────────────────
 
 export async function* streamChat(
   threadId: string,
-  userContent: string,
+  userContent: UserContent,
   engine: WorkflowEngine,
   knowledgeBase: KnowledgeBase,
-  driveService?: GoogleDriveService
+  driveService?: GoogleDriveService,
+  dbContent?: string
 ): AsyncGenerator<ChatEvent> {
   // Load thread + agent
   const thread = await threadService.getById(threadId);
@@ -572,8 +577,9 @@ export async function* streamChat(
     return;
   }
 
-  // Save user message
-  await threadService.addMessage(threadId, "user", userContent);
+  // Save user message (text-only for DB; content blocks are ephemeral)
+  const messageText = dbContent ?? (typeof userContent === "string" ? userContent : "");
+  await threadService.addMessage(threadId, "user", messageText);
 
   // Load training docs and build system prompt
   const trainingDocs = await agentService.getTrainingDocs(agent.id);
@@ -596,6 +602,14 @@ export async function* streamChat(
   const systemTokens = estimateTokens(systemPrompt);
   const maxContextTokens = 100000 - systemTokens - agent.max_tokens;
   const conversationMessages = trimMessages(allMessages, Math.max(maxContextTokens, 4000));
+
+  // Replace last user message content with the actual userContent (may contain image blocks)
+  if (typeof userContent !== "string" && conversationMessages.length > 0) {
+    const lastIdx = conversationMessages.length - 1;
+    if (conversationMessages[lastIdx].role === "user") {
+      (conversationMessages[lastIdx] as any).content = userContent;
+    }
+  }
 
   // Build tools
   const tools = buildTools(engine, knowledgeBase, driveService);
@@ -724,7 +738,7 @@ export async function* streamChat(
   // Auto-title on first exchange (2 messages = 1 user + 1 assistant)
   const messageCount = await threadService.getMessageCount(threadId);
   if (messageCount === 2 && !thread.title) {
-    generateTitle(threadId, userContent, fullResponse).catch(console.error);
+    generateTitle(threadId, messageText, fullResponse).catch(console.error);
   }
 
   yield {

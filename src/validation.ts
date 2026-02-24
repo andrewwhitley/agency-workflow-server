@@ -45,11 +45,23 @@ export const updateThreadSchema = z.object({
   archived: z.boolean().optional(),
 });
 
+// ── Attachment schema ─────────────────────────────────────────
+
+export const attachmentSchema = z.object({
+  name: z.string().min(1).max(500),
+  mime_type: z.string().min(1).max(200),
+  data: z.string().max(30_000_000), // base64, ~22MB raw
+});
+
 // ── Message schemas ───────────────────────────────────────────
 
 export const createMessageSchema = z.object({
-  content: z.string().min(1).max(100000),
-});
+  content: z.string().min(0).max(100000),
+  attachments: z.array(attachmentSchema).max(5).optional(),
+}).refine(
+  (d) => (d.content && d.content.trim().length > 0) || (d.attachments && d.attachments.length > 0),
+  { message: "Either content or attachments must be provided" },
+);
 
 // ── Training doc schemas ──────────────────────────────────────
 

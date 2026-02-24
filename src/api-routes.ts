@@ -3,11 +3,12 @@
  */
 
 import { Router } from "express";
+import Anthropic from "@anthropic-ai/sdk";
 import { agentService } from "./agent-service.js";
 import { threadService } from "./thread-service.js";
 import { taskService } from "./task-service.js";
 import { memoryService } from "./memory-service.js";
-import { streamChat } from "./chat-engine.js";
+import { streamChat, type UserContent } from "./chat-engine.js";
 import { query } from "./database.js";
 import {
   createAgentSchema,
@@ -259,6 +260,75 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       return;
     }
 
+    // ── Process attachments into content blocks ──────
+    let userContent: UserContent = parsed.data.content;
+    let dbContent: string | undefined;
+    const attachments = parsed.data.attachments;
+
+    if (attachments && attachments.length > 0) {
+      const contentBlocks: Anthropic.ContentBlockParam[] = [];
+      const dbNotes: string[] = [];
+
+      if (parsed.data.content) {
+        contentBlocks.push({ type: "text", text: parsed.data.content });
+      }
+
+      for (const att of attachments) {
+        const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+        if (IMAGE_TYPES.includes(att.mime_type)) {
+          contentBlocks.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: att.mime_type as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+              data: att.data,
+            },
+          });
+          dbNotes.push(`[Attached image: ${att.name}]`);
+        } else if (att.mime_type === "application/pdf") {
+          try {
+            const { PDFParse } = await import("pdf-parse");
+            const buffer = Buffer.from(att.data, "base64");
+            const parser = new PDFParse({ data: buffer });
+            const result = await parser.getText();
+            const text = (result.text || "").slice(0, 50000);
+            contentBlocks.push({ type: "text", text: `[Content of ${att.name}]:\n${text}` });
+            dbNotes.push(`[Attached PDF: ${att.name}, ${result.total} pages]`);
+          } catch (err) {
+            console.error("PDF parse error:", err);
+            contentBlocks.push({ type: "text", text: `[Failed to parse PDF: ${att.name}]` });
+            dbNotes.push(`[Attached PDF: ${att.name} (parse failed)]`);
+          }
+        } else if (att.mime_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+          try {
+            const mammoth = await import("mammoth");
+            const buffer = Buffer.from(att.data, "base64");
+            const result = await mammoth.extractRawText({ buffer });
+            const text = result.value.slice(0, 50000);
+            contentBlocks.push({ type: "text", text: `[Content of ${att.name}]:\n${text}` });
+            dbNotes.push(`[Attached DOCX: ${att.name}]`);
+          } catch (err) {
+            console.error("DOCX parse error:", err);
+            contentBlocks.push({ type: "text", text: `[Failed to parse DOCX: ${att.name}]` });
+            dbNotes.push(`[Attached DOCX: ${att.name} (parse failed)]`);
+          }
+        } else {
+          // Try reading as UTF-8 text
+          try {
+            const text = Buffer.from(att.data, "base64").toString("utf-8").slice(0, 50000);
+            contentBlocks.push({ type: "text", text: `[Content of ${att.name}]:\n${text}` });
+            dbNotes.push(`[Attached file: ${att.name}]`);
+          } catch {
+            dbNotes.push(`[Attached file: ${att.name} (unreadable)]`);
+          }
+        }
+      }
+
+      userContent = contentBlocks;
+      dbContent = [parsed.data.content, ...dbNotes].filter(Boolean).join("\n");
+    }
+
     // SSE streaming response
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -274,10 +344,11 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
 
       const generator = streamChat(
         req.params.id,
-        parsed.data.content,
+        userContent,
         engine,
         knowledgeBase,
-        driveService
+        driveService,
+        dbContent
       );
 
       for await (const event of generator) {

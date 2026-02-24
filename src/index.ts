@@ -432,6 +432,8 @@ async function main(): Promise<void> {
 
   // ─── 12b. AI Agent Routes ──────────────────────────
   if (process.env.DATABASE_URL) {
+    // Higher body limit for file/image uploads in chat
+    app.use("/api/threads", express.json({ limit: "25mb" }));
     app.use("/api", apiRouter(engine, knowledgeBase, authService));
   }
 
