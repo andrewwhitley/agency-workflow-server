@@ -33,8 +33,7 @@ export class GoogleAuthService {
         email: credentials.client_email,
         key: credentials.private_key,
         scopes: [
-          "https://www.googleapis.com/auth/drive.readonly",
-          "https://www.googleapis.com/auth/drive.file",
+          "https://www.googleapis.com/auth/drive",
           "https://www.googleapis.com/auth/documents",
           "https://www.googleapis.com/auth/spreadsheets",
         ],
