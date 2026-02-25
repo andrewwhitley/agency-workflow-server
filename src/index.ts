@@ -571,8 +571,11 @@ async function main(): Promise<void> {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
 
+    console.log(`[MCP Auth] ${req.method} ${req.path} | auth=${authHeader ? "Bearer ..." + (bearerToken?.slice(-6) || "") : "none"} | query_key=${req.query.api_key ? "yes" : "no"}`);
+
     // 1. Try OAuth Bearer token
     if (bearerToken && isMcpOAuthConfigured() && validateBearerToken(bearerToken)) {
+      console.log("[MCP Auth] ✓ OAuth Bearer token valid");
       return next();
     }
 
@@ -580,13 +583,20 @@ async function main(): Promise<void> {
     const apiKey = process.env.MCP_API_KEY;
     if (apiKey) {
       const provided = bearerToken || (req.query.api_key as string);
-      if (provided === apiKey) return next();
+      if (provided === apiKey) {
+        console.log("[MCP Auth] ✓ API key valid");
+        return next();
+      }
     }
 
     // 3. If neither auth method is configured, allow open access
-    if (!apiKey && !isMcpOAuthConfigured()) return next();
+    if (!apiKey && !isMcpOAuthConfigured()) {
+      console.log("[MCP Auth] ✓ Open access (no auth configured)");
+      return next();
+    }
 
     // 4. Unauthorized
+    console.log(`[MCP Auth] ✗ Unauthorized (oauth=${isMcpOAuthConfigured()}, apiKey=${!!apiKey}, bearer=${!!bearerToken})`);
     const wwwAuth = isMcpOAuthConfigured()
       ? `Bearer resource_metadata="${process.env.BASE_URL}/.well-known/oauth-protected-resource"`
       : "Bearer";

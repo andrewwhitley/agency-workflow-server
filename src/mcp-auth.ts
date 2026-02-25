@@ -92,6 +92,8 @@ export function handleAuthorize(req: Request, res: Response): void {
     state,
   } = req.query as Record<string, string>;
 
+  console.log(`[OAuth] GET /authorize | client_id=${client_id} | redirect_uri=${redirect_uri} | response_type=${response_type} | pkce=${code_challenge_method}`);
+
   // Validate required params
   if (response_type !== "code") {
     res.status(400).json({ error: "unsupported_response_type" });
@@ -167,6 +169,8 @@ export function handleToken(req: Request, res: Response): void {
     code_verifier,
   } = req.body;
 
+  console.log(`[OAuth] POST /token | grant_type=${grant_type} | client_id=${client_id} | has_secret=${!!client_secret} | has_verifier=${!!code_verifier} | redirect_uri=${redirect_uri}`);
+
   if (grant_type !== "authorization_code") {
     res.status(400).json({ error: "unsupported_grant_type" });
     return;
@@ -235,6 +239,7 @@ export function handleToken(req: Request, res: Response): void {
 
 export function handleRegister(req: Request, res: Response): void {
   const { client_name, redirect_uris } = req.body;
+  console.log(`[OAuth] POST /register | client_name=${client_name} | redirect_uris=${JSON.stringify(redirect_uris)}`);
 
   // Accept any registration — single-user server, we just echo back
   // a client_id. If the caller provides redirect_uris, validate them.
