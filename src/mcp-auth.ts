@@ -10,11 +10,7 @@ import type { Request, Response } from "express";
 // ─── Configuration ───────────────────────────────────────────
 
 export function isMcpOAuthConfigured(): boolean {
-  return !!(
-    process.env.MCP_OAUTH_CLIENT_ID &&
-    process.env.MCP_OAUTH_CLIENT_SECRET &&
-    process.env.BASE_URL
-  );
+  return !!(process.env.MCP_OAUTH_CLIENT_ID && process.env.BASE_URL);
 }
 
 const ALLOWED_REDIRECT_URIS = [
@@ -63,8 +59,9 @@ setInterval(() => {
 export function getProtectedResourceMetadata(): object {
   const base = process.env.BASE_URL!;
   return {
-    resource: base,
+    resource: `${base}/mcp/sse`,
     authorization_servers: [base],
+    scopes_supported: ["mcp"],
     bearer_methods_supported: ["header"],
   };
 }
@@ -75,10 +72,11 @@ export function getAuthorizationServerMetadata(): object {
     issuer: base,
     authorization_endpoint: `${base}/oauth/authorize`,
     token_endpoint: `${base}/oauth/token`,
+    registration_endpoint: `${base}/oauth/register`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["client_secret_post"],
+    token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
   };
 }
 
@@ -99,7 +97,7 @@ export function handleAuthorize(req: Request, res: Response): void {
     res.status(400).json({ error: "unsupported_response_type" });
     return;
   }
-  if (client_id !== process.env.MCP_OAUTH_CLIENT_ID) {
+  if (!client_id) {
     res.status(400).json({ error: "invalid_client" });
     return;
   }
@@ -131,7 +129,7 @@ export function handleAuthorizeApproval(req: Request, res: Response): void {
   }
 
   // Validate again (don't trust hidden fields blindly)
-  if (client_id !== process.env.MCP_OAUTH_CLIENT_ID) {
+  if (!client_id) {
     res.status(400).json({ error: "invalid_client" });
     return;
   }
@@ -174,11 +172,14 @@ export function handleToken(req: Request, res: Response): void {
     return;
   }
 
-  // Validate client credentials
-  if (
-    client_id !== process.env.MCP_OAUTH_CLIENT_ID ||
-    client_secret !== process.env.MCP_OAUTH_CLIENT_SECRET
-  ) {
+  // Validate client — accept "none" auth (public client) or client_secret_post
+  if (!client_id) {
+    res.status(401).json({ error: "invalid_client" });
+    return;
+  }
+  // If client_secret is provided, verify it matches (client_secret_post auth)
+  const expectedSecret = process.env.MCP_OAUTH_CLIENT_SECRET;
+  if (client_secret && expectedSecret && client_secret !== expectedSecret) {
     res.status(401).json({ error: "invalid_client" });
     return;
   }
@@ -227,6 +228,34 @@ export function handleToken(req: Request, res: Response): void {
     access_token: token,
     token_type: "Bearer",
     expires_in: ACCESS_TOKEN_TTL / 1000,
+  });
+}
+
+// ─── Dynamic Client Registration (RFC 7591) ─────────────────
+
+export function handleRegister(req: Request, res: Response): void {
+  const { client_name, redirect_uris } = req.body;
+
+  // Accept any registration — single-user server, we just echo back
+  // a client_id. If the caller provides redirect_uris, validate them.
+  if (redirect_uris && Array.isArray(redirect_uris)) {
+    for (const uri of redirect_uris) {
+      if (!ALLOWED_REDIRECT_URIS.includes(uri)) {
+        res.status(400).json({ error: "invalid_redirect_uri" });
+        return;
+      }
+    }
+  }
+
+  const clientId = process.env.MCP_OAUTH_CLIENT_ID || `dcr-${crypto.randomBytes(8).toString("hex")}`;
+
+  res.status(201).json({
+    client_id: clientId,
+    client_name: client_name || "MCP Client",
+    redirect_uris: redirect_uris || ALLOWED_REDIRECT_URIS,
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
   });
 }
 

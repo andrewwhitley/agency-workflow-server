@@ -46,6 +46,7 @@ import {
   handleAuthorize,
   handleAuthorizeApproval,
   handleToken,
+  handleRegister,
   validateBearerToken,
 } from "./mcp-auth.js";
 
@@ -210,15 +211,24 @@ async function main(): Promise<void> {
 
   // ─── 3e. OAuth 2.1 for MCP (public, no session needed) ──
   if (isMcpOAuthConfigured()) {
+    // Root well-known endpoints
     app.get("/.well-known/oauth-protected-resource", (_req, res) => {
       res.json(getProtectedResourceMetadata());
     });
     app.get("/.well-known/oauth-authorization-server", (_req, res) => {
       res.json(getAuthorizationServerMetadata());
     });
+    // Path-specific well-known endpoints (RFC 9728 — inserted between host and path)
+    app.get("/.well-known/oauth-protected-resource/*", (_req, res) => {
+      res.json(getProtectedResourceMetadata());
+    });
+    app.get("/.well-known/oauth-authorization-server/*", (_req, res) => {
+      res.json(getAuthorizationServerMetadata());
+    });
     app.get("/oauth/authorize", handleAuthorize);
     app.post("/oauth/authorize", handleAuthorizeApproval);
     app.post("/oauth/token", handleToken);
+    app.post("/oauth/register", handleRegister);
     console.log("✓ MCP OAuth 2.1 endpoints enabled");
   }
 
