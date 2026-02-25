@@ -48,6 +48,7 @@ Andrew Whitley — andrew@aimarketingteam.com
 - Domain: teamdashboard.aimarketingteam.com
 
 ## Mistakes to Avoid
+- **NEVER run `railway add`** — the PostgreSQL database already exists and is provisioned. Running this command creates duplicate instances that cost money. If you need to check the database, use `railway variables` to see `DATABASE_URL`.
 - Don't try to `cat` or read `dashboard.ts` in full — it will exceed token limits. Use offset/limit.
 - Don't modify existing migration SQL in `database.ts` — always append new migrations.
 - Don't forget `.js` extensions on imports — this is ESM.
