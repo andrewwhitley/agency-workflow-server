@@ -59,7 +59,7 @@ setInterval(() => {
 export function getProtectedResourceMetadata(): object {
   const base = process.env.BASE_URL!;
   return {
-    resource: `${base}/mcp/sse`,
+    resource: `${base}/mcp`,
     authorization_servers: [base],
     scopes_supported: ["mcp"],
     bearer_methods_supported: ["header"],

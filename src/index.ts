@@ -16,8 +16,10 @@ import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
 import rateLimit from "express-rate-limit";
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
@@ -563,15 +565,25 @@ async function main(): Promise<void> {
     });
   });
 
-  // ─── 14. MCP SSE Endpoint ─────────────────────────
-  const transports = new Map<string, SSEServerTransport>();
+  // ─── 14. MCP Endpoint (Streamable HTTP + legacy SSE) ────
 
-  // MCP auth: OAuth Bearer token → API key fallback → open if neither configured
+  // Helper: create a wired-up MCP server instance
+  function createMcpServer(): McpServer {
+    const server = new McpServer({ name: "agency-workflow-server", version: "1.0.0" });
+    bridgeWorkflowsToMcp(server, engine);
+    bridgeKnowledgeToMcp(server, knowledgeBase, sopParser, clientAgent);
+    bridgeThreadsToMcp(server);
+    bridgeTasksToMcp(server);
+    bridgeMemoriesToMcp(server);
+    return server;
+  }
+
+  // MCP auth middleware: OAuth Bearer → API key fallback → open if neither configured
   app.use("/mcp", (req, res, next) => {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
 
-    console.log(`[MCP Auth] ${req.method} ${req.path} | auth=${authHeader ? "Bearer ..." + (bearerToken?.slice(-6) || "") : "none"} | query_key=${req.query.api_key ? "yes" : "no"}`);
+    console.log(`[MCP Auth] ${req.method} ${req.path} | auth=${authHeader ? "Bearer ..." + (bearerToken?.slice(-6) || "") : "none"}`);
 
     // 1. Try OAuth Bearer token
     if (bearerToken && isMcpOAuthConfigured() && validateBearerToken(bearerToken)) {
@@ -590,13 +602,10 @@ async function main(): Promise<void> {
     }
 
     // 3. If neither auth method is configured, allow open access
-    if (!apiKey && !isMcpOAuthConfigured()) {
-      console.log("[MCP Auth] ✓ Open access (no auth configured)");
-      return next();
-    }
+    if (!apiKey && !isMcpOAuthConfigured()) return next();
 
     // 4. Unauthorized
-    console.log(`[MCP Auth] ✗ Unauthorized (oauth=${isMcpOAuthConfigured()}, apiKey=${!!apiKey}, bearer=${!!bearerToken})`);
+    console.log(`[MCP Auth] ✗ Unauthorized`);
     const wwwAuth = isMcpOAuthConfigured()
       ? `Bearer resource_metadata="${process.env.BASE_URL}/.well-known/oauth-protected-resource"`
       : "Bearer";
@@ -604,41 +613,72 @@ async function main(): Promise<void> {
     res.status(401).json({ error: "Unauthorized" });
   });
 
+  // ── Streamable HTTP transport (Claude.ai uses this) ──
+  const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+
+  // Single handler for GET, POST, DELETE on /mcp
+  const handleStreamableMcp = async (req: express.Request, res: express.Response) => {
+    // Check for existing session
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    let transport = sessionId ? streamableTransports.get(sessionId) : undefined;
+
+    if (transport) {
+      // Existing session — delegate
+      await transport.handleRequest(req, res, req.body);
+      return;
+    }
+
+    // For POST without session (initialization), or GET (SSE listen)
+    if (req.method === "POST" || req.method === "GET") {
+      transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+      const server = createMcpServer();
+      await server.connect(transport);
+
+      transport.onclose = () => {
+        const sid = transport!.sessionId;
+        if (sid) streamableTransports.delete(sid);
+        console.log(`MCP Streamable session closed: ${sid}`);
+      };
+
+      await transport.handleRequest(req, res, req.body);
+
+      if (transport.sessionId) {
+        streamableTransports.set(transport.sessionId, transport);
+        console.log(`MCP Streamable session started: ${transport.sessionId}`);
+      }
+      return;
+    }
+
+    res.status(405).json({ error: "Method not allowed" });
+  };
+
+  app.all("/mcp", handleStreamableMcp as any);
+
+  // ── Legacy SSE transport (existing MCP clients) ──
+  const sseTransports = new Map<string, SSEServerTransport>();
+
   app.get("/mcp/sse", async (req, res) => {
     console.log("MCP client connecting via SSE...");
-
-    const server = new McpServer({
-      name: "agency-workflow-server",
-      version: "1.0.0",
-    });
-
-    bridgeWorkflowsToMcp(server, engine);
-    bridgeKnowledgeToMcp(server, knowledgeBase, sopParser, clientAgent);
-    bridgeThreadsToMcp(server);
-    bridgeTasksToMcp(server);
-    bridgeMemoriesToMcp(server);
-
+    const server = createMcpServer();
     const transport = new SSEServerTransport("/mcp/messages", res);
-    transports.set(transport.sessionId, transport);
+    sseTransports.set(transport.sessionId, transport);
 
     res.on("close", () => {
-      transports.delete(transport.sessionId);
-      console.log(`MCP client disconnected: ${transport.sessionId}`);
+      sseTransports.delete(transport.sessionId);
+      console.log(`MCP SSE client disconnected: ${transport.sessionId}`);
     });
 
     await server.connect(transport);
-    console.log(`MCP client connected: ${transport.sessionId}`);
+    console.log(`MCP SSE client connected: ${transport.sessionId}`);
   });
 
   app.post("/mcp/messages", async (req, res) => {
     const sessionId = String(req.query.sessionId);
-    const transport = transports.get(sessionId);
-
+    const transport = sseTransports.get(sessionId);
     if (!transport) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
-
     await transport.handlePostMessage(req, res);
   });
 
