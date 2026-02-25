@@ -25,6 +25,7 @@ import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
 import type { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
+import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
 
 export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService): Router {
   const router = Router();
@@ -562,6 +563,45 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
     } catch (err) {
       console.error("Delete memory error:", err);
       res.status(500).json({ error: "Failed to delete memory" });
+    }
+  });
+
+  // ── Workbooks ─────────────────────────────────────────
+
+  router.get("/workbooks/clients", async (_req, res) => {
+    try {
+      const clients = listClients();
+      res.json(clients);
+    } catch (err) {
+      console.error("List workbook clients error:", err);
+      res.status(500).json({ error: "Failed to list clients" });
+    }
+  });
+
+  router.get("/workbooks/clients/:slug", async (req, res) => {
+    try {
+      const config = loadClientConfig(req.params.slug);
+      if (!config) { res.status(404).json({ error: "Client not found" }); return; }
+      res.json(config);
+    } catch (err) {
+      console.error("Get client config error:", err);
+      res.status(500).json({ error: "Failed to get client config" });
+    }
+  });
+
+  router.post("/workbooks/create", async (req, res) => {
+    const { client, sourceDocId, title } = req.body || {};
+    if (!client || !sourceDocId) {
+      res.status(400).json({ error: "client and sourceDocId are required" });
+      return;
+    }
+    try {
+      const result = await createWorkbook(client, sourceDocId, title);
+      res.status(201).json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Create workbook error:", err);
+      res.status(500).json({ error: `Failed to create workbook: ${message}` });
     }
   });
 

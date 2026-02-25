@@ -8,6 +8,7 @@ import { threadService, type Message } from "./thread-service.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { GoogleDriveService, extractGoogleId, type FormatOperation, type DocEdit } from "./google-drive.js";
+import { listClients, createWorkbook } from "./workbook-service.js";
 
 const anthropic = new Anthropic();
 
@@ -263,6 +264,21 @@ function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveS
     });
   }
 
+  // Workbook creation tool
+  tools.push({
+    name: "create_branded_workbook",
+    description: "Create a branded Google Doc workbook from a source document. Uses the client's brand colors, fonts, logos, and provider photos. Available clients: " + listClients().map(c => `${c.slug} (${c.name})`).join(", "),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        client: { type: "string", description: "Client slug (e.g. 'perfect-health-wellness')" },
+        source_doc_id: { type: "string", description: "Google Doc ID of the source content (from the URL)" },
+        title: { type: "string", description: "Optional custom title for the workbook" },
+      },
+      required: ["client", "source_doc_id"],
+    },
+  });
+
   return tools;
 }
 
@@ -487,6 +503,24 @@ async function executeToolCall(
     );
     if (wf) {
       return engine.run(wf.name, toolInput).then((result) => JSON.stringify(result, null, 2));
+    }
+  }
+
+  if (toolName === "create_branded_workbook") {
+    try {
+      const result = await createWorkbook(
+        toolInput.client as string,
+        toolInput.source_doc_id as string,
+        toolInput.title as string | undefined
+      );
+      return JSON.stringify({
+        success: true,
+        ...result,
+        note: "Workbook created. User should right-click images and set 'Wrap text' for best layout.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Workbook creation failed: ${message}` });
     }
   }
 

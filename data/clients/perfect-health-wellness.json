@@ -1,0 +1,27 @@
+{
+  "name": "Perfect Health and Wellness",
+  "provider": "Dr. Kat Stock, DC, LCN",
+
+  "colors": {
+    "primary":    "#00a1ae",
+    "secondary":  "#00cf7b",
+    "accent":     "#00c1ce",
+    "dark":       "#333333",
+    "muted":      "#666666",
+    "lightBg":    "#e6f7f8"
+  },
+
+  "fonts": {
+    "heading": "Montserrat",
+    "body": "Open Sans"
+  },
+
+  "images": {
+    "logo": "1UeRV2nhfMbKqn5H0Yo_2K_L2c01I7nk2",
+    "providerPhoto1": "1Hcith6v7qXpuZ_7U9ar-rNKduhRgsRRv",
+    "providerPhoto2": "1pCOglN0wEmiTHAoRUFZWIyyu4c4O5Gec"
+  },
+
+  "stockImageFolder": "1Cs0fWV_BABOkTxqvmNF5NY4VpzwHOqpc",
+  "outputFolder": "13TkgCeG7MMsKHGnpPcyD-AQUJyjmBPuo"
+}

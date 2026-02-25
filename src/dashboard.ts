@@ -1169,6 +1169,9 @@ export function getDashboardHtml(user?: SessionUser): string {
 
       <nav class="nav-section">
         <div class="nav-label">Productivity</div>
+        <div class="nav-item" data-view="workbooks" onclick="switchView('workbooks')">
+          <span>&#128214;</span> Workbooks
+        </div>
         <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">
           <span>&#9745;</span> Tasks <span class="count" id="tasks-count">0</span>
         </div>
@@ -1493,6 +1496,38 @@ export function getDashboardHtml(user?: SessionUser): string {
         </div>
         <div class="filter-pills" id="memory-category-pills" style="margin-bottom:20px;"></div>
         <div id="memories-grid" class="agent-grid"></div>
+      </div>
+
+      <!-- Workbooks View -->
+      <div id="view-workbooks" class="hidden">
+        <div class="page-header">
+          <h1>Create Branded Workbook</h1>
+          <p>Generate a branded Google Doc from workshop content</p>
+        </div>
+        <div style="max-width:600px;">
+          <div class="form-group">
+            <label>Client</label>
+            <select id="workbook-client" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--fg);font-size:14px;">
+              <option value="">Loading clients...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Source Google Doc URL or ID</label>
+            <input type="text" id="workbook-source" placeholder="Paste Google Doc URL or document ID" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--fg);font-size:14px;" />
+          </div>
+          <div class="form-group">
+            <label>Title (optional)</label>
+            <input type="text" id="workbook-title" placeholder="Custom workbook title" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg);color:var(--fg);font-size:14px;" />
+          </div>
+          <button class="btn btn-primary" id="workbook-create-btn" onclick="createWorkbook()" style="margin-top:8px;">Create Workbook</button>
+          <div id="workbook-status" style="margin-top:16px;"></div>
+          <div id="workbook-result" style="margin-top:16px;display:none;padding:16px;border-radius:8px;background:var(--card-bg);border:1px solid var(--border);">
+            <h3 style="margin:0 0 8px 0;color:var(--accent);">Workbook Created</h3>
+            <p id="workbook-result-title" style="margin:0 0 8px 0;"></p>
+            <a id="workbook-result-link" href="#" target="_blank" style="color:var(--accent);font-weight:600;">Open in Google Docs</a>
+            <p style="margin:12px 0 0 0;font-size:13px;color:var(--muted);">Next: Right-click each image &rarr; Image options &rarr; Text wrapping &rarr; Wrap text</p>
+          </div>
+        </div>
       </div>
 
       <!-- Memory Modal -->
@@ -1877,6 +1912,7 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (view === "drive") { checkDriveStatus(); loadIndexedDocs(); }
       if (view === "clients") loadClients();
       if (view === "sops") loadSOPs();
+      if (view === "workbooks") loadWorkbookClients();
       if (view === "tasks") loadTasks();
       if (view === "memories") loadMemories();
       if (view === "discord-logs") {
@@ -2358,6 +2394,69 @@ export function getDashboardHtml(user?: SessionUser): string {
         }).join("");
       } catch (err) {
         console.error("Failed to load Discord logs:", err);
+      }
+    }
+
+    // ─── Workbooks ─────────────────────────────────────
+    let workbookClientsLoaded = false;
+
+    async function loadWorkbookClients() {
+      if (workbookClientsLoaded) return;
+      try {
+        const clients = await api("/workbooks/clients");
+        const select = document.getElementById("workbook-client");
+        select.innerHTML = '<option value="">Select a client...</option>' +
+          clients.map(c => \`<option value="\${c.slug}">\${c.name} (\${c.provider})</option>\`).join("");
+        workbookClientsLoaded = true;
+      } catch (err) {
+        document.getElementById("workbook-client").innerHTML = '<option value="">Failed to load clients</option>';
+      }
+    }
+
+    function extractDocId(input) {
+      if (!input) return null;
+      // Handle full Google Doc URLs
+      const match = input.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+      if (match) return match[1];
+      // Handle plain ID (no slashes)
+      if (/^[a-zA-Z0-9_-]+$/.test(input.trim())) return input.trim();
+      return null;
+    }
+
+    async function createWorkbook() {
+      const client = document.getElementById("workbook-client").value;
+      const sourceRaw = document.getElementById("workbook-source").value;
+      const title = document.getElementById("workbook-title").value || undefined;
+      const sourceDocId = extractDocId(sourceRaw);
+
+      if (!client) { alert("Please select a client."); return; }
+      if (!sourceDocId) { alert("Please enter a valid Google Doc URL or ID."); return; }
+
+      const btn = document.getElementById("workbook-create-btn");
+      const status = document.getElementById("workbook-status");
+      const result = document.getElementById("workbook-result");
+      btn.disabled = true;
+      btn.textContent = "Creating...";
+      status.innerHTML = '<span style="color:var(--muted);">Copying doc, applying branding, inserting images... This takes about 30 seconds.</span>';
+      result.style.display = "none";
+
+      try {
+        const data = await api("/workbooks/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client, sourceDocId, title }),
+        });
+        status.innerHTML = "";
+        result.style.display = "block";
+        document.getElementById("workbook-result-title").textContent = data.title + " (" + data.client + ") — " + data.imagesInserted + " images inserted";
+        const link = document.getElementById("workbook-result-link");
+        link.href = data.url;
+        link.textContent = data.url;
+      } catch (err) {
+        status.innerHTML = '<span style="color:#e74c3c;">Error: ' + (err.message || "Unknown error") + '</span>';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Create Workbook";
       }
     }
 

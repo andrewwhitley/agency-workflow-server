@@ -1,6 +1,7 @@
 node_modules/
 build/
-data/
+data/*
+!data/clients/
 .env
 *.log
 images and screenshots/
