@@ -532,6 +532,22 @@ async function main(): Promise<void> {
   // ─── 14. MCP SSE Endpoint ─────────────────────────
   const transports = new Map<string, SSEServerTransport>();
 
+  // API key gate for MCP — if MCP_API_KEY is set, require it
+  app.use("/mcp", (req, res, next) => {
+    const key = process.env.MCP_API_KEY;
+    if (!key) return next(); // no key configured = open access
+
+    const provided =
+      req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
+      (req.query.api_key as string);
+
+    if (provided !== key) {
+      res.status(401).json({ error: "Invalid or missing API key" });
+      return;
+    }
+    next();
+  });
+
   app.get("/mcp/sse", async (req, res) => {
     console.log("MCP client connecting via SSE...");
 
