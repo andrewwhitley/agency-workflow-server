@@ -57,7 +57,8 @@ setInterval(() => {
 // ─── Metadata endpoints ──────────────────────────────────────
 
 export function getProtectedResourceMetadata(): object {
-  const base = process.env.BASE_URL!;
+  const base = process.env.BASE_URL!.replace(/\/+$/, "");
+  console.log(`[OAuth] Protected resource metadata requested (build v3, base=${base})`);
   return {
     resource: `${base}/mcp`,
     authorization_servers: [base],
