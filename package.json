@@ -1,6 +1,6 @@
 {
   "name": "mcp-agency-workflow-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP Workflow Server with dashboard — built for digital marketing agencies",
   "type": "module",
   "scripts": {
