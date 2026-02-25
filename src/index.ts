@@ -39,6 +39,15 @@ import {
   requireAuth,
   type SessionUser,
 } from "./oauth.js";
+import {
+  isMcpOAuthConfigured,
+  getProtectedResourceMetadata,
+  getAuthorizationServerMetadata,
+  handleAuthorize,
+  handleAuthorizeApproval,
+  handleToken,
+  validateBearerToken,
+} from "./mcp-auth.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -88,6 +97,7 @@ async function main(): Promise<void> {
   const app = express();
   app.set("trust proxy", 1);
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
 
   // ─── 3b. Session middleware ───────────────────────
   app.use(
@@ -197,6 +207,20 @@ async function main(): Promise<void> {
       res.json({ authenticated: !isOAuthConfigured() });
     }
   });
+
+  // ─── 3e. OAuth 2.1 for MCP (public, no session needed) ──
+  if (isMcpOAuthConfigured()) {
+    app.get("/.well-known/oauth-protected-resource", (_req, res) => {
+      res.json(getProtectedResourceMetadata());
+    });
+    app.get("/.well-known/oauth-authorization-server", (_req, res) => {
+      res.json(getAuthorizationServerMetadata());
+    });
+    app.get("/oauth/authorize", handleAuthorize);
+    app.post("/oauth/authorize", handleAuthorizeApproval);
+    app.post("/oauth/token", handleToken);
+    console.log("✓ MCP OAuth 2.1 endpoints enabled");
+  }
 
   // ─── 4. Dashboard (protected) ──────────────────────
   app.get("/", requireAuth, (req, res) => {
@@ -532,20 +556,32 @@ async function main(): Promise<void> {
   // ─── 14. MCP SSE Endpoint ─────────────────────────
   const transports = new Map<string, SSEServerTransport>();
 
-  // API key gate for MCP — if MCP_API_KEY is set, require it
+  // MCP auth: OAuth Bearer token → API key fallback → open if neither configured
   app.use("/mcp", (req, res, next) => {
-    const key = process.env.MCP_API_KEY;
-    if (!key) return next(); // no key configured = open access
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
 
-    const provided =
-      req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
-      (req.query.api_key as string);
-
-    if (provided !== key) {
-      res.status(401).json({ error: "Invalid or missing API key" });
-      return;
+    // 1. Try OAuth Bearer token
+    if (bearerToken && isMcpOAuthConfigured() && validateBearerToken(bearerToken)) {
+      return next();
     }
-    next();
+
+    // 2. Try legacy API key (via Bearer header or query param)
+    const apiKey = process.env.MCP_API_KEY;
+    if (apiKey) {
+      const provided = bearerToken || (req.query.api_key as string);
+      if (provided === apiKey) return next();
+    }
+
+    // 3. If neither auth method is configured, allow open access
+    if (!apiKey && !isMcpOAuthConfigured()) return next();
+
+    // 4. Unauthorized
+    const wwwAuth = isMcpOAuthConfigured()
+      ? `Bearer resource_metadata="${process.env.BASE_URL}/.well-known/oauth-protected-resource"`
+      : "Bearer";
+    res.setHeader("WWW-Authenticate", wwwAuth);
+    res.status(401).json({ error: "Unauthorized" });
   });
 
   app.get("/mcp/sse", async (req, res) => {
@@ -606,6 +642,7 @@ async function main(): Promise<void> {
     console.log(`  Health:      http://localhost:${PORT}/health`);
     console.log(`  Drive:       ${authService.isAuthenticated() ? "Connected (" + authService.getServiceEmail() + ")" : "Not configured (set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SERVICE_ACCOUNT_JSON)"}`);
     console.log(`  Auth:        ${isOAuthConfigured() ? "Google OAuth enabled" : "Disabled (no GOOGLE_OAUTH_CLIENT_ID)"}`);
+    console.log(`  MCP Auth:    ${isMcpOAuthConfigured() ? "OAuth 2.1 enabled" : process.env.MCP_API_KEY ? "API key only" : "Open access"}`);
     console.log(`  Database:    ${process.env.DATABASE_URL ? "Connected" : "Not configured"}`);
     console.log(`  Oracle:      ${process.env.ORACLE_FOLDER_ID ? "Configured" : "Not configured (set ORACLE_FOLDER_ID)"}`);
 
