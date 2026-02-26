@@ -9,8 +9,13 @@ import type { Request, Response } from "express";
 
 // ─── Configuration ───────────────────────────────────────────
 
+/** MCP OAuth base URL — uses MCP_BASE_URL if set, otherwise falls back to BASE_URL */
+function getMcpBaseUrl(): string {
+  return (process.env.MCP_BASE_URL || process.env.BASE_URL || "").replace(/\/+$/, "");
+}
+
 export function isMcpOAuthConfigured(): boolean {
-  return !!(process.env.MCP_OAUTH_CLIENT_ID && process.env.BASE_URL);
+  return !!(process.env.MCP_OAUTH_CLIENT_ID && getMcpBaseUrl());
 }
 
 const ALLOWED_REDIRECT_URIS = [
@@ -57,8 +62,8 @@ setInterval(() => {
 // ─── Metadata endpoints ──────────────────────────────────────
 
 export function getProtectedResourceMetadata(): object {
-  const base = process.env.BASE_URL!.replace(/\/+$/, "");
-  console.log(`[OAuth] Protected resource metadata requested (build v3, base=${base})`);
+  const base = getMcpBaseUrl();
+  console.log(`[OAuth] Protected resource metadata requested (build v4, base=${base})`);
   return {
     resource: `${base}/mcp`,
     authorization_servers: [base],
@@ -68,7 +73,7 @@ export function getProtectedResourceMetadata(): object {
 }
 
 export function getAuthorizationServerMetadata(): object {
-  const base = process.env.BASE_URL!;
+  const base = getMcpBaseUrl();
   return {
     issuer: base,
     authorization_endpoint: `${base}/oauth/authorize`,

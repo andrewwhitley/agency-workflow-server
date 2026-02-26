@@ -607,7 +607,7 @@ async function main(): Promise<void> {
     // 4. Unauthorized
     console.log(`[MCP Auth] ✗ Unauthorized`);
     const wwwAuth = isMcpOAuthConfigured()
-      ? `Bearer resource_metadata="${process.env.BASE_URL}/.well-known/oauth-protected-resource"`
+      ? `Bearer resource_metadata="${process.env.MCP_BASE_URL || process.env.BASE_URL}/.well-known/oauth-protected-resource"`
       : "Bearer";
     res.setHeader("WWW-Authenticate", wwwAuth);
     res.status(401).json({ error: "Unauthorized" });
