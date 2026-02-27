@@ -237,12 +237,18 @@ async function main(): Promise<void> {
   // ─── 4. Dashboard (protected) ──────────────────────
   app.get("/", requireAuth, (req, res) => {
     const user = (req.session as any)?.user as SessionUser | undefined;
+    console.log(`[Dashboard] GET / | user=${user?.email || "none"} | oauthConfigured=${isOAuthConfigured()}`);
     res.setHeader("Content-Type", "text/html");
     res.send(getDashboardHtml(user));
   });
 
   // ─── 5. REST API (for dashboard) ───────────────────
   // Protect all /api routes except /api/auth/me (already defined above)
+  app.use("/api", (req, res, next) => {
+    const user = (req.session as any)?.user as SessionUser | undefined;
+    console.log(`[API] ${req.method} ${req.path} | user=${user?.email || "none"} | session=${!!req.session}`);
+    next();
+  });
   app.use("/api", requireAuth);
 
   app.get("/api/workflows", (_req, res) => {

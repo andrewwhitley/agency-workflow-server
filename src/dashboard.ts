@@ -1566,7 +1566,7 @@ export function getDashboardHtml(user?: SessionUser): string {
     <div class="modal" id="modal"></div>
   </div>
 
-  <script>
+  <script data-cfasync="false">
     // ─── State ──────────────────────────────────────────
     let workflows = [];
     let stats = {};
