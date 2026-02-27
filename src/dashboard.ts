@@ -2416,7 +2416,7 @@ export function getDashboardHtml(user?: SessionUser): string {
     function extractDocId(input) {
       if (!input) return null;
       // Handle full Google Doc URLs
-      const match = input.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+      const match = input.match(/\\/document\\/d\\/([a-zA-Z0-9_-]+)/);
       if (match) return match[1];
       // Handle plain ID (no slashes)
       if (/^[a-zA-Z0-9_-]+$/.test(input.trim())) return input.trim();
