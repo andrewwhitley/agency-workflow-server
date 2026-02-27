@@ -237,18 +237,12 @@ async function main(): Promise<void> {
   // ─── 4. Dashboard (protected) ──────────────────────
   app.get("/", requireAuth, (req, res) => {
     const user = (req.session as any)?.user as SessionUser | undefined;
-    console.log(`[Dashboard] GET / | user=${user?.email || "none"} | oauthConfigured=${isOAuthConfigured()}`);
     res.setHeader("Content-Type", "text/html");
     res.send(getDashboardHtml(user));
   });
 
   // ─── 5. REST API (for dashboard) ───────────────────
   // Protect all /api routes except /api/auth/me (already defined above)
-  app.use("/api", (req, res, next) => {
-    const user = (req.session as any)?.user as SessionUser | undefined;
-    console.log(`[API] ${req.method} ${req.path} | user=${user?.email || "none"} | session=${!!req.session}`);
-    next();
-  });
   app.use("/api", requireAuth);
 
   app.get("/api/workflows", (_req, res) => {
@@ -589,11 +583,8 @@ async function main(): Promise<void> {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
 
-    console.log(`[MCP Auth] ${req.method} ${req.path} | auth=${authHeader ? "Bearer ..." + (bearerToken?.slice(-6) || "") : "none"}`);
-
     // 1. Try OAuth Bearer token
     if (bearerToken && isMcpOAuthConfigured() && validateBearerToken(bearerToken)) {
-      console.log("[MCP Auth] ✓ OAuth Bearer token valid");
       return next();
     }
 
@@ -601,17 +592,13 @@ async function main(): Promise<void> {
     const apiKey = process.env.MCP_API_KEY;
     if (apiKey) {
       const provided = bearerToken || (req.query.api_key as string);
-      if (provided === apiKey) {
-        console.log("[MCP Auth] ✓ API key valid");
-        return next();
-      }
+      if (provided === apiKey) return next();
     }
 
     // 3. If neither auth method is configured, allow open access
     if (!apiKey && !isMcpOAuthConfigured()) return next();
 
     // 4. Unauthorized
-    console.log(`[MCP Auth] ✗ Unauthorized`);
     const wwwAuth = isMcpOAuthConfigured()
       ? `Bearer resource_metadata="${process.env.MCP_BASE_URL || process.env.BASE_URL}/.well-known/oauth-protected-resource"`
       : "Bearer";
