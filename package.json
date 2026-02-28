@@ -1,7 +1,7 @@
 {
-  "name": "mcp-agency-workflow-server",
-  "version": "1.1.0",
-  "description": "MCP Workflow Server with dashboard — built for digital marketing agencies",
+  "name": "optimal-health-dashboard",
+  "version": "1.0.0",
+  "description": "Functional medicine family health dashboard with AI wellness assistant",
   "type": "module",
   "scripts": {
     "build": "tsc && node scripts/validate-dashboard.mjs",
@@ -13,14 +13,11 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.75.0",
-    "@modelcontextprotocol/sdk": "^1.12.1",
     "cookie-session": "^2.1.1",
-    "discord.js": "^14.25.1",
     "dotenv": "^17.3.1",
     "express": "^4.21.0",
     "express-rate-limit": "^8.2.1",
     "googleapis": "^171.4.0",
-    "mammoth": "^1.11.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.18.0",
     "zod": "^3.25.0"

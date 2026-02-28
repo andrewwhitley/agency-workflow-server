@@ -3,7 +3,7 @@
  * and checks it for syntax errors. Run after `tsc`.
  */
 
-import { getDashboardHtml } from "../build/dashboard.js";
+import { getDashboardHtml } from "../build/health-dashboard.js";
 
 const html = getDashboardHtml();
 const scriptMatch = html.match(/<script[^>]*>([\s\S]*?)<\/script>/);
@@ -24,9 +24,9 @@ try {
   for (let i = lines.length; i > 0; i--) {
     try {
       new Function(lines.slice(0, i).join("\n"));
-      console.error(`  Near JS line ${i + 1}:`);
+      console.error("  Near JS line " + (i + 1) + ":");
       for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j++) {
-        console.error(`  ${j + 1}: ${lines[j]}`);
+        console.error("  " + (j + 1) + ": " + lines[j]);
       }
       break;
     } catch {}

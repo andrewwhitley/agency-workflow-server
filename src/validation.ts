@@ -1,102 +1,151 @@
 /**
- * Shared validation schemas and utilities.
+ * Zod validation schemas for all health data endpoints.
  */
 
-import { z, ZodTypeAny } from "zod";
-import type { InputType, InputDef } from "./workflow-engine.js";
+import { z } from "zod";
 
-// ── Zod schema helper (extracted from mcp-bridge.ts) ─────────
+// ── Family Members ──────────────────────────────────────────
 
-export function inputTypeToZod(type: InputType): ZodTypeAny {
-  switch (type) {
-    case "string":  return z.string();
-    case "number":  return z.number();
-    case "boolean": return z.boolean();
-    case "array":   return z.array(z.unknown());
-    case "object":  return z.record(z.unknown());
-    default:        return z.string();
-  }
-}
-
-// ── Agent schemas ─────────────────────────────────────────────
-
-export const createAgentSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).default(""),
-  system_prompt: z.string().max(50000).default("You are a helpful assistant."),
-  model: z.string().default("claude-sonnet-4-5-20250929"),
-  max_tokens: z.number().int().min(1).max(64000).default(4096),
-  temperature: z.number().min(0).max(1).default(0.7),
+export const createFamilyMemberSchema = z.object({
+  name: z.string().min(1).max(255),
+  date_of_birth: z.string().optional(),
+  sex: z.enum(["male", "female", "other"]).optional(),
+  role: z.enum(["adult", "child"]).optional(),
+  avatar_color: z.string().max(7).optional(),
+  height_inches: z.number().positive().optional(),
+  weight_lbs: z.number().positive().optional(),
+  blood_type: z.string().max(10).optional(),
+  allergies: z.array(z.string().max(200)).optional(),
+  conditions: z.array(z.string().max(200)).optional(),
+  medications: z.array(z.string().max(200)).optional(),
+  primary_doctor: z.string().max(255).optional(),
+  pharmacy_name: z.string().max(255).optional(),
+  pharmacy_phone: z.string().max(50).optional(),
+  insurance_provider: z.string().max(255).optional(),
+  insurance_policy: z.string().max(100).optional(),
+  insurance_group: z.string().max(100).optional(),
+  emergency_contact_name: z.string().max(255).optional(),
+  emergency_contact_phone: z.string().max(50).optional(),
+  address: z.string().max(1000).optional(),
+  health_goals: z.array(z.string().max(500)).optional(),
+  notes: z.string().max(5000).optional(),
 });
 
-export const updateAgentSchema = createAgentSchema.partial();
+export const updateFamilyMemberSchema = createFamilyMemberSchema.partial();
 
-// ── Thread schemas ────────────────────────────────────────────
+// ── Lab Results ─────────────────────────────────────────────
 
-export const createThreadSchema = z.object({
-  title: z.string().max(200).optional(),
-  agent_id: z.string().uuid(),
-  client: z.string().max(100).optional(),
-  created_by: z.string().max(200).optional(),
-});
-
-export const updateThreadSchema = z.object({
-  title: z.string().max(200).optional(),
-  archived: z.boolean().optional(),
-});
-
-// ── Attachment schema ─────────────────────────────────────────
-
-export const attachmentSchema = z.object({
-  name: z.string().min(1).max(500),
-  mime_type: z.string().min(1).max(200),
-  data: z.string().max(30_000_000), // base64, ~22MB raw
-});
-
-// ── Message schemas ───────────────────────────────────────────
-
-export const createMessageSchema = z.object({
-  content: z.string().min(0).max(100000),
-  attachments: z.array(attachmentSchema).max(5).optional(),
-}).refine(
-  (d) => (d.content && d.content.trim().length > 0) || (d.attachments && d.attachments.length > 0),
-  { message: "Either content or attachments must be provided" },
-);
-
-// ── Training doc schemas ──────────────────────────────────────
-
-export const createTrainingDocSchema = z.object({
-  title: z.string().min(1).max(200),
-  content: z.string().min(1).max(200000),
-  doc_type: z.enum(["reference", "example", "instruction", "context"]).default("reference"),
-  source: z.string().max(500).optional(),
-});
-
-// ── Task schemas ─────────────────────────────────────────────
-
-export const createTaskSchema = z.object({
-  title: z.string().min(1).max(300),
-  description: z.string().max(10000).default(""),
-  status: z.enum(["open", "in_progress", "completed", "blocked"]).default("open"),
-  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  due_date: z.string().datetime().optional(),
-  tags: z.array(z.string().max(50)).max(20).default([]),
-  thread_id: z.string().uuid().optional(),
-  created_by: z.string().max(200).optional(),
-  assigned_to: z.string().max(200).optional(),
-});
-
-export const updateTaskSchema = createTaskSchema.partial();
-
-// ── Memory schemas ───────────────────────────────────────────
-
-export const upsertMemorySchema = z.object({
-  key: z.string().min(1).max(300),
-  content: z.string().min(1).max(50000),
+export const markerInputSchema = z.object({
+  name: z.string().min(1).max(255),
+  value: z.number(),
+  unit: z.string().max(50).optional(),
+  conventional_low: z.number().optional(),
+  conventional_high: z.number().optional(),
+  optimal_low: z.number().optional(),
+  optimal_high: z.number().optional(),
   category: z.string().max(100).optional(),
-  created_by: z.string().max(200).optional(),
+  notes: z.string().max(1000).optional(),
 });
 
-// ── Workflow run validation ───────────────────────────────────
+export const createLabResultSchema = z.object({
+  family_member_id: z.string().uuid(),
+  test_date: z.string().min(1),
+  lab_name: z.string().max(255).optional(),
+  test_type: z.string().max(255).optional(),
+  notes: z.string().max(5000).optional(),
+  markers: z.array(markerInputSchema).optional(),
+});
 
-export const workflowRunSchema = z.record(z.unknown());
+export const updateLabResultSchema = z.object({
+  test_date: z.string().optional(),
+  lab_name: z.string().max(255).optional(),
+  test_type: z.string().max(255).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+// ── Symptoms ────────────────────────────────────────────────
+
+export const createSymptomSchema = z.object({
+  family_member_id: z.string().uuid(),
+  logged_date: z.string().optional(),
+  symptom: z.string().min(1).max(255),
+  severity: z.number().int().min(1).max(10),
+  body_system: z.string().max(100).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export const updateSymptomSchema = z.object({
+  logged_date: z.string().optional(),
+  symptom: z.string().min(1).max(255).optional(),
+  severity: z.number().int().min(1).max(10).optional(),
+  body_system: z.string().max(100).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+// ── Protocols ───────────────────────────────────────────────
+
+export const createProtocolSchema = z.object({
+  family_member_id: z.string().uuid(),
+  name: z.string().min(1).max(255),
+  category: z.string().max(100).optional(),
+  description: z.string().max(5000).optional(),
+  dosage: z.string().max(255).optional(),
+  frequency: z.string().max(255).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  status: z.enum(["active", "paused", "completed", "discontinued"]).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export const updateProtocolSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  category: z.string().max(100).optional(),
+  description: z.string().max(5000).optional(),
+  dosage: z.string().max(255).optional(),
+  frequency: z.string().max(255).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
+  status: z.enum(["active", "paused", "completed", "discontinued"]).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+// ── Diet ────────────────────────────────────────────────────
+
+export const createDietSchema = z.object({
+  family_member_id: z.string().uuid(),
+  logged_date: z.string().optional(),
+  meal_type: z.string().max(50).optional(),
+  description: z.string().min(1).max(5000),
+  tags: z.array(z.string().max(50)).optional(),
+  reactions: z.string().max(2000).optional(),
+  energy_level: z.number().int().min(1).max(10).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export const updateDietSchema = z.object({
+  logged_date: z.string().optional(),
+  meal_type: z.string().max(50).optional(),
+  description: z.string().min(1).max(5000).optional(),
+  tags: z.array(z.string().max(50)).optional(),
+  reactions: z.string().max(2000).optional(),
+  energy_level: z.number().int().min(1).max(10).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+// ── Chat ────────────────────────────────────────────────────
+
+export const chatMessageSchema = z.object({
+  message: z.string().min(1).max(10000),
+  family_member_id: z.string().uuid(),
+  conversation_id: z.string().uuid().optional(),
+});
+
+// ── Knowledge Documents ─────────────────────────────────────
+
+export const uploadKnowledgeSchema = z.object({
+  title: z.string().min(1).max(500),
+  filename: z.string().max(500).optional(),
+  content: z.string().min(1),
+  doc_type: z.enum(["reference", "book", "guide", "protocol", "research"]).optional(),
+  category: z.string().max(100).optional(),
+});
