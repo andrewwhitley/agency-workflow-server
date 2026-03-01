@@ -656,6 +656,9 @@ export async function* streamChat(
 
   console.log(`[chat] Thread ${threadId}: ${currentMessages.length} messages, ${tools.length} tools, model=${agent.model}`);
 
+  // Track all tool_use IDs across loop iterations to prevent duplicates (API requires unique IDs)
+  const seenToolUseIds = new Set<string>();
+
   // Tool use loop
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -715,13 +718,23 @@ export async function* streamChat(
 
       for (const block of finalMessage.content) {
         if (block.type === "tool_use") {
+          let id = block.id;
+          // Ensure tool_use IDs are unique across all loop iterations
+          if (seenToolUseIds.has(id)) {
+            id = `toolu_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 11)}`;
+            console.warn(`[chat] Duplicate tool_use ID detected, remapped: ${block.id} → ${id}`);
+          }
+          seenToolUseIds.add(id);
+
           toolUseBlocks.push({
-            id: block.id,
+            id,
             name: block.name,
             input: block.input as Record<string, unknown>,
           });
+          assistantContent.push(id === block.id ? block : { ...block, id } as Anthropic.ContentBlock);
+        } else {
+          assistantContent.push(block);
         }
-        assistantContent.push(block);
       }
 
       // Add assistant message with tool_use blocks
