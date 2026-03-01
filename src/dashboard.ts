@@ -1161,6 +1161,13 @@ export function getDashboardHtml(user?: SessionUser): string {
       </nav>
 
       <nav class="nav-section">
+        <div class="nav-label">Company</div>
+        <div class="nav-item" data-view="eos" onclick="switchView('eos')">
+          <span>&#127919;</span> EOS Dashboard
+        </div>
+      </nav>
+
+      <nav class="nav-section">
         <div class="nav-label">Integrations</div>
         <div class="nav-item" data-view="discord-logs" onclick="switchView('discord-logs')">
           <span>&#9993;</span> Discord Logs
@@ -1527,6 +1534,29 @@ export function getDashboardHtml(user?: SessionUser): string {
             <a id="workbook-result-link" href="#" target="_blank" style="color:var(--accent);font-weight:600;">Open in Google Docs</a>
             <p style="margin:12px 0 0 0;font-size:13px;color:var(--muted);">Next: Right-click each image &rarr; Image options &rarr; Text wrapping &rarr; Wrap text</p>
           </div>
+        </div>
+      </div>
+
+      <!-- ═══ EOS Dashboard View ═══ -->
+      <div id="view-eos" class="hidden">
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h1>EOS Dashboard</h1>
+            <p>Vision, Rocks, Goals & HR documents from Google Drive</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="loadEosDocs()">Refresh</button>
+        </div>
+        <div id="eos-loading" style="display:none;text-align:center;padding:40px;color:var(--text-muted);">Loading EOS documents...</div>
+        <div id="eos-grid" class="agent-grid"></div>
+        <div id="eos-doc-viewer" class="hidden" style="margin-top:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <h2 id="eos-doc-title" style="font-size:18px;"></h2>
+            <div style="display:flex;gap:8px;">
+              <a id="eos-doc-drive-link" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in Drive</a>
+              <button class="btn btn-ghost btn-sm" onclick="closeEosDoc()">Close</button>
+            </div>
+          </div>
+          <div id="eos-doc-content" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:600px;overflow-y:auto;"></div>
         </div>
       </div>
 
@@ -1913,6 +1943,7 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (view === "clients") loadClients();
       if (view === "sops") loadSOPs();
       if (view === "workbooks") loadWorkbookClients();
+      if (view === "eos") loadEosDocs();
       if (view === "tasks") loadTasks();
       if (view === "memories") loadMemories();
       if (view === "discord-logs") {
@@ -2348,6 +2379,119 @@ export function getDashboardHtml(user?: SessionUser): string {
       } catch (err) {
         console.error("Register SOP error:", err);
       }
+    }
+
+    // ─── EOS Dashboard ─────────────────────────────────
+    let eosDocsLoaded = false;
+    let eosFiles = [];
+
+    async function loadEosDocs() {
+      const grid = document.getElementById("eos-grid");
+      const loading = document.getElementById("eos-loading");
+      const viewer = document.getElementById("eos-doc-viewer");
+
+      // Always hide viewer on reload
+      viewer.classList.add("hidden");
+
+      if (!eosDocsLoaded) {
+        loading.style.display = "block";
+        grid.innerHTML = "";
+      }
+
+      try {
+        const data = await api("/eos/files");
+        eosFiles = data.files || [];
+        eosDocsLoaded = true;
+        loading.style.display = "none";
+
+        if (!eosFiles.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#127919;</div><p>No EOS documents found. Add documents to your EOS folder in Google Drive.</p></div>';
+          return;
+        }
+
+        // Categorize files
+        const categories = { vto: [], rocks: [], goals: [], hr: [], other: [] };
+        for (const f of eosFiles) {
+          const name = f.name.toLowerCase();
+          if (name.includes("vto") || name.includes("v/to") || name.includes("vision") || name.includes("traction")) {
+            categories.vto.push(f);
+          } else if (name.includes("rock")) {
+            categories.rocks.push(f);
+          } else if (name.includes("goal")) {
+            categories.goals.push(f);
+          } else if (name.includes("hr") || name.includes("handbook") || name.includes("policy") || name.includes("onboard") || name.includes("employee")) {
+            categories.hr.push(f);
+          } else {
+            categories.other.push(f);
+          }
+        }
+
+        const icons = { vto: "&#127758;", rocks: "&#9968;", goals: "&#127919;", hr: "&#128203;", other: "&#128196;" };
+        const labels = { vto: "Vision / Traction Organizer", rocks: "Rocks", goals: "Company Goals", hr: "HR Documents", other: "Other Documents" };
+        const colors = { vto: "var(--accent)", rocks: "var(--green)", goals: "var(--amber)", hr: "var(--blue)", other: "var(--text-muted)" };
+
+        let html = "";
+        for (const [cat, files] of Object.entries(categories)) {
+          if (!files.length) continue;
+          html += '<div style="margin-bottom:24px;">';
+          html += '<h3 style="font-size:14px;color:' + colors[cat] + ';margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span>' + icons[cat] + '</span> ' + labels[cat] + '</h3>';
+          html += '<div class="agent-grid">';
+          for (const f of files) {
+            const modified = new Date(f.modifiedTime).toLocaleDateString();
+            const mimeIcon = f.mimeType.includes("spreadsheet") ? "&#128202;" : f.mimeType.includes("document") ? "&#128196;" : f.mimeType.includes("pdf") ? "&#128213;" : "&#128196;";
+            const mimeLabel = f.mimeType.includes("spreadsheet") ? "Sheet" : f.mimeType.includes("document") ? "Doc" : f.mimeType.includes("pdf") ? "PDF" : "File";
+            html += '<div class="agent-card" style="cursor:pointer;" onclick="openEosDoc(\\'' + f.id + '\\', \\'' + f.name.replace(/'/g, "\\\\'") + '\\', \\'' + f.mimeType + '\\')">';
+            html += '<div class="agent-card-name">' + mimeIcon + ' ' + escapeHtml(f.name) + '</div>';
+            html += '<div class="agent-card-meta" style="margin-top:8px;">';
+            html += '<span>' + mimeLabel + '</span>';
+            html += '<span>Updated ' + modified + '</span>';
+            html += '</div>';
+            html += '</div>';
+          }
+          html += '</div></div>';
+        }
+
+        grid.innerHTML = html;
+      } catch (err) {
+        loading.style.display = "none";
+        grid.innerHTML = '<div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load EOS documents. Make sure Google Drive is connected and the EOS folder is shared with the service account.</p></div>';
+        console.error("EOS load error:", err);
+      }
+    }
+
+    async function openEosDoc(fileId, fileName, mimeType) {
+      const viewer = document.getElementById("eos-doc-viewer");
+      const titleEl = document.getElementById("eos-doc-title");
+      const contentEl = document.getElementById("eos-doc-content");
+      const driveLink = document.getElementById("eos-doc-drive-link");
+
+      titleEl.textContent = fileName;
+      contentEl.innerHTML = '<span style="color:var(--text-muted);">Loading document...</span>';
+      viewer.classList.remove("hidden");
+
+      // Build Drive link based on mime type
+      if (mimeType.includes("spreadsheet")) {
+        driveLink.href = "https://docs.google.com/spreadsheets/d/" + fileId;
+      } else if (mimeType.includes("document")) {
+        driveLink.href = "https://docs.google.com/document/d/" + fileId;
+      } else {
+        driveLink.href = "https://drive.google.com/file/d/" + fileId;
+      }
+
+      try {
+        const data = await api("/eos/file/" + fileId + "?mimeType=" + encodeURIComponent(mimeType));
+        contentEl.textContent = data.content || "(empty document)";
+      } catch (err) {
+        contentEl.innerHTML = '<span style="color:var(--red);">Failed to load document content.</span>';
+        console.error("EOS doc read error:", err);
+      }
+
+      // Scroll viewer into view
+      viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function closeEosDoc() {
+      document.getElementById("eos-doc-viewer").classList.add("hidden");
     }
 
     // ─── Discord Logs ────────────────────────────────────

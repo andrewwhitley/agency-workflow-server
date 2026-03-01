@@ -452,6 +452,40 @@ async function main(): Promise<void> {
     res.json(result);
   });
 
+  // ─── 11b. EOS Dashboard Routes ─────────────────────
+  const EOS_FOLDER_ID = process.env.EOS_FOLDER_ID || "1QqjiHxPKOCMfTxwPZXt8iAir9Q2mQx5D";
+
+  app.get("/api/eos/files", async (_req, res) => {
+    if (!authService.isAuthenticated()) {
+      res.status(401).json({ error: "Google Drive not connected" });
+      return;
+    }
+    try {
+      const drive = new GoogleDriveService(authService.getClient());
+      const files = await drive.listFiles(EOS_FOLDER_ID);
+      const folders = await drive.listFolders(EOS_FOLDER_ID);
+      res.json({ files, folders });
+    } catch (err) {
+      console.error("EOS files error:", err);
+      res.status(500).json({ error: "Failed to list EOS files" });
+    }
+  });
+
+  app.get("/api/eos/file/:fileId", async (req, res) => {
+    if (!authService.isAuthenticated()) {
+      res.status(401).json({ error: "Google Drive not connected" });
+      return;
+    }
+    try {
+      const drive = new GoogleDriveService(authService.getClient());
+      const content = await drive.readFile(req.params.fileId, req.query.mimeType as string || "application/vnd.google-apps.document");
+      res.json({ content });
+    } catch (err) {
+      console.error("EOS file read error:", err);
+      res.status(500).json({ error: "Failed to read EOS file" });
+    }
+  });
+
   // ─── 12. Discord Logs Route ─────────────────────────
   app.get("/api/discord/logs", (_req, res) => {
     let logs = discordBot.getChatLog();
@@ -483,6 +517,7 @@ async function main(): Promise<void> {
     const driveConnected = authService.isAuthenticated();
     const discordConnected = discordBot.isConnected();
     const oracleConfigured = !!process.env.ORACLE_FOLDER_ID;
+    const eosConfigured = !!(process.env.EOS_FOLDER_ID || "1QqjiHxPKOCMfTxwPZXt8iAir9Q2mQx5D");
 
     if (!dbConnected) { healthState = "warn"; reasons.push("Database not configured"); }
     if (!driveConnected) { reasons.push("Google Drive not connected"); }
