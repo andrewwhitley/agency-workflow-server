@@ -627,6 +627,83 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     .hidden { display: none !important; }
 
+    /* ── EOS Dashboard ─────────────────────────────────── */
+    .eos-sub-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+      flex-wrap: wrap;
+    }
+    .eos-sub-tab {
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .eos-sub-tab:hover { color: var(--text); }
+    .eos-sub-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .eos-sub-tab.admin-tab { color: var(--red); opacity: 0.6; }
+    .eos-sub-tab.admin-tab:hover { opacity: 1; }
+    .eos-sub-tab.admin-tab.active { opacity: 1; border-bottom-color: var(--red); }
+    .eos-section { display: none; }
+    .eos-section.active { display: block; }
+
+    .scorecard-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .scorecard-table th, .scorecard-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .scorecard-table th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .scorecard-table td { color: var(--text); }
+    .scorecard-table tr:hover td { background: var(--surface-2); }
+
+    .sc-on { color: var(--green); }
+    .sc-off { color: var(--red); }
+
+    .rock-status {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .rock-on_track { background: var(--green-dim); color: var(--green); }
+    .rock-off_track { background: var(--red-dim); color: var(--red); }
+    .rock-done { background: var(--accent-glow); color: var(--accent); }
+
+    .issue-priority-1 { border-left: 3px solid var(--red); }
+    .issue-priority-2 { border-left: 3px solid var(--amber); }
+    .issue-priority-3 { border-left: 3px solid var(--text-dim); }
+
+    .meeting-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      margin-bottom: 8px;
+    }
+    .meeting-card:hover { border-color: var(--accent); }
+
     .filter-pills {
       display: flex;
       gap: 8px;
@@ -1542,21 +1619,356 @@ export function getDashboardHtml(user?: SessionUser): string {
         <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
           <div>
             <h1>EOS Dashboard</h1>
-            <p>Vision, Rocks, Goals & HR documents from Google Drive</p>
+            <p>Entrepreneurial Operating System — Vision, Rocks, Scorecard, IDS & more</p>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="loadEosDocs()">Refresh</button>
         </div>
-        <div id="eos-loading" style="display:none;text-align:center;padding:40px;color:var(--text-muted);">Loading EOS documents...</div>
-        <div id="eos-grid" class="agent-grid"></div>
-        <div id="eos-doc-viewer" class="hidden" style="margin-top:20px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-            <h2 id="eos-doc-title" style="font-size:18px;"></h2>
+
+        <!-- Sub-tabs -->
+        <div class="eos-sub-tabs" id="eos-sub-tabs">
+          <button class="eos-sub-tab active" onclick="eosTab('rocks')">Rocks</button>
+          <button class="eos-sub-tab" onclick="eosTab('scorecard')">Scorecard</button>
+          <button class="eos-sub-tab" onclick="eosTab('ids')">IDS</button>
+          <button class="eos-sub-tab" onclick="eosTab('meetings')">L10 Meetings</button>
+          <button class="eos-sub-tab" onclick="eosTab('vto')">V/TO & Docs</button>
+          <button class="eos-sub-tab admin-tab hidden" id="eos-admin-issues-tab" onclick="eosTab('internal')">Internal Issues</button>
+          <button class="eos-sub-tab admin-tab hidden" id="eos-admin-people-tab" onclick="eosTab('people')">People Analyzer</button>
+        </div>
+
+        <!-- Rocks Section -->
+        <div class="eos-section active" id="eos-sec-rocks">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <select id="eos-rocks-quarter" onchange="loadEosRocks()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;"></select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openRockModal()">+ Add Rock</button>
+          </div>
+          <div id="eos-rocks-grid" class="agent-grid"></div>
+        </div>
+
+        <!-- Scorecard Section -->
+        <div class="eos-section" id="eos-sec-scorecard">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="font-size:14px;color:var(--text-muted);">Weekly Scorecard</h3>
             <div style="display:flex;gap:8px;">
-              <a id="eos-doc-drive-link" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in Drive</a>
-              <button class="btn btn-ghost btn-sm" onclick="closeEosDoc()">Close</button>
+              <button class="btn btn-ghost btn-sm" onclick="openScorecardEntryModal()">+ Log Entry</button>
+              <button class="btn btn-primary btn-sm" onclick="openScorecardMetricModal()">+ Add Metric</button>
             </div>
           </div>
-          <div id="eos-doc-content" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:600px;overflow-y:auto;"></div>
+          <div id="eos-scorecard-table" style="overflow-x:auto;"></div>
+        </div>
+
+        <!-- IDS Section -->
+        <div class="eos-section" id="eos-sec-ids">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div class="filter-pills" id="eos-ids-filter">
+              <button class="pill active" onclick="setIdsFilter('all')">All</button>
+              <button class="pill" onclick="setIdsFilter('open')">Open</button>
+              <button class="pill" onclick="setIdsFilter('solving')">Solving</button>
+              <button class="pill" onclick="setIdsFilter('solved')">Solved</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openIssueModal()">+ Add Issue</button>
+          </div>
+          <div id="eos-ids-grid" class="agent-grid"></div>
+        </div>
+
+        <!-- L10 Meetings Section -->
+        <div class="eos-section" id="eos-sec-meetings">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="font-size:14px;color:var(--text-muted);">L10 Meeting Notes</h3>
+            <button class="btn btn-primary btn-sm" onclick="openMeetingModal()">+ New Meeting</button>
+          </div>
+          <div id="eos-meetings-list"></div>
+          <div id="eos-meeting-detail" class="hidden" style="margin-top:16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;"></div>
+        </div>
+
+        <!-- V/TO & Docs Section -->
+        <div class="eos-section" id="eos-sec-vto">
+          <div id="eos-vto-grid" class="agent-grid"></div>
+          <div id="eos-doc-viewer" class="hidden" style="margin-top:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h2 id="eos-doc-title" style="font-size:18px;"></h2>
+              <div style="display:flex;gap:8px;">
+                <a id="eos-doc-drive-link" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in Drive</a>
+                <button class="btn btn-ghost btn-sm" onclick="closeEosDoc()">Close</button>
+              </div>
+            </div>
+            <div id="eos-doc-content" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;white-space:pre-wrap;font-size:14px;line-height:1.7;max-height:600px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- Internal Issues (admin only) -->
+        <div class="eos-section" id="eos-sec-internal">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div class="filter-pills" id="eos-internal-filter">
+              <button class="pill active" onclick="setInternalFilter('all')">All</button>
+              <button class="pill" onclick="setInternalFilter('open')">Open</button>
+              <button class="pill" onclick="setInternalFilter('solved')">Solved</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openIssueModal('internal')">+ Add Internal Issue</button>
+          </div>
+          <div id="eos-internal-grid" class="agent-grid"></div>
+        </div>
+
+        <!-- People Analyzer (admin only) -->
+        <div class="eos-section" id="eos-sec-people">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <select id="eos-people-quarter" onchange="loadPeopleAnalyzer()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;"></select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openPeopleModal()">+ Add Entry</button>
+          </div>
+          <div id="eos-people-table" style="overflow-x:auto;"></div>
+        </div>
+      </div>
+
+      <!-- EOS Rock Modal -->
+      <div class="modal-overlay" id="eos-rock-modal" onclick="if(event.target===this)closeRockModal()">
+        <div class="modal" style="max-width:520px;">
+          <h2 id="rock-modal-title">Add Rock</h2>
+          <form id="rock-form" onsubmit="saveRock(event)">
+            <input type="hidden" id="rock-edit-id" />
+            <div class="form-group">
+              <label>Rock Title *</label>
+              <input type="text" id="rock-title" required maxlength="300" placeholder="e.g. Launch new website" />
+            </div>
+            <div class="form-group">
+              <label>Owner *</label>
+              <input type="text" id="rock-owner" required maxlength="200" placeholder="Who owns this rock?" />
+            </div>
+            <div class="form-group">
+              <label>Quarter *</label>
+              <input type="text" id="rock-quarter" required maxlength="10" placeholder="e.g. Q1 2026" />
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="rock-status" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit;">
+                <option value="on_track">On Track</option>
+                <option value="off_track">Off Track</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="rock-notes" rows="3" maxlength="2000" placeholder="Progress notes..."></textarea>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="rock-save-btn">Save Rock</button>
+              <button type="button" class="btn btn-ghost" onclick="closeRockModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="rock-delete-btn" onclick="deleteRock()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- EOS Issue Modal -->
+      <div class="modal-overlay" id="eos-issue-modal" onclick="if(event.target===this)closeIssueModal()">
+        <div class="modal" style="max-width:520px;">
+          <h2 id="issue-modal-title">Add Issue</h2>
+          <form id="issue-form" onsubmit="saveIssue(event)">
+            <input type="hidden" id="issue-edit-id" />
+            <input type="hidden" id="issue-category" value="ids" />
+            <div class="form-group">
+              <label>Issue Title *</label>
+              <input type="text" id="issue-title" required maxlength="300" placeholder="Describe the issue" />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="issue-description" rows="3" maxlength="5000" placeholder="Details..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Priority</label>
+              <select id="issue-priority" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit;">
+                <option value="1">1 — High</option>
+                <option value="2" selected>2 — Medium</option>
+                <option value="3">3 — Low</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Owner</label>
+              <input type="text" id="issue-owner" maxlength="200" placeholder="Who owns solving this?" />
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="issue-status" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit;">
+                <option value="open">Open</option>
+                <option value="solving">Solving</option>
+                <option value="solved">Solved</option>
+                <option value="tabled">Tabled</option>
+              </select>
+            </div>
+            <div class="form-group hidden" id="issue-resolved-group">
+              <label>Resolution Notes</label>
+              <textarea id="issue-resolved-notes" rows="2" maxlength="5000" placeholder="How was this resolved?"></textarea>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="issue-save-btn">Save Issue</button>
+              <button type="button" class="btn btn-ghost" onclick="closeIssueModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="issue-delete-btn" onclick="deleteIssue()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- EOS Scorecard Metric Modal -->
+      <div class="modal-overlay" id="eos-metric-modal" onclick="if(event.target===this)closeScorecardMetricModal()">
+        <div class="modal" style="max-width:480px;">
+          <h2>Add Scorecard Metric</h2>
+          <form id="metric-form" onsubmit="saveScorecardMetric(event)">
+            <div class="form-group">
+              <label>Metric Name *</label>
+              <input type="text" id="metric-name" required maxlength="200" placeholder="e.g. Weekly Revenue" />
+            </div>
+            <div class="form-group">
+              <label>Owner *</label>
+              <input type="text" id="metric-owner" required maxlength="200" placeholder="Who tracks this?" />
+            </div>
+            <div class="form-group">
+              <label>Goal / Target</label>
+              <input type="text" id="metric-goal" maxlength="100" placeholder="e.g. >= 50,000" />
+            </div>
+            <div class="form-group">
+              <label>Unit</label>
+              <input type="text" id="metric-unit" maxlength="50" placeholder="e.g. $, %, count" />
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary">Save Metric</button>
+              <button type="button" class="btn btn-ghost" onclick="closeScorecardMetricModal()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- EOS Scorecard Entry Modal -->
+      <div class="modal-overlay" id="eos-entry-modal" onclick="if(event.target===this)closeScorecardEntryModal()">
+        <div class="modal" style="max-width:480px;">
+          <h2>Log Scorecard Entry</h2>
+          <form id="entry-form" onsubmit="saveScorecardEntry(event)">
+            <div class="form-group">
+              <label>Metric *</label>
+              <select id="entry-metric" required style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit;">
+                <option value="">Select metric...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Week Of *</label>
+              <input type="date" id="entry-week" required />
+            </div>
+            <div class="form-group">
+              <label>Value *</label>
+              <input type="text" id="entry-value" required maxlength="100" placeholder="This week's number" />
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="entry-on-track" checked style="width:auto;" /> On Track
+              </label>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary">Log Entry</button>
+              <button type="button" class="btn btn-ghost" onclick="closeScorecardEntryModal()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- EOS Meeting Modal -->
+      <div class="modal-overlay" id="eos-meeting-modal" onclick="if(event.target===this)closeMeetingModal()">
+        <div class="modal" style="max-width:640px;">
+          <h2 id="meeting-modal-title">New L10 Meeting</h2>
+          <form id="meeting-form" onsubmit="saveMeeting(event)">
+            <input type="hidden" id="meeting-edit-id" />
+            <div class="form-group">
+              <label>Meeting Date *</label>
+              <input type="date" id="meeting-date" required />
+            </div>
+            <div class="form-group">
+              <label>Attendees</label>
+              <input type="text" id="meeting-attendees" placeholder="Comma-separated names" />
+            </div>
+            <div class="form-group">
+              <label>Segue (Good News)</label>
+              <textarea id="meeting-segue" rows="2" placeholder="Personal and professional good news..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Scorecard Review</label>
+              <textarea id="meeting-scorecard" rows="2" placeholder="Scorecard discussion notes..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Rock Review</label>
+              <textarea id="meeting-rock-review" rows="2" placeholder="Rock progress updates..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Headlines</label>
+              <textarea id="meeting-headlines" rows="2" placeholder="Customer/employee headlines..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>To-Do List</label>
+              <textarea id="meeting-todos" rows="3" placeholder="Action items from the meeting..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>IDS (Identify, Discuss, Solve)</label>
+              <textarea id="meeting-ids" rows="3" placeholder="Issues discussed and solutions..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Conclusion / Rating</label>
+              <textarea id="meeting-conclusion" rows="2" placeholder="Meeting rating and closing comments..."></textarea>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary" id="meeting-save-btn">Save Meeting</button>
+              <button type="button" class="btn btn-ghost" onclick="closeMeetingModal()">Cancel</button>
+              <button type="button" class="btn btn-red btn-sm hidden" id="meeting-delete-btn" onclick="deleteMeeting()" style="margin-left:auto;">Delete</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- EOS People Analyzer Modal -->
+      <div class="modal-overlay" id="eos-people-modal" onclick="if(event.target===this)closePeopleModal()">
+        <div class="modal" style="max-width:520px;">
+          <h2>People Analyzer</h2>
+          <form id="people-form" onsubmit="savePeopleEntry(event)">
+            <div class="form-group">
+              <label>Team Member *</label>
+              <input type="text" id="people-member" required maxlength="200" placeholder="Name" />
+            </div>
+            <div class="form-group">
+              <label>Quarter *</label>
+              <input type="text" id="people-quarter" required maxlength="10" placeholder="e.g. Q1 2026" />
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="people-right-person" style="width:auto;" /> Right Person (core values fit)
+              </label>
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="people-right-seat" style="width:auto;" /> Right Seat (role fit)
+              </label>
+            </div>
+            <div style="margin:12px 0;font-size:13px;color:var(--text-muted);font-weight:600;">GWC — Get it, Want it, Capacity</div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="people-get-it" style="width:auto;" /> Get It
+              </label>
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="people-want-it" style="width:auto;" /> Want It
+              </label>
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="people-capacity" style="width:auto;" /> Capacity to Do It
+              </label>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="people-notes" rows="3" placeholder="Observations, action items..."></textarea>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn-primary">Save</button>
+              <button type="button" class="btn btn-ghost" onclick="closePeopleModal()">Cancel</button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -1674,12 +2086,13 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (r.status === 401) { window.location.href = "/auth/login"; throw new Error("Unauthorized"); }
       return r.json();
     });
-    const apiPost = (path, body) => fetch("/api" + path, {
-      method: "POST",
+    const apiPost = (path, body, method) => fetch("/api" + path, {
+      method: method || "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(r => {
       if (r.status === 401) { window.location.href = "/auth/login"; throw new Error("Unauthorized"); }
+      if (!r.ok) return r.json().then(e => { throw new Error(e.error || "Request failed"); });
       return r.json();
     });
 
@@ -2382,80 +2795,539 @@ export function getDashboardHtml(user?: SessionUser): string {
     }
 
     // ─── EOS Dashboard ─────────────────────────────────
-    let eosDocsLoaded = false;
-    let eosFiles = [];
+    let eosIsAdmin = false;
+    let eosInitDone = false;
+    let idsFilter = "all";
+    let internalFilter = "all";
 
     async function loadEosDocs() {
-      const grid = document.getElementById("eos-grid");
-      const loading = document.getElementById("eos-loading");
-      const viewer = document.getElementById("eos-doc-viewer");
+      if (!eosInitDone) {
+        // Check admin role
+        try {
+          const role = await api("/eos/role");
+          eosIsAdmin = role.admin;
+          if (eosIsAdmin) {
+            document.getElementById("eos-admin-issues-tab").classList.remove("hidden");
+            document.getElementById("eos-admin-people-tab").classList.remove("hidden");
+          }
+        } catch(e) {}
 
-      // Always hide viewer on reload
-      viewer.classList.add("hidden");
-
-      if (!eosDocsLoaded) {
-        loading.style.display = "block";
-        grid.innerHTML = "";
+        // Populate quarter selectors
+        const now = new Date();
+        const q = Math.ceil((now.getMonth() + 1) / 3);
+        const y = now.getFullYear();
+        const quarters = [];
+        for (let i = 0; i < 6; i++) {
+          const qq = q - i;
+          const adjustedQ = ((qq - 1 + 400) % 4) + 1;
+          const adjustedY = y - Math.floor((i - (q - 1)) / 4 + (qq <= 0 ? 1 : 0));
+          quarters.push("Q" + adjustedQ + " " + adjustedY);
+        }
+        const qOpts = quarters.map((q, i) => '<option value="' + q + '"' + (i === 0 ? " selected" : "") + '>' + q + '</option>').join("");
+        document.getElementById("eos-rocks-quarter").innerHTML = qOpts;
+        document.getElementById("eos-people-quarter").innerHTML = qOpts;
+        eosInitDone = true;
       }
 
-      try {
-        const data = await api("/eos/files");
-        eosFiles = data.files || [];
-        eosDocsLoaded = true;
-        loading.style.display = "none";
+      // Load the active tab
+      const activeTab = document.querySelector(".eos-sub-tab.active");
+      const view = activeTab ? activeTab.textContent.trim().toLowerCase() : "rocks";
+      if (view === "rocks" || view.includes("rock")) loadEosRocks();
+      else if (view === "scorecard") loadScorecard();
+      else if (view === "ids") loadIdsIssues();
+      else if (view.includes("l10") || view.includes("meeting")) loadMeetings();
+      else if (view.includes("v/to") || view.includes("docs")) loadVtoDocs();
+      else if (view.includes("internal")) loadInternalIssues();
+      else if (view.includes("people")) loadPeopleAnalyzer();
+    }
 
-        if (!eosFiles.length) {
-          grid.innerHTML = '<div class="empty-state"><div class="icon">&#127919;</div><p>No EOS documents found. Add documents to your EOS folder in Google Drive.</p></div>';
+    function eosTab(tab) {
+      document.querySelectorAll(".eos-sub-tab").forEach(el => el.classList.remove("active"));
+      event.target.classList.add("active");
+      document.querySelectorAll(".eos-section").forEach(el => el.classList.remove("active"));
+      const sec = document.getElementById("eos-sec-" + tab);
+      if (sec) sec.classList.add("active");
+
+      if (tab === "rocks") loadEosRocks();
+      else if (tab === "scorecard") loadScorecard();
+      else if (tab === "ids") loadIdsIssues();
+      else if (tab === "meetings") loadMeetings();
+      else if (tab === "vto") loadVtoDocs();
+      else if (tab === "internal") loadInternalIssues();
+      else if (tab === "people") loadPeopleAnalyzer();
+    }
+
+    // ── Rocks ──
+    async function loadEosRocks() {
+      const quarter = document.getElementById("eos-rocks-quarter").value;
+      const grid = document.getElementById("eos-rocks-grid");
+      try {
+        const rocks = await api("/eos/rocks?quarter=" + encodeURIComponent(quarter));
+        if (!rocks.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#9968;</div><p>No rocks for ' + escapeHtml(quarter) + '. Add your quarterly priorities!</p></div>';
+          return;
+        }
+        grid.innerHTML = rocks.map(r => {
+          const updated = new Date(r.updated_at).toLocaleDateString();
+          return '<div class="agent-card" style="cursor:pointer;" onclick="openRockModal(\\'' + r.id + '\\')">' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+              '<div class="agent-card-name" style="flex:1;">' + escapeHtml(r.title) + '</div>' +
+              '<span class="rock-status rock-' + r.status + '">' + r.status.replace("_", " ") + '</span>' +
+            '</div>' +
+            (r.notes ? '<div style="font-size:13px;color:var(--text-muted);margin-top:8px;line-height:1.4;">' + escapeHtml(r.notes.slice(0, 200)) + '</div>' : '') +
+            '<div class="agent-card-meta" style="margin-top:8px;">' +
+              '<span>&#9823; ' + escapeHtml(r.owner) + '</span>' +
+              '<span>Updated ' + updated + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      } catch (err) {
+        grid.innerHTML = '<div class="empty-state"><p>Failed to load rocks. Database may not be connected.</p></div>';
+      }
+    }
+
+    async function openRockModal(rockId) {
+      const form = document.getElementById("rock-form");
+      form.reset();
+      document.getElementById("rock-edit-id").value = "";
+      document.getElementById("rock-delete-btn").classList.add("hidden");
+      document.getElementById("rock-modal-title").textContent = "Add Rock";
+      document.getElementById("rock-quarter").value = document.getElementById("eos-rocks-quarter").value;
+
+      if (rockId) {
+        try {
+          const rocks = await api("/eos/rocks");
+          const rock = rocks.find(r => r.id === rockId);
+          if (rock) {
+            document.getElementById("rock-edit-id").value = rock.id;
+            document.getElementById("rock-title").value = rock.title;
+            document.getElementById("rock-owner").value = rock.owner;
+            document.getElementById("rock-quarter").value = rock.quarter;
+            document.getElementById("rock-status").value = rock.status;
+            document.getElementById("rock-notes").value = rock.notes;
+            document.getElementById("rock-modal-title").textContent = "Edit Rock";
+            document.getElementById("rock-delete-btn").classList.remove("hidden");
+          }
+        } catch(e) {}
+      }
+      document.getElementById("eos-rock-modal").classList.add("open");
+    }
+
+    function closeRockModal() { document.getElementById("eos-rock-modal").classList.remove("open"); }
+
+    async function saveRock(e) {
+      e.preventDefault();
+      const id = document.getElementById("rock-edit-id").value;
+      const data = {
+        title: document.getElementById("rock-title").value,
+        owner: document.getElementById("rock-owner").value,
+        quarter: document.getElementById("rock-quarter").value,
+        status: document.getElementById("rock-status").value,
+        notes: document.getElementById("rock-notes").value,
+      };
+      try {
+        if (id) await apiPost("/eos/rocks/" + id, data, "PUT");
+        else await apiPost("/eos/rocks", data);
+        closeRockModal();
+        loadEosRocks();
+      } catch (err) { alert("Failed to save rock"); }
+    }
+
+    async function deleteRock() {
+      const id = document.getElementById("rock-edit-id").value;
+      if (!id || !confirm("Delete this rock?")) return;
+      try {
+        await fetch("/api/eos/rocks/" + id, { method: "DELETE" });
+        closeRockModal();
+        loadEosRocks();
+      } catch (err) { alert("Failed to delete rock"); }
+    }
+
+    // ── Scorecard ──
+    async function loadScorecard() {
+      const container = document.getElementById("eos-scorecard-table");
+      try {
+        const metrics = await api("/eos/scorecard");
+        if (!metrics.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">&#128202;</div><p>No scorecard metrics yet. Add metrics to track your weekly numbers.</p></div>';
           return;
         }
 
-        // Categorize files
-        const categories = { vto: [], rocks: [], goals: [], hr: [], other: [] };
-        for (const f of eosFiles) {
-          const name = f.name.toLowerCase();
-          if (name.includes("vto") || name.includes("v/to") || name.includes("vision") || name.includes("traction")) {
-            categories.vto.push(f);
-          } else if (name.includes("rock")) {
-            categories.rocks.push(f);
-          } else if (name.includes("goal")) {
-            categories.goals.push(f);
-          } else if (name.includes("hr") || name.includes("handbook") || name.includes("policy") || name.includes("onboard") || name.includes("employee")) {
-            categories.hr.push(f);
-          } else {
-            categories.other.push(f);
-          }
+        // Get last 13 weeks of Mondays
+        const weeks = [];
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+        for (let i = 0; i < 13; i++) {
+          const w = new Date(monday);
+          w.setDate(monday.getDate() - (i * 7));
+          weeks.push(w.toISOString().split("T")[0]);
         }
 
-        const icons = { vto: "&#127758;", rocks: "&#9968;", goals: "&#127919;", hr: "&#128203;", other: "&#128196;" };
-        const labels = { vto: "Vision / Traction Organizer", rocks: "Rocks", goals: "Company Goals", hr: "HR Documents", other: "Other Documents" };
-        const colors = { vto: "var(--accent)", rocks: "var(--green)", goals: "var(--amber)", hr: "var(--blue)", other: "var(--text-muted)" };
+        let html = '<table class="scorecard-table"><thead><tr>';
+        html += '<th>Metric</th><th>Owner</th><th>Goal</th>';
+        weeks.slice(0, 8).forEach(w => {
+          html += '<th>' + new Date(w + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) + '</th>';
+        });
+        html += '</tr></thead><tbody>';
 
-        let html = "";
-        for (const [cat, files] of Object.entries(categories)) {
-          if (!files.length) continue;
-          html += '<div style="margin-bottom:24px;">';
-          html += '<h3 style="font-size:14px;color:' + colors[cat] + ';margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span>' + icons[cat] + '</span> ' + labels[cat] + '</h3>';
-          html += '<div class="agent-grid">';
-          for (const f of files) {
-            const modified = new Date(f.modifiedTime).toLocaleDateString();
-            const mimeIcon = f.mimeType.includes("spreadsheet") ? "&#128202;" : f.mimeType.includes("document") ? "&#128196;" : f.mimeType.includes("pdf") ? "&#128213;" : "&#128196;";
-            const mimeLabel = f.mimeType.includes("spreadsheet") ? "Sheet" : f.mimeType.includes("document") ? "Doc" : f.mimeType.includes("pdf") ? "PDF" : "File";
-            html += '<div class="agent-card" style="cursor:pointer;" onclick="openEosDoc(\\'' + f.id + '\\', \\'' + f.name.replace(/'/g, "\\\\'") + '\\', \\'' + f.mimeType + '\\')">';
-            html += '<div class="agent-card-name">' + mimeIcon + ' ' + escapeHtml(f.name) + '</div>';
-            html += '<div class="agent-card-meta" style="margin-top:8px;">';
-            html += '<span>' + mimeLabel + '</span>';
-            html += '<span>Updated ' + modified + '</span>';
-            html += '</div>';
-            html += '</div>';
-          }
-          html += '</div></div>';
+        for (const m of metrics) {
+          const entryMap = {};
+          (m.entries || []).forEach(e => { entryMap[e.week_of.split("T")[0]] = e; });
+          html += '<tr>';
+          html += '<td style="font-weight:500;">' + escapeHtml(m.metric_name) + '</td>';
+          html += '<td style="color:var(--text-muted);">' + escapeHtml(m.owner) + '</td>';
+          html += '<td style="color:var(--text-dim);">' + escapeHtml(m.goal) + (m.unit ? ' ' + escapeHtml(m.unit) : '') + '</td>';
+          weeks.slice(0, 8).forEach(w => {
+            const entry = entryMap[w];
+            if (entry) {
+              const cls = entry.on_track ? "sc-on" : "sc-off";
+              html += '<td class="' + cls + '" style="font-weight:500;">' + escapeHtml(entry.value) + '</td>';
+            } else {
+              html += '<td style="color:var(--text-dim);">—</td>';
+            }
+          });
+          html += '</tr>';
         }
-
-        grid.innerHTML = html;
+        html += '</tbody></table>';
+        container.innerHTML = html;
       } catch (err) {
-        loading.style.display = "none";
-        grid.innerHTML = '<div class="empty-state"><div class="icon">&#9888;</div><p>Failed to load EOS documents. Make sure Google Drive is connected and the EOS folder is shared with the service account.</p></div>';
-        console.error("EOS load error:", err);
+        container.innerHTML = '<div class="empty-state"><p>Failed to load scorecard.</p></div>';
+      }
+    }
+
+    function openScorecardMetricModal() { document.getElementById("metric-form").reset(); document.getElementById("eos-metric-modal").classList.add("open"); }
+    function closeScorecardMetricModal() { document.getElementById("eos-metric-modal").classList.remove("open"); }
+
+    async function saveScorecardMetric(e) {
+      e.preventDefault();
+      try {
+        await apiPost("/eos/scorecard/metrics", {
+          metric_name: document.getElementById("metric-name").value,
+          owner: document.getElementById("metric-owner").value,
+          goal: document.getElementById("metric-goal").value,
+          unit: document.getElementById("metric-unit").value,
+        });
+        closeScorecardMetricModal();
+        loadScorecard();
+      } catch (err) { alert("Failed to save metric"); }
+    }
+
+    async function openScorecardEntryModal() {
+      document.getElementById("entry-form").reset();
+      // Set default week to this Monday
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+      document.getElementById("entry-week").value = monday.toISOString().split("T")[0];
+
+      try {
+        const metrics = await api("/eos/scorecard");
+        const sel = document.getElementById("entry-metric");
+        sel.innerHTML = '<option value="">Select metric...</option>' +
+          metrics.map(m => '<option value="' + m.id + '">' + escapeHtml(m.metric_name) + ' (' + escapeHtml(m.owner) + ')</option>').join("");
+      } catch(e) {}
+      document.getElementById("eos-entry-modal").classList.add("open");
+    }
+    function closeScorecardEntryModal() { document.getElementById("eos-entry-modal").classList.remove("open"); }
+
+    async function saveScorecardEntry(e) {
+      e.preventDefault();
+      try {
+        await apiPost("/eos/scorecard/entries", {
+          metric_id: document.getElementById("entry-metric").value,
+          week_of: document.getElementById("entry-week").value,
+          value: document.getElementById("entry-value").value,
+          on_track: document.getElementById("entry-on-track").checked,
+        });
+        closeScorecardEntryModal();
+        loadScorecard();
+      } catch (err) { alert("Failed to log entry"); }
+    }
+
+    // ── IDS Issues ──
+    function setIdsFilter(f) {
+      idsFilter = f;
+      document.querySelectorAll("#eos-ids-filter .pill").forEach(p => p.classList.remove("active"));
+      event.target.classList.add("active");
+      loadIdsIssues();
+    }
+
+    async function loadIdsIssues() {
+      const grid = document.getElementById("eos-ids-grid");
+      try {
+        let url = "/eos/issues?category=ids";
+        if (idsFilter !== "all") url += "&status=" + idsFilter;
+        const issues = await api(url);
+        if (!issues.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#128161;</div><p>No IDS issues. Add issues to Identify, Discuss, and Solve.</p></div>';
+          return;
+        }
+        grid.innerHTML = issues.map(iss => renderIssueCard(iss)).join("");
+      } catch (err) {
+        grid.innerHTML = '<div class="empty-state"><p>Failed to load issues.</p></div>';
+      }
+    }
+
+    function renderIssueCard(iss) {
+      const statusColors = { open: "var(--blue)", solving: "var(--amber)", solved: "var(--green)", tabled: "var(--text-dim)" };
+      return '<div class="agent-card issue-priority-' + iss.priority + '" style="cursor:pointer;" onclick="openIssueModal(\\'' + iss.category + '\\', \\'' + iss.id + '\\')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+          '<div class="agent-card-name" style="flex:1;">' + escapeHtml(iss.title) + '</div>' +
+          '<span style="font-size:11px;padding:3px 10px;border-radius:99px;background:' + (statusColors[iss.status] || "var(--text-dim)") + '22;color:' + (statusColors[iss.status] || "var(--text-dim)") + ';font-weight:600;">' + iss.status + '</span>' +
+        '</div>' +
+        (iss.description ? '<div style="font-size:13px;color:var(--text-muted);margin-top:8px;line-height:1.4;">' + escapeHtml(iss.description.slice(0, 200)) + '</div>' : '') +
+        '<div class="agent-card-meta" style="margin-top:8px;">' +
+          '<span>P' + iss.priority + '</span>' +
+          (iss.owner ? '<span>&#9823; ' + escapeHtml(iss.owner) + '</span>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    async function openIssueModal(category, issueId) {
+      const form = document.getElementById("issue-form");
+      form.reset();
+      document.getElementById("issue-edit-id").value = "";
+      document.getElementById("issue-category").value = category || "ids";
+      document.getElementById("issue-delete-btn").classList.add("hidden");
+      document.getElementById("issue-resolved-group").classList.add("hidden");
+      document.getElementById("issue-modal-title").textContent = category === "internal" ? "Internal Issue" : "IDS Issue";
+
+      if (issueId) {
+        try {
+          const cat = category || "ids";
+          const issues = await api("/eos/issues?category=" + cat);
+          const iss = issues.find(i => i.id === issueId);
+          if (iss) {
+            document.getElementById("issue-edit-id").value = iss.id;
+            document.getElementById("issue-title").value = iss.title;
+            document.getElementById("issue-description").value = iss.description;
+            document.getElementById("issue-priority").value = iss.priority;
+            document.getElementById("issue-owner").value = iss.owner || "";
+            document.getElementById("issue-status").value = iss.status;
+            document.getElementById("issue-resolved-notes").value = iss.resolved_notes || "";
+            if (iss.status === "solved") document.getElementById("issue-resolved-group").classList.remove("hidden");
+            document.getElementById("issue-modal-title").textContent = "Edit Issue";
+            document.getElementById("issue-delete-btn").classList.remove("hidden");
+          }
+        } catch(e) {}
+      }
+      document.getElementById("eos-issue-modal").classList.add("open");
+    }
+
+    function closeIssueModal() { document.getElementById("eos-issue-modal").classList.remove("open"); }
+
+    // Show/hide resolution notes based on status
+    document.addEventListener("change", function(e) {
+      if (e.target && e.target.id === "issue-status") {
+        document.getElementById("issue-resolved-group").classList.toggle("hidden", e.target.value !== "solved");
+      }
+    });
+
+    async function saveIssue(e) {
+      e.preventDefault();
+      const id = document.getElementById("issue-edit-id").value;
+      const data = {
+        title: document.getElementById("issue-title").value,
+        description: document.getElementById("issue-description").value,
+        priority: parseInt(document.getElementById("issue-priority").value),
+        owner: document.getElementById("issue-owner").value || null,
+        status: document.getElementById("issue-status").value,
+        category: document.getElementById("issue-category").value,
+        resolved_notes: document.getElementById("issue-resolved-notes").value,
+      };
+      try {
+        if (id) await apiPost("/eos/issues/" + id, data, "PUT");
+        else await apiPost("/eos/issues", data);
+        closeIssueModal();
+        if (data.category === "internal") loadInternalIssues();
+        else loadIdsIssues();
+      } catch (err) { alert("Failed to save issue"); }
+    }
+
+    async function deleteIssue() {
+      const id = document.getElementById("issue-edit-id").value;
+      if (!id || !confirm("Delete this issue?")) return;
+      try {
+        await fetch("/api/eos/issues/" + id, { method: "DELETE" });
+        closeIssueModal();
+        loadIdsIssues();
+        loadInternalIssues();
+      } catch (err) { alert("Failed to delete issue"); }
+    }
+
+    // ── Internal Issues (admin) ──
+    function setInternalFilter(f) {
+      internalFilter = f;
+      document.querySelectorAll("#eos-internal-filter .pill").forEach(p => p.classList.remove("active"));
+      event.target.classList.add("active");
+      loadInternalIssues();
+    }
+
+    async function loadInternalIssues() {
+      const grid = document.getElementById("eos-internal-grid");
+      try {
+        let url = "/eos/issues?category=internal";
+        if (internalFilter !== "all") url += "&status=" + internalFilter;
+        const issues = await api(url);
+        if (!issues.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#128274;</div><p>No internal issues.</p></div>';
+          return;
+        }
+        grid.innerHTML = issues.map(iss => renderIssueCard(iss)).join("");
+      } catch (err) {
+        grid.innerHTML = '<div class="empty-state"><p>Admin access required or failed to load.</p></div>';
+      }
+    }
+
+    // ── L10 Meeting Notes ──
+    async function loadMeetings() {
+      const list = document.getElementById("eos-meetings-list");
+      document.getElementById("eos-meeting-detail").classList.add("hidden");
+      try {
+        const meetings = await api("/eos/meetings");
+        if (!meetings.length) {
+          list.innerHTML = '<div class="empty-state"><div class="icon">&#128197;</div><p>No L10 meetings recorded yet. Start by adding one!</p></div>';
+          return;
+        }
+        list.innerHTML = meetings.map(m => {
+          const date = new Date(m.meeting_date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+          const attendees = (m.attendees || []).join(", ");
+          return '<div class="meeting-card" onclick="viewMeeting(\\'' + m.id + '\\')">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+              '<div><strong>' + m.meeting_type + '</strong> — ' + date + '</div>' +
+              '<span style="font-size:12px;color:var(--text-dim);">Click to view</span>' +
+            '</div>' +
+            (attendees ? '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Attendees: ' + escapeHtml(attendees) + '</div>' : '') +
+          '</div>';
+        }).join("");
+      } catch (err) {
+        list.innerHTML = '<div class="empty-state"><p>Failed to load meetings.</p></div>';
+      }
+    }
+
+    async function viewMeeting(id) {
+      const detail = document.getElementById("eos-meeting-detail");
+      try {
+        const m = await api("/eos/meetings/" + id);
+        const date = new Date(m.meeting_date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+        const sections = [
+          { label: "Segue / Good News", val: m.segue },
+          { label: "Scorecard Review", val: m.scorecard_review },
+          { label: "Rock Review", val: m.rock_review },
+          { label: "Headlines", val: m.headlines },
+          { label: "To-Do List", val: m.todos },
+          { label: "IDS (Identify, Discuss, Solve)", val: m.ids_list },
+          { label: "Conclusion / Rating", val: m.conclusion },
+        ].filter(s => s.val);
+
+        detail.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">' +
+          '<div><h3 style="font-size:16px;">' + m.meeting_type + ' — ' + date + '</h3>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Attendees: ' + escapeHtml((m.attendees || []).join(", ")) + '</div></div>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<button class="btn btn-ghost btn-sm" onclick="openMeetingModal(\\'' + m.id + '\\')">Edit</button>' +
+            '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(&quot;eos-meeting-detail&quot;).classList.add(&quot;hidden&quot;)">Close</button>' +
+          '</div></div>' +
+          sections.map(s =>
+            '<div style="margin-bottom:16px;"><div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px;">' + s.label + '</div>' +
+            '<div style="white-space:pre-wrap;font-size:14px;line-height:1.6;">' + escapeHtml(s.val) + '</div></div>'
+          ).join("");
+        detail.classList.remove("hidden");
+        detail.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (err) {
+        detail.innerHTML = '<p style="color:var(--red);">Failed to load meeting details.</p>';
+        detail.classList.remove("hidden");
+      }
+    }
+
+    function openMeetingModal(meetingId) {
+      const form = document.getElementById("meeting-form");
+      form.reset();
+      document.getElementById("meeting-edit-id").value = "";
+      document.getElementById("meeting-delete-btn").classList.add("hidden");
+      document.getElementById("meeting-modal-title").textContent = "New L10 Meeting";
+      document.getElementById("meeting-date").value = new Date().toISOString().split("T")[0];
+
+      if (meetingId) {
+        api("/eos/meetings/" + meetingId).then(m => {
+          document.getElementById("meeting-edit-id").value = m.id;
+          document.getElementById("meeting-date").value = m.meeting_date.split("T")[0];
+          document.getElementById("meeting-attendees").value = (m.attendees || []).join(", ");
+          document.getElementById("meeting-segue").value = m.segue;
+          document.getElementById("meeting-scorecard").value = m.scorecard_review;
+          document.getElementById("meeting-rock-review").value = m.rock_review;
+          document.getElementById("meeting-headlines").value = m.headlines;
+          document.getElementById("meeting-todos").value = m.todos;
+          document.getElementById("meeting-ids").value = m.ids_list;
+          document.getElementById("meeting-conclusion").value = m.conclusion;
+          document.getElementById("meeting-modal-title").textContent = "Edit Meeting";
+          document.getElementById("meeting-delete-btn").classList.remove("hidden");
+        }).catch(() => {});
+      }
+      document.getElementById("eos-meeting-modal").classList.add("open");
+    }
+
+    function closeMeetingModal() { document.getElementById("eos-meeting-modal").classList.remove("open"); }
+
+    async function saveMeeting(e) {
+      e.preventDefault();
+      const id = document.getElementById("meeting-edit-id").value;
+      const data = {
+        meeting_date: document.getElementById("meeting-date").value,
+        attendees: document.getElementById("meeting-attendees").value.split(",").map(s => s.trim()).filter(Boolean),
+        segue: document.getElementById("meeting-segue").value,
+        scorecard_review: document.getElementById("meeting-scorecard").value,
+        rock_review: document.getElementById("meeting-rock-review").value,
+        headlines: document.getElementById("meeting-headlines").value,
+        todos: document.getElementById("meeting-todos").value,
+        ids_list: document.getElementById("meeting-ids").value,
+        conclusion: document.getElementById("meeting-conclusion").value,
+      };
+      try {
+        if (id) await apiPost("/eos/meetings/" + id, data, "PUT");
+        else await apiPost("/eos/meetings", data);
+        closeMeetingModal();
+        loadMeetings();
+      } catch (err) { alert("Failed to save meeting"); }
+    }
+
+    async function deleteMeeting() {
+      const id = document.getElementById("meeting-edit-id").value;
+      if (!id || !confirm("Delete this meeting?")) return;
+      try {
+        await fetch("/api/eos/meetings/" + id, { method: "DELETE" });
+        closeMeetingModal();
+        loadMeetings();
+      } catch (err) { alert("Failed to delete meeting"); }
+    }
+
+    // ── V/TO & Drive Docs ──
+    async function loadVtoDocs() {
+      const grid = document.getElementById("eos-vto-grid");
+      document.getElementById("eos-doc-viewer").classList.add("hidden");
+      try {
+        const data = await api("/eos/files");
+        const files = data.files || [];
+        if (!files.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="icon">&#127758;</div><p>No documents found in the EOS folder. Add your V/TO and other docs to Google Drive.</p></div>';
+          return;
+        }
+        grid.innerHTML = files.map(f => {
+          const modified = new Date(f.modifiedTime).toLocaleDateString();
+          const mimeIcon = f.mimeType.includes("spreadsheet") ? "&#128202;" : f.mimeType.includes("document") ? "&#128196;" : f.mimeType.includes("pdf") ? "&#128213;" : "&#128196;";
+          const mimeLabel = f.mimeType.includes("spreadsheet") ? "Sheet" : f.mimeType.includes("document") ? "Doc" : f.mimeType.includes("pdf") ? "PDF" : "File";
+          return '<div class="agent-card" style="cursor:pointer;" onclick="openEosDoc(\\'' + f.id + '\\', \\'' + f.name.replace(/'/g, "\\\\'") + '\\', \\'' + f.mimeType + '\\')">' +
+            '<div class="agent-card-name">' + mimeIcon + ' ' + escapeHtml(f.name) + '</div>' +
+            '<div class="agent-card-meta" style="margin-top:8px;">' +
+              '<span>' + mimeLabel + '</span>' +
+              '<span>Updated ' + modified + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join("");
+      } catch (err) {
+        grid.innerHTML = '<div class="empty-state"><p>Failed to load EOS documents. Make sure Google Drive is connected.</p></div>';
       }
     }
 
@@ -2469,30 +3341,79 @@ export function getDashboardHtml(user?: SessionUser): string {
       contentEl.innerHTML = '<span style="color:var(--text-muted);">Loading document...</span>';
       viewer.classList.remove("hidden");
 
-      // Build Drive link based on mime type
-      if (mimeType.includes("spreadsheet")) {
-        driveLink.href = "https://docs.google.com/spreadsheets/d/" + fileId;
-      } else if (mimeType.includes("document")) {
-        driveLink.href = "https://docs.google.com/document/d/" + fileId;
-      } else {
-        driveLink.href = "https://drive.google.com/file/d/" + fileId;
-      }
+      if (mimeType.includes("spreadsheet")) driveLink.href = "https://docs.google.com/spreadsheets/d/" + fileId;
+      else if (mimeType.includes("document")) driveLink.href = "https://docs.google.com/document/d/" + fileId;
+      else driveLink.href = "https://drive.google.com/file/d/" + fileId;
 
       try {
         const data = await api("/eos/file/" + fileId + "?mimeType=" + encodeURIComponent(mimeType));
         contentEl.textContent = data.content || "(empty document)";
       } catch (err) {
         contentEl.innerHTML = '<span style="color:var(--red);">Failed to load document content.</span>';
-        console.error("EOS doc read error:", err);
       }
-
-      // Scroll viewer into view
       viewer.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    function closeEosDoc() {
-      document.getElementById("eos-doc-viewer").classList.add("hidden");
+    function closeEosDoc() { document.getElementById("eos-doc-viewer").classList.add("hidden"); }
+
+    // ── People Analyzer (admin) ──
+    async function loadPeopleAnalyzer() {
+      const container = document.getElementById("eos-people-table");
+      const quarter = document.getElementById("eos-people-quarter").value;
+      try {
+        const entries = await api("/eos/people?quarter=" + encodeURIComponent(quarter));
+        if (!entries.length) {
+          container.innerHTML = '<div class="empty-state"><div class="icon">&#128101;</div><p>No people analyzer entries for ' + escapeHtml(quarter) + '.</p></div>';
+          return;
+        }
+        const check = (v) => v === true ? '<span style="color:var(--green);">+</span>' : v === false ? '<span style="color:var(--red);">-</span>' : '<span style="color:var(--text-dim);">?</span>';
+        let html = '<table class="scorecard-table"><thead><tr>';
+        html += '<th>Team Member</th><th>Right Person</th><th>Right Seat</th><th>Get It</th><th>Want It</th><th>Capacity</th><th>Notes</th>';
+        html += '</tr></thead><tbody>';
+        for (const e of entries) {
+          html += '<tr>';
+          html += '<td style="font-weight:500;">' + escapeHtml(e.team_member) + '</td>';
+          html += '<td>' + check(e.right_person) + '</td>';
+          html += '<td>' + check(e.right_seat) + '</td>';
+          html += '<td>' + check(e.gwo_get_it) + '</td>';
+          html += '<td>' + check(e.gwo_want_it) + '</td>';
+          html += '<td>' + check(e.gwo_capacity) + '</td>';
+          html += '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(e.notes || "") + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = '<div class="empty-state"><p>Admin access required or failed to load.</p></div>';
+      }
     }
+
+    function openPeopleModal() {
+      document.getElementById("people-form").reset();
+      document.getElementById("people-quarter").value = document.getElementById("eos-people-quarter").value;
+      document.getElementById("eos-people-modal").classList.add("open");
+    }
+
+    function closePeopleModal() { document.getElementById("eos-people-modal").classList.remove("open"); }
+
+    async function savePeopleEntry(e) {
+      e.preventDefault();
+      try {
+        await apiPost("/eos/people", {
+          team_member: document.getElementById("people-member").value,
+          quarter: document.getElementById("people-quarter").value,
+          right_person: document.getElementById("people-right-person").checked,
+          right_seat: document.getElementById("people-right-seat").checked,
+          gwo_get_it: document.getElementById("people-get-it").checked,
+          gwo_want_it: document.getElementById("people-want-it").checked,
+          gwo_capacity: document.getElementById("people-capacity").checked,
+          notes: document.getElementById("people-notes").value,
+        });
+        closePeopleModal();
+        loadPeopleAnalyzer();
+      } catch (err) { alert("Failed to save entry"); }
+    }
+
 
     // ─── Discord Logs ────────────────────────────────────
     let discordFilter = "all";
@@ -2879,7 +3800,7 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     // ─── Keyboard shortcut ──────────────────────────────
     document.addEventListener("keydown", e => {
-      if (e.key === "Escape") { closeModal(); closeTaskModal(); closeMemoryModal(); }
+      if (e.key === "Escape") { closeModal(); closeTaskModal(); closeMemoryModal(); closeRockModal(); closeIssueModal(); closeScorecardMetricModal(); closeScorecardEntryModal(); closeMeetingModal(); closePeopleModal(); }
     });
 
     // ─── Chat View JS ─────────────────────────────────

@@ -268,6 +268,123 @@ Always provide specific, implementable recommendations with expected impact leve
       CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
     `,
   },
+  {
+    id: "010_eos_rocks",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_rocks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(300) NOT NULL,
+        owner VARCHAR(200) NOT NULL,
+        quarter VARCHAR(10) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'on_track'
+          CHECK (status IN ('on_track', 'off_track', 'done')),
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  },
+  {
+    id: "011_eos_scorecard",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_scorecard_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        metric_name VARCHAR(200) NOT NULL,
+        owner VARCHAR(200) NOT NULL,
+        goal VARCHAR(100) NOT NULL DEFAULT '',
+        unit VARCHAR(50) NOT NULL DEFAULT '',
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS eos_scorecard_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        metric_id UUID NOT NULL REFERENCES eos_scorecard_metrics(id) ON DELETE CASCADE,
+        week_of DATE NOT NULL,
+        value VARCHAR(100) NOT NULL,
+        on_track BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(metric_id, week_of)
+      );
+      CREATE INDEX IF NOT EXISTS idx_scorecard_entries_metric ON eos_scorecard_entries(metric_id, week_of DESC);
+    `,
+  },
+  {
+    id: "012_eos_issues",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_issues (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title VARCHAR(300) NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        priority INTEGER NOT NULL DEFAULT 2 CHECK (priority BETWEEN 1 AND 3),
+        status VARCHAR(20) NOT NULL DEFAULT 'open'
+          CHECK (status IN ('open', 'solving', 'solved', 'tabled')),
+        category VARCHAR(20) NOT NULL DEFAULT 'ids'
+          CHECK (category IN ('ids', 'internal')),
+        owner VARCHAR(200),
+        resolved_notes TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_eos_issues_status ON eos_issues(status);
+      CREATE INDEX IF NOT EXISTS idx_eos_issues_category ON eos_issues(category);
+    `,
+  },
+  {
+    id: "013_eos_meeting_notes",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_meeting_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        meeting_date DATE NOT NULL,
+        meeting_type VARCHAR(20) NOT NULL DEFAULT 'L10',
+        attendees TEXT[] NOT NULL DEFAULT '{}',
+        segue TEXT NOT NULL DEFAULT '',
+        scorecard_review TEXT NOT NULL DEFAULT '',
+        rock_review TEXT NOT NULL DEFAULT '',
+        headlines TEXT NOT NULL DEFAULT '',
+        todos TEXT NOT NULL DEFAULT '',
+        ids_list TEXT NOT NULL DEFAULT '',
+        conclusion TEXT NOT NULL DEFAULT '',
+        created_by VARCHAR(200),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_meeting_notes_date ON eos_meeting_notes(meeting_date DESC);
+    `,
+  },
+  {
+    id: "014_eos_people_analyzer",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_people_analyzer (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        team_member VARCHAR(200) NOT NULL,
+        quarter VARCHAR(10) NOT NULL,
+        right_person BOOLEAN,
+        right_seat BOOLEAN,
+        core_values_scores JSONB NOT NULL DEFAULT '{}',
+        gwo_get_it BOOLEAN,
+        gwo_want_it BOOLEAN,
+        gwo_capacity BOOLEAN,
+        notes TEXT NOT NULL DEFAULT '',
+        created_by VARCHAR(200),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(team_member, quarter)
+      );
+    `,
+  },
+  {
+    id: "015_eos_headlines",
+    sql: `
+      CREATE TABLE IF NOT EXISTS eos_headlines (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        content VARCHAR(500) NOT NULL,
+        category VARCHAR(50) NOT NULL DEFAULT 'general',
+        shared_by VARCHAR(200),
+        meeting_id UUID REFERENCES eos_meeting_notes(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -33,6 +33,10 @@ import { ClientAgent } from "./client-agent.js";
 import { DiscordBot } from "./discord-bot.js";
 import { runMigrations, closePool } from "./database.js";
 import { apiRouter } from "./api-routes.js";
+import {
+  rockService, scorecardService, issueService, meetingService, peopleAnalyzerService,
+  isEosAdmin,
+} from "./eos-service.js";
 import { redactionMiddleware } from "./redaction.js";
 import {
   getOAuth2Client,
@@ -455,6 +459,23 @@ async function main(): Promise<void> {
   // ─── 11b. EOS Dashboard Routes ─────────────────────
   const EOS_FOLDER_ID = process.env.EOS_FOLDER_ID || "1QqjiHxPKOCMfTxwPZXt8iAir9Q2mQx5D";
 
+  // Admin check middleware for EOS admin-only routes
+  const requireEosAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const email = (req.session as any)?.user?.email;
+    if (!isEosAdmin(email)) {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+    next();
+  };
+
+  // Check if current user is EOS admin
+  app.get("/api/eos/role", (req, res) => {
+    const email = (req.session as any)?.user?.email;
+    res.json({ admin: isEosAdmin(email), email: email || null });
+  });
+
+  // Drive files (VTO, etc.)
   app.get("/api/eos/files", async (_req, res) => {
     if (!authService.isAuthenticated()) {
       res.status(401).json({ error: "Google Drive not connected" });
@@ -463,8 +484,7 @@ async function main(): Promise<void> {
     try {
       const drive = new GoogleDriveService(authService.getClient());
       const files = await drive.listFiles(EOS_FOLDER_ID);
-      const folders = await drive.listFolders(EOS_FOLDER_ID);
-      res.json({ files, folders });
+      res.json({ files });
     } catch (err) {
       console.error("EOS files error:", err);
       res.status(500).json({ error: "Failed to list EOS files" });
@@ -485,6 +505,122 @@ async function main(): Promise<void> {
       res.status(500).json({ error: "Failed to read EOS file" });
     }
   });
+
+  // Rocks CRUD
+  if (process.env.DATABASE_URL) {
+    app.get("/api/eos/rocks", async (req, res) => {
+      try { res.json(await rockService.list(req.query.quarter as string)); }
+      catch (err) { res.status(500).json({ error: "Failed to load rocks" }); }
+    });
+    app.post("/api/eos/rocks", async (req, res) => {
+      try { res.json(await rockService.create(req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to create rock" }); }
+    });
+    app.put("/api/eos/rocks/:id", async (req, res) => {
+      try { res.json(await rockService.update(req.params.id, req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to update rock" }); }
+    });
+    app.delete("/api/eos/rocks/:id", async (req, res) => {
+      try { await rockService.delete(req.params.id); res.json({ success: true }); }
+      catch (err) { res.status(500).json({ error: "Failed to delete rock" }); }
+    });
+
+    // Scorecard CRUD
+    app.get("/api/eos/scorecard", async (_req, res) => {
+      try { res.json(await scorecardService.listMetrics()); }
+      catch (err) { res.status(500).json({ error: "Failed to load scorecard" }); }
+    });
+    app.post("/api/eos/scorecard/metrics", async (req, res) => {
+      try { res.json(await scorecardService.createMetric(req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to create metric" }); }
+    });
+    app.put("/api/eos/scorecard/metrics/:id", async (req, res) => {
+      try { res.json(await scorecardService.updateMetric(req.params.id, req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to update metric" }); }
+    });
+    app.delete("/api/eos/scorecard/metrics/:id", async (req, res) => {
+      try { await scorecardService.deleteMetric(req.params.id); res.json({ success: true }); }
+      catch (err) { res.status(500).json({ error: "Failed to delete metric" }); }
+    });
+    app.post("/api/eos/scorecard/entries", async (req, res) => {
+      try { res.json(await scorecardService.addEntry(req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to add scorecard entry" }); }
+    });
+
+    // Issues (IDS) — team sees 'ids', admin sees 'internal' too
+    app.get("/api/eos/issues", async (req, res) => {
+      try {
+        const email = (req.session as any)?.user?.email;
+        const cat = req.query.category as string;
+        // Non-admins can only see 'ids' category
+        if (cat === "internal" && !isEosAdmin(email)) {
+          res.status(403).json({ error: "Admin access required" });
+          return;
+        }
+        res.json(await issueService.list(cat, req.query.status as string));
+      } catch (err) { res.status(500).json({ error: "Failed to load issues" }); }
+    });
+    app.post("/api/eos/issues", async (req, res) => {
+      try {
+        const email = (req.session as any)?.user?.email;
+        if (req.body.category === "internal" && !isEosAdmin(email)) {
+          res.status(403).json({ error: "Admin access required" });
+          return;
+        }
+        res.json(await issueService.create(req.body));
+      } catch (err) { res.status(500).json({ error: "Failed to create issue" }); }
+    });
+    app.put("/api/eos/issues/:id", async (req, res) => {
+      try { res.json(await issueService.update(req.params.id, req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to update issue" }); }
+    });
+    app.delete("/api/eos/issues/:id", async (req, res) => {
+      try { await issueService.delete(req.params.id); res.json({ success: true }); }
+      catch (err) { res.status(500).json({ error: "Failed to delete issue" }); }
+    });
+
+    // Meeting Notes CRUD
+    app.get("/api/eos/meetings", async (_req, res) => {
+      try { res.json(await meetingService.list()); }
+      catch (err) { res.status(500).json({ error: "Failed to load meetings" }); }
+    });
+    app.get("/api/eos/meetings/:id", async (req, res) => {
+      try {
+        const m = await meetingService.getById(req.params.id);
+        m ? res.json(m) : res.status(404).json({ error: "Meeting not found" });
+      } catch (err) { res.status(500).json({ error: "Failed to load meeting" }); }
+    });
+    app.post("/api/eos/meetings", async (req, res) => {
+      try {
+        const email = (req.session as any)?.user?.email;
+        res.json(await meetingService.create({ ...req.body, created_by: email }));
+      } catch (err) { res.status(500).json({ error: "Failed to create meeting" }); }
+    });
+    app.put("/api/eos/meetings/:id", async (req, res) => {
+      try { res.json(await meetingService.update(req.params.id, req.body)); }
+      catch (err) { res.status(500).json({ error: "Failed to update meeting" }); }
+    });
+    app.delete("/api/eos/meetings/:id", async (req, res) => {
+      try { await meetingService.delete(req.params.id); res.json({ success: true }); }
+      catch (err) { res.status(500).json({ error: "Failed to delete meeting" }); }
+    });
+
+    // People Analyzer (admin only)
+    app.get("/api/eos/people", requireEosAdmin as any, async (req, res) => {
+      try { res.json(await peopleAnalyzerService.list(req.query.quarter as string)); }
+      catch (err) { res.status(500).json({ error: "Failed to load people analyzer" }); }
+    });
+    app.post("/api/eos/people", requireEosAdmin as any, async (req, res) => {
+      try {
+        const email = (req.session as any)?.user?.email;
+        res.json(await peopleAnalyzerService.upsert({ ...req.body, created_by: email }));
+      } catch (err) { res.status(500).json({ error: "Failed to save people analyzer" }); }
+    });
+    app.delete("/api/eos/people/:id", requireEosAdmin as any, async (req, res) => {
+      try { await peopleAnalyzerService.delete(req.params.id); res.json({ success: true }); }
+      catch (err) { res.status(500).json({ error: "Failed to delete entry" }); }
+    });
+  }
 
   // ─── 12. Discord Logs Route ─────────────────────────
   app.get("/api/discord/logs", (_req, res) => {
