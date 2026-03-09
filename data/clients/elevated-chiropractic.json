@@ -1,0 +1,92 @@
+{
+  "name": "Elevated Chiropractic",
+  "provider": "Dr. Joshua Fearn, DC",
+
+  "colors": {
+    "primary":    "#1b3a5c",
+    "secondary":  "#4e8da8",
+    "accent":     "#b5cdd8",
+    "dark":       "#333333",
+    "muted":      "#666666",
+    "lightBg":    "#e8f0f5"
+  },
+
+  "fonts": {
+    "heading": "Raleway",
+    "body": "Open Sans"
+  },
+
+  "images": {
+    "logo": "1tQLajl52tTU9h0dZUhXJUn7RULlpCQ3Q",
+    "providerPhoto1": "1L_wSXdFQplrV6HpWGsYiQncP_Lxs8CNc",
+    "providerPhoto2": "130e70dVyv7smOWzWelnR_55aaSBaV9Rh"
+  },
+
+  "replacements": {
+    "Perfect Health and Wellness": "Elevated Chiropractic",
+    "Dr. Kat Stock, DC, LCN": "Dr. Joshua Fearn, DC",
+    "Dr. Kat Stock": "Dr. Joshua Fearn",
+    "Virtual-First Care — Nationwide": "925 Main St, Suite A — Broomfield, CO 80020",
+    "chiropractor, licensed clinical nutritionist, and founder of": "chiropractor and founder of",
+    "After witnessing firsthand how chronic illness can derail an entire family, she dedicated her career to helping others find root-cause answers.": "With a passion for helping patients achieve optimal health, he specializes in personalized chiropractic care for all ages and life stages.",
+    "we combine targeted lab testing with real-food nutrition, personalized supplement protocols, and lifestyle shifts": "we offer personalized chiropractic adjustments, TMJ treatment, and whole-body wellness care for kids, adults, and families"
+  },
+
+  "stockImageFolder": "1dyomrYI13T0FxJQuG3ZrMFA_PI1HCR57",
+  "outputFolder": "1HweFuiS5KmR14Rghx7OoH-v-YXZWykYc",
+
+  "contentProfile": {
+    "businessType": "chiropractic",
+    "tagline": "Elevate Your Health. Elevate Your Life.",
+    "cities": ["Broomfield"],
+    "coreServices": [
+      {
+        "name": "Chiropractic Adjustments",
+        "slug": "chiropractic-adjustments",
+        "description": "Personalized spinal adjustments to restore alignment, reduce pain, and improve nervous system function.",
+        "subServices": [
+          {
+            "name": "Pediatric Chiropractic",
+            "slug": "pediatric-chiropractic",
+            "description": "Gentle, safe chiropractic care specifically designed for infants, children, and teens."
+          },
+          {
+            "name": "Prenatal Chiropractic",
+            "slug": "prenatal-chiropractic",
+            "description": "Specialized adjustments for expecting mothers to support a healthy pregnancy and easier delivery."
+          }
+        ]
+      },
+      {
+        "name": "TMJ Treatment",
+        "slug": "tmj-treatment",
+        "description": "Targeted treatment for jaw pain, clicking, headaches, and TMJ dysfunction."
+      },
+      {
+        "name": "Sports Chiropractic",
+        "slug": "sports-chiropractic",
+        "description": "Performance-focused care for athletes — injury recovery, prevention, and peak performance."
+      },
+      {
+        "name": "Corrective Care",
+        "slug": "corrective-care",
+        "description": "Structured care plans to correct postural imbalances and spinal misalignments over time."
+      }
+    ],
+    "storybrand": {
+      "hero": "Families and individuals in Broomfield who want to feel their best but are held back by pain, stiffness, or recurring health issues.",
+      "problem": "Chronic pain, poor posture, and nagging injuries steal your energy and keep you from the activities you love. Quick fixes and medications only mask the symptoms.",
+      "guide": "Dr. Joshua Fearn is a trusted chiropractor who combines expertise with genuine care, helping patients find lasting relief through personalized, whole-body wellness.",
+      "plan": "1. Schedule your initial consultation. 2. Get a thorough assessment and personalized care plan. 3. Start feeling better with consistent, targeted adjustments.",
+      "callToAction": "Schedule Your First Visit",
+      "avoidFailure": "Without proper care, pain compounds — limiting your mobility, affecting your work, and stealing time from your family.",
+      "achieveSuccess": "Imagine waking up without pain, playing with your kids without limitation, and performing at your peak — that's life elevated."
+    },
+    "brandVoice": {
+      "tone": "warm, professional, encouraging",
+      "style": "conversational but authoritative — like a trusted friend who happens to be an expert",
+      "avoidWords": ["cheap", "discount", "pain management", "crack"],
+      "preferWords": ["personalized", "family", "wellness", "elevate", "thrive", "whole-body"]
+    }
+  }
+}
