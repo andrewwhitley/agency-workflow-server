@@ -76,11 +76,12 @@ export function buildSitemap(
 ): SitemapPage[] {
   const pages: SitemapPage[] = [];
   const brandSuffix = ` | ${clientName}`;
+  const bizType = profile.businessType.replace(/\b\w/g, (c) => c.toUpperCase());
   const loc = profile.cities?.length === 1 ? `, ${profile.cities[0]}` : "";
 
   // Core pages every local business needs
   const corePages: Array<{ name: string; path: string; titlePrefix: string; type: SitemapPage["type"] }> = [
-    { name: "Home", path: "/", titlePrefix: `${profile.businessType}${loc}`, type: "core" },
+    { name: "Home", path: "/", titlePrefix: `${bizType}${loc}`, type: "core" },
     { name: "About", path: "/about/", titlePrefix: `About Us`, type: "core" },
     { name: "Services", path: "/services/", titlePrefix: `Our Services`, type: "core" },
     { name: "Contact", path: "/contact/", titlePrefix: `Contact Us`, type: "core" },
@@ -164,7 +165,7 @@ export function buildSitemap(
       pages.push({
         name: city,
         path: `/areas/${citySlug}/`,
-        metaTitle: `${profile.businessType} in ${city}${brandSuffix}`,
+        metaTitle: `${bizType} in ${city}${brandSuffix}`,
         type: "area",
         parentPath: "/areas/",
       });

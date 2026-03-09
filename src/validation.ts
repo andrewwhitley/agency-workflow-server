@@ -160,6 +160,22 @@ export const contentPlannerInputSchema = z.object({
   startYear: z.number().int().min(2024).max(2030).optional(),
 });
 
+// ── Content Management schemas ───────────────────────────────
+
+export const contentGenerateRequestSchema = z.object({
+  pageNames: z.array(z.string().max(300)).optional(),
+  enableQA: z.boolean().optional(),
+  qaPassThreshold: z.number().min(0).max(100).optional(),
+  outputFolderId: z.string().max(200).optional(),
+  contentTypes: z.array(z.enum(["website-page", "blog-post", "gbp-post"])).optional(),
+});
+
+export const updateClientConfigSchema = z.object({
+  fulfillmentFolderId: z.string().max(200).optional(),
+  outputFolder: z.string().max(200).optional(),
+  contentProfile: contentProfileSchema.optional(),
+});
+
 // ── Scheduled Job schemas ────────────────────────────────────
 
 export const createScheduledJobSchema = z.object({

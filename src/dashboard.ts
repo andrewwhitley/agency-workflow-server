@@ -1,5 +1,6 @@
 import type { SessionUser } from "./oauth.js";
 import { getChatViewHtml, getChatViewCss, getChatViewJs } from "./dashboard-chat.js";
+import { getContentViewHtml, getContentViewCss, getContentViewJs } from "./dashboard-content.js";
 
 /**
  * Returns the full HTML for the dashboard UI.
@@ -9,6 +10,9 @@ export function getDashboardHtml(user?: SessionUser): string {
   const chatHtml = getChatViewHtml();
   const chatCss = getChatViewCss();
   const chatJs = getChatViewJs();
+  const contentHtml = getContentViewHtml();
+  const contentCss = getContentViewCss();
+  const contentJs = getContentViewJs();
   const userHtml = user
     ? `<div class="user-info">
         <img class="user-avatar" src="${user.picture}" alt="" referrerpolicy="no-referrer" />
@@ -1101,6 +1105,7 @@ export function getDashboardHtml(user?: SessionUser): string {
     .status-bar .stale-badge.visible { display: inline; }
 
     ${chatCss}
+    ${contentCss}
   </style>
 </head>
 <body>
@@ -1168,6 +1173,13 @@ export function getDashboardHtml(user?: SessionUser): string {
       </nav>
 
       <nav class="nav-section">
+        <div class="nav-label">Content</div>
+        <div class="nav-item" data-view="content" onclick="switchView('content')">
+          <span>&#9998;</span> Content Manager
+        </div>
+      </nav>
+
+      <nav class="nav-section">
         <div class="nav-label">Productivity</div>
         <div class="nav-item" data-view="workbooks" onclick="switchView('workbooks')">
           <span>&#128214;</span> Workbooks
@@ -1206,6 +1218,8 @@ export function getDashboardHtml(user?: SessionUser): string {
       </div>
 
       ${chatHtml}
+
+      ${contentHtml}
 
       <!-- ═══ Agents View ═══ -->
       <div id="view-agents" class="hidden">
@@ -1915,6 +1929,7 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (view === "workbooks") loadWorkbookClients();
       if (view === "tasks") loadTasks();
       if (view === "memories") loadMemories();
+      if (view === "content") loadContentClients();
       if (view === "discord-logs") {
         loadDiscordLogs();
         if (discordRefreshTimer) clearInterval(discordRefreshTimer);
@@ -2740,6 +2755,8 @@ export function getDashboardHtml(user?: SessionUser): string {
 
     // ─── Chat View JS ─────────────────────────────────
     ` + chatJs + `
+
+    ` + contentJs + `
 
     // ─── Boot ───────────────────────────────────────────
     init();

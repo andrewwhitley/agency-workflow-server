@@ -20,15 +20,17 @@ import {
   createTaskSchema,
   updateTaskSchema,
   upsertMemorySchema,
+  contentGenerateRequestSchema,
+  updateClientConfigSchema,
 } from "./validation.js";
 import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
 import type { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
-import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
-import { buildContentPlan, runContentFactory, getRunStatus, listRuns } from "./content-factory.js";
-import { generateContentStrategy, strategyToCSV, type ContentPlannerInput } from "./content-planner.js";
-import { reviewContent } from "./content-qa.js";
+import { listClients, loadClientConfig, saveClientConfig, createWorkbook } from "./workbook-service.js";
+import { buildContentPlan, runContentFactory, getRunStatus, listRuns, type ContentPageSpec } from "./content-factory.js";
+import { generateContentStrategy, buildSitemap, strategyToCSV, type ContentPlannerInput } from "./content-planner.js";
+import { contentQueue } from "./content-queue.js";
 import { contentFactoryInputSchema, contentPlannerInputSchema } from "./validation.js";
 
 export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService): Router {
@@ -712,6 +714,118 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       console.error("Content planner error:", err);
       res.status(500).json({ error: message });
     }
+  });
+
+  // ── Content Management ─────────────────────────────────────
+
+  /** List clients that have a contentProfile configured */
+  router.get("/content-management/clients", (_req, res) => {
+    const clients = listClients().map((c) => {
+      const config = loadClientConfig(c.slug);
+      return {
+        slug: c.slug,
+        name: c.name,
+        provider: c.provider,
+        hasContentProfile: !!config?.contentProfile,
+        hasFulfillmentFolder: !!config?.fulfillmentFolderId,
+        outputFolder: config?.outputFolder || null,
+        fulfillmentFolderId: config?.fulfillmentFolderId || null,
+      };
+    });
+    res.json(clients);
+  });
+
+  /** Get full client config */
+  router.get("/content-management/clients/:slug", (req, res) => {
+    const config = loadClientConfig(req.params.slug);
+    if (!config) { res.status(404).json({ error: "Client not found" }); return; }
+    res.json({ slug: req.params.slug, ...config });
+  });
+
+  /** Get content plan (sitemap + factory pages) — no LLM calls, instant */
+  router.get("/content-management/clients/:slug/plan", (req, res) => {
+    const config = loadClientConfig(req.params.slug);
+    if (!config?.contentProfile) {
+      res.status(400).json({ error: "Client has no content profile configured" });
+      return;
+    }
+    const sitemap = buildSitemap(config.contentProfile, config.name);
+    const factoryPages = buildContentPlan(config.contentProfile, config.name);
+    res.json({ sitemap, factoryPages, clientName: config.name });
+  });
+
+  /** Generate content strategy (editorial calendar) — uses LLM */
+  router.post("/content-management/clients/:slug/strategy", async (req, res) => {
+    try {
+      const config = loadClientConfig(req.params.slug);
+      if (!config?.contentProfile) {
+        res.status(400).json({ error: "Client has no content profile configured" });
+        return;
+      }
+      const strategy = await generateContentStrategy({
+        clientName: config.name,
+        contentProfile: config.contentProfile,
+        postsPerMonth: req.body?.postsPerMonth,
+        startMonth: req.body?.startMonth,
+        startYear: req.body?.startYear,
+      });
+      if (req.query.format === "csv") {
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="${config.name}-content-strategy.csv"`);
+        res.send(strategyToCSV(strategy));
+        return;
+      }
+      res.json(strategy);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content strategy error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Trigger content generation (queued) */
+  router.post("/content-management/clients/:slug/generate", async (req, res) => {
+    try {
+      const parsed = contentGenerateRequestSchema.safeParse(req.body);
+      if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+      const config = loadClientConfig(req.params.slug);
+      if (!config?.contentProfile) {
+        res.status(400).json({ error: "Client has no content profile configured" });
+        return;
+      }
+
+      const outputFolderId = parsed.data.outputFolderId || config.fulfillmentFolderId || config.outputFolder;
+
+      const result = await runContentFactory({
+        clientSlug: req.params.slug,
+        contentTypes: parsed.data.contentTypes || ["website-page"],
+        dryRun: false,
+        outputFolderId: outputFolderId || undefined,
+        enableQA: parsed.data.enableQA,
+        qaPassThreshold: parsed.data.qaPassThreshold,
+      }, authService ? new GoogleDriveService(authService.getClient()) : undefined);
+
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content generation error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Update client config (fulfillment folder, etc.) */
+  router.patch("/content-management/clients/:slug/config", (req, res) => {
+    const parsed = updateClientConfigSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    const updated = saveClientConfig(req.params.slug, parsed.data);
+    if (!updated) { res.status(404).json({ error: "Client not found" }); return; }
+    res.json({ slug: req.params.slug, ...updated });
+  });
+
+  /** Content queue status */
+  router.get("/content-management/queue", (_req, res) => {
+    res.json(contentQueue.stats);
   });
 
   return router;

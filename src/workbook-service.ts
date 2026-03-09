@@ -35,6 +35,7 @@ export interface ClientConfig {
   replacements?: Record<string, string>;
   stockImageFolder?: string;
   outputFolder?: string;
+  fulfillmentFolderId?: string;
   contentProfile?: import("./content-factory.js").ContentProfile;
 }
 
@@ -173,6 +174,18 @@ export function loadClientConfig(slug: string): ClientConfig | null {
   const configPath = path.join(CLIENTS_DIR, `${slug}.json`);
   if (!fs.existsSync(configPath)) return null;
   return JSON.parse(fs.readFileSync(configPath, "utf-8"));
+}
+
+/**
+ * Save (merge) updates to a client config by slug.
+ */
+export function saveClientConfig(slug: string, updates: Partial<ClientConfig>): ClientConfig | null {
+  const existing = loadClientConfig(slug);
+  if (!existing) return null;
+  const merged = { ...existing, ...updates };
+  const configPath = path.join(CLIENTS_DIR, `${slug}.json`);
+  fs.writeFileSync(configPath, JSON.stringify(merged, null, 2));
+  return merged;
 }
 
 /**
