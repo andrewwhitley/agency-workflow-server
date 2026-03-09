@@ -728,8 +728,10 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
         provider: c.provider,
         hasContentProfile: !!config?.contentProfile,
         hasFulfillmentFolder: !!config?.fulfillmentFolderId,
+        hasPlanningSheet: !!config?.planningSheetId,
         outputFolder: config?.outputFolder || null,
         fulfillmentFolderId: config?.fulfillmentFolderId || null,
+        planningSheetId: config?.planningSheetId || null,
       };
     });
     res.json(clients);
@@ -826,6 +828,93 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
   /** Content queue status */
   router.get("/content-management/queue", (_req, res) => {
     res.json(contentQueue.stats);
+  });
+
+  // ── Planning Sheet Integration ────────────────────────────
+
+  /** Read a specific tab from a client's planning sheet */
+  router.get("/content-management/clients/:slug/sheet", async (req, res) => {
+    try {
+      const config = loadClientConfig(req.params.slug);
+      if (!config?.planningSheetId) {
+        res.status(400).json({ error: "No planning sheet configured for this client. Set planningSheetId in client config." });
+        return;
+      }
+      if (!authService?.isAuthenticated()) {
+        res.status(500).json({ error: "Google service account not configured" });
+        return;
+      }
+      const driveService = new GoogleDriveService(authService.getClient());
+      const tab = typeof req.query.tab === "string" ? req.query.tab : undefined;
+      const range = tab ? `'${tab}'` : undefined;
+      const data = await driveService.readGoogleSheet(config.planningSheetId, range);
+      res.json(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Read the content tracking tab specifically (parsed into structured rows) */
+  router.get("/content-management/clients/:slug/sheet/content-tracking", async (req, res) => {
+    try {
+      const config = loadClientConfig(req.params.slug);
+      if (!config?.planningSheetId) {
+        res.status(400).json({ error: "No planning sheet configured" });
+        return;
+      }
+      if (!authService?.isAuthenticated()) {
+        res.status(500).json({ error: "Google service account not configured" });
+        return;
+      }
+      const driveService = new GoogleDriveService(authService.getClient());
+      const data = await driveService.readGoogleSheet(config.planningSheetId, "'New Content Tracking'");
+      if (!data.values?.length) {
+        res.json({ headers: [], rows: [] });
+        return;
+      }
+      const headers = data.values[0];
+      const rows = data.values.slice(1).map((row) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h.trim()] = row[i] || ""; });
+        return obj;
+      });
+      res.json({ headers, rows, sheetTitle: data.title });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Read the topical sitemap tab (parsed) */
+  router.get("/content-management/clients/:slug/sheet/sitemap", async (req, res) => {
+    try {
+      const config = loadClientConfig(req.params.slug);
+      if (!config?.planningSheetId) {
+        res.status(400).json({ error: "No planning sheet configured" });
+        return;
+      }
+      if (!authService?.isAuthenticated()) {
+        res.status(500).json({ error: "Google service account not configured" });
+        return;
+      }
+      const driveService = new GoogleDriveService(authService.getClient());
+      const data = await driveService.readGoogleSheet(config.planningSheetId, "'Topical Sitemap'");
+      if (!data.values?.length) {
+        res.json({ headers: [], rows: [] });
+        return;
+      }
+      const headers = data.values[0];
+      const rows = data.values.slice(1).map((row) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h.trim()] = row[i] || ""; });
+        return obj;
+      });
+      res.json({ headers, rows, sheetTitle: data.title });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
   });
 
   return router;

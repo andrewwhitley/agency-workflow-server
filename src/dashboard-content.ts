@@ -23,6 +23,7 @@ export function getContentViewHtml(): string {
           <div id="content-client-info" class="hidden" style="display:flex;gap:12px;align-items:center;margin-left:auto;">
             <span id="content-client-profile-badge" class="pill pill-green hidden">Content Profile</span>
             <span id="content-client-folder-badge" class="pill pill-blue hidden">Fulfillment Folder</span>
+            <span id="content-client-sheet-badge" class="pill pill-purple hidden">Planning Sheet</span>
           </div>
         </div>
 
@@ -32,6 +33,7 @@ export function getContentViewHtml(): string {
             <button class="pill pill-active" onclick="switchContentTab('plan')" data-content-tab="plan">Content Plan</button>
             <button class="pill" onclick="switchContentTab('calendar')" data-content-tab="calendar">Editorial Calendar</button>
             <button class="pill" onclick="switchContentTab('generate')" data-content-tab="generate">Generate</button>
+            <button class="pill" onclick="switchContentTab('sheet')" data-content-tab="sheet">Planning Sheet</button>
             <button class="pill" onclick="switchContentTab('runs')" data-content-tab="runs">Run History</button>
             <button class="pill" onclick="switchContentTab('settings')" data-content-tab="settings">Settings</button>
           </div>
@@ -102,6 +104,24 @@ export function getContentViewHtml(): string {
           </div>
         </div>
 
+        <!-- Planning Sheet Tab -->
+        <div id="content-tab-sheet" class="content-tab hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 style="font-size:18px;margin:0;">Planning Sheet</h2>
+            <div style="display:flex;gap:8px;">
+              <div class="filter-pills">
+                <button class="pill pill-active" onclick="switchSheetSubTab('tracking')" data-sheet-tab="tracking">Content Tracking</button>
+                <button class="pill" onclick="switchSheetSubTab('sitemap')" data-sheet-tab="sitemap">Topical Sitemap</button>
+                <button class="pill" onclick="switchSheetSubTab('deliverables')" data-sheet-tab="deliverables">Deliverables</button>
+              </div>
+              <a id="sheet-open-link" href="#" target="_blank" class="btn btn-ghost btn-sm hidden" style="font-size:12px;">Open in Sheets</a>
+            </div>
+          </div>
+          <div id="content-sheet-body">
+            <div class="empty-state"><p>No planning sheet configured for this client. Set it in Settings.</p></div>
+          </div>
+        </div>
+
         <!-- Runs Tab -->
         <div id="content-tab-runs" class="content-tab hidden">
           <h2 style="font-size:18px;margin-bottom:16px;">Run History</h2>
@@ -165,6 +185,10 @@ export function getContentViewCss(): string {
     .type-badge.area { background: rgba(245,158,11,0.15); color: #fbbf24; }
     .type-badge.support { background: rgba(107,114,128,0.15); color: #9ca3af; }
     .type-badge.blog { background: rgba(236,72,153,0.15); color: #f472b6; }
+    .pill-purple { background: rgba(168,85,247,0.15); color: #c084fc; }
+
+    .sheet-status-done { color: #34d399; }
+    .sheet-status-pending { color: #fbbf24; }
 
     .qa-grade {
       display: inline-block;
@@ -273,8 +297,10 @@ export function getContentViewJs(): string {
       const client = contentClients.find(c => c.slug === slug);
       const profileBadge = document.getElementById("content-client-profile-badge");
       const folderBadge = document.getElementById("content-client-folder-badge");
+      const sheetBadge = document.getElementById("content-client-sheet-badge");
       profileBadge.classList.toggle("hidden", !client?.hasContentProfile);
       folderBadge.classList.toggle("hidden", !client?.hasFulfillmentFolder);
+      sheetBadge.classList.toggle("hidden", !client?.hasPlanningSheet);
       switchContentTab("plan");
     }
 
@@ -289,6 +315,7 @@ export function getContentViewJs(): string {
       if (tab === "plan") loadContentPlan();
       if (tab === "calendar") loadContentCalendarView();
       if (tab === "generate") loadGenerateView();
+      if (tab === "sheet") loadSheetView();
       if (tab === "runs") loadContentRuns();
       if (tab === "settings") loadContentSettings();
     }
@@ -605,6 +632,7 @@ export function getContentViewJs(): string {
         html += '<div class="form-group"><label>Client Name</label><input type="text" value="' + escapeHtml(config.name || "") + '" disabled /></div>';
         html += '<div class="form-group"><label>Provider</label><input type="text" value="' + escapeHtml(config.provider || "") + '" disabled /></div>';
         html += '<div class="form-group"><label>Fulfillment Folder ID</label><input type="text" id="settings-fulfillment-folder" value="' + escapeHtml(config.fulfillmentFolderId || "") + '" placeholder="Google Drive folder ID for deliverables" /></div>';
+        html += '<div class="form-group"><label>Planning Sheet ID</label><input type="text" id="settings-planning-sheet" value="' + escapeHtml(config.planningSheetId || "") + '" placeholder="Google Sheets ID for content tracking" /></div>';
         html += '<div class="form-group"><label>Output Folder ID</label><input type="text" value="' + escapeHtml(config.outputFolder || "") + '" disabled /><small style="color:var(--text-muted);font-size:11px;">Set in client JSON config</small></div>';
         html += '<div class="form-group"><label>Content Profile</label>';
         if (config.contentProfile) {
@@ -621,14 +649,145 @@ export function getContentViewJs(): string {
       }
     }
 
+    // ─── Planning Sheet ───────────────────────────────
+    let sheetCurrentSubTab = "tracking";
+
+    async function loadSheetView() {
+      const body = document.getElementById("content-sheet-body");
+      const client = contentClients.find(c => c.slug === contentCurrentSlug);
+      const link = document.getElementById("sheet-open-link");
+      if (!client?.hasPlanningSheet) {
+        body.innerHTML = '<div class="empty-state"><p>No planning sheet configured. Go to Settings to add one.</p></div>';
+        link.classList.add("hidden");
+        return;
+      }
+      link.href = "https://docs.google.com/spreadsheets/d/" + client.planningSheetId;
+      link.classList.remove("hidden");
+      switchSheetSubTab(sheetCurrentSubTab);
+    }
+
+    function switchSheetSubTab(tab) {
+      sheetCurrentSubTab = tab;
+      document.querySelectorAll("[data-sheet-tab]").forEach(p => p.classList.remove("pill-active"));
+      const pill = document.querySelector('[data-sheet-tab="' + tab + '"]');
+      if (pill) pill.classList.add("pill-active");
+
+      if (tab === "tracking") loadContentTracking();
+      if (tab === "sitemap") loadTopicalSitemap();
+      if (tab === "deliverables") loadDeliverables();
+    }
+
+    async function loadContentTracking() {
+      const body = document.getElementById("content-sheet-body");
+      body.innerHTML = '<div class="empty-state"><p>Loading content tracking...</p></div>';
+      try {
+        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/content-tracking");
+        if (!data.rows?.length) {
+          body.innerHTML = '<div class="empty-state"><p>No content tracking entries found.</p></div>';
+          return;
+        }
+        let html = '<table class="content-plan-table"><thead><tr>';
+        html += '<th>Topic</th><th>Date</th><th>Type</th><th>Title</th><th>Keyword</th><th>Assigned</th><th>Status</th>';
+        html += '</tr></thead><tbody>';
+        for (const row of data.rows) {
+          const completed = (row["Completed"] || "").toUpperCase() === "TRUE";
+          html += '<tr>';
+          html += '<td><span class="type-badge service">' + escapeHtml(row["Service Topic"] || "") + '</span></td>';
+          html += '<td style="font-size:12px;white-space:nowrap;">' + escapeHtml(row["Scheduled (m/yyyy)"] || "") + '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(row["Type"] || "") + '</td>';
+          html += '<td style="font-weight:500;">' + escapeHtml(row["Title (<65 Characters)"] || "") + '</td>';
+          html += '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(row["Focus SEO Keyword(s)"] || "") + '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(row["Assigned To"] || "Unassigned") + '</td>';
+          html += '<td class="' + (completed ? "sheet-status-done" : "sheet-status-pending") + '" style="font-weight:500;">' + (completed ? "Done" : "Pending") + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      } catch (e) {
+        body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function loadTopicalSitemap() {
+      const body = document.getElementById("content-sheet-body");
+      body.innerHTML = '<div class="empty-state"><p>Loading topical sitemap...</p></div>';
+      try {
+        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/sitemap");
+        if (!data.rows?.length) {
+          body.innerHTML = '<div class="empty-state"><p>No sitemap entries found.</p></div>';
+          return;
+        }
+        let html = '<table class="content-plan-table"><thead><tr>';
+        html += '<th>Page</th><th>URL</th><th>SEO Keywords</th><th>SEO Score</th><th>Title</th><th>Words</th>';
+        html += '</tr></thead><tbody>';
+        for (const row of data.rows) {
+          const score = parseInt(row["SEO Score"] || row["SEO Score "] || "0");
+          const scoreColor = score >= 80 ? "#34d399" : score >= 60 ? "#fbbf24" : "#f87171";
+          html += '<tr>';
+          html += '<td style="font-weight:500;">' + escapeHtml(row["Page"] || "") + '</td>';
+          html += '<td style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">';
+          if (row["URL"]) html += '<a href="' + escapeHtml(row["URL"]) + '" target="_blank" style="color:var(--primary);">' + escapeHtml(row["URL"].replace("https://","")) + '</a>';
+          html += '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(row["SEO Keywords"] || row["SEO Keywords "] || "") + '</td>';
+          html += '<td style="font-weight:600;color:' + scoreColor + ';">' + (score || "—") + '</td>';
+          html += '<td style="font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(row["Title (Max 60 Ch / 580 Px)"] || "") + '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(row["Word Count"] || "") + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      } catch (e) {
+        body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function loadDeliverables() {
+      const body = document.getElementById("content-sheet-body");
+      body.innerHTML = '<div class="empty-state"><p>Loading deliverables...</p></div>';
+      try {
+        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet?tab=Deliverables");
+        if (!data.values?.length) {
+          body.innerHTML = '<div class="empty-state"><p>No deliverables data found.</p></div>';
+          return;
+        }
+        let html = '<table class="content-plan-table"><thead><tr>';
+        const headers = data.values[0] || [];
+        for (const h of headers) html += '<th>' + escapeHtml(h) + '</th>';
+        html += '</tr></thead><tbody>';
+        for (let i = 1; i < data.values.length; i++) {
+          const row = data.values[i];
+          if (!row?.length || !row.some(c => c?.trim())) continue;
+          html += '<tr>';
+          for (let j = 0; j < headers.length; j++) {
+            const val = row[j] || "";
+            const isBool = val.toUpperCase() === "TRUE" || val.toUpperCase() === "FALSE";
+            if (isBool) {
+              html += '<td style="text-align:center;">' + (val.toUpperCase() === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>') + '</td>';
+            } else {
+              html += '<td style="font-size:13px;">' + escapeHtml(val) + '</td>';
+            }
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      } catch (e) {
+        body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
     async function saveContentSettings() {
       if (!contentCurrentSlug) return;
       const fulfillmentFolder = document.getElementById("settings-fulfillment-folder")?.value?.trim();
+      const planningSheet = document.getElementById("settings-planning-sheet")?.value?.trim();
       try {
         await api("/content-management/clients/" + contentCurrentSlug + "/config", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fulfillmentFolderId: fulfillmentFolder || undefined })
+          body: JSON.stringify({
+            fulfillmentFolderId: fulfillmentFolder || undefined,
+            planningSheetId: planningSheet || undefined,
+          })
         });
         alert("Settings saved!");
         loadContentClients(); // Refresh badges

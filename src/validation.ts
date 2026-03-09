@@ -173,6 +173,7 @@ export const contentGenerateRequestSchema = z.object({
 export const updateClientConfigSchema = z.object({
   fulfillmentFolderId: z.string().max(200).optional(),
   outputFolder: z.string().max(200).optional(),
+  planningSheetId: z.string().max(200).optional(),
   contentProfile: contentProfileSchema.optional(),
 });
 

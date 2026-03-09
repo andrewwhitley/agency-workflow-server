@@ -36,6 +36,7 @@ export interface ClientConfig {
   stockImageFolder?: string;
   outputFolder?: string;
   fulfillmentFolderId?: string;
+  planningSheetId?: string;
   contentProfile?: import("./content-factory.js").ContentProfile;
 }
 

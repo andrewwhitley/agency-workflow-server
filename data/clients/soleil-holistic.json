@@ -1,0 +1,55 @@
+{
+  "name": "Soleil Acupuncture & Naturopathic Wellness",
+  "provider": "Dr. Lyndsey Maher",
+  "colors": {
+    "primary": "#c9a96e",
+    "secondary": "#5a7d6b",
+    "accent": "#d4a852",
+    "dark": "#2c3e2d",
+    "muted": "#8b9d8e",
+    "lightBg": "#f5f1eb"
+  },
+  "fonts": {
+    "heading": "Playfair Display",
+    "body": "Open Sans"
+  },
+  "images": {},
+  "fulfillmentFolderId": "1OvyVINXXkArk9ckb21mPDyVSSCb4WYBj",
+  "planningSheetId": "1h5LkdtUo355CunbFKsEbWY3SLqNGbApD1YjHv9tmxOw",
+  "contentProfile": {
+    "businessType": "functional medicine clinic",
+    "tagline": "Holistic healing for modern wellness",
+    "cities": ["Hamden"],
+    "coreServices": [
+      {
+        "name": "Acupuncture",
+        "slug": "acupuncture",
+        "description": "Traditional Chinese Medicine acupuncture for pain relief, stress reduction, and whole-body healing"
+      },
+      {
+        "name": "Naturopathic Medicine",
+        "slug": "naturopathic-medicine",
+        "description": "Comprehensive naturopathic care including herbal medicine, nutrition, and lifestyle counseling"
+      },
+      {
+        "name": "IV Nutrient Therapy",
+        "slug": "iv-therapy",
+        "description": "Custom IV vitamin and nutrient infusions for energy, immunity, and recovery"
+      },
+      {
+        "name": "Bioidentical Hormone Replacement Therapy",
+        "slug": "bhrt",
+        "description": "BHRT for hormone optimization, menopause management, and vitality restoration"
+      },
+      {
+        "name": "Medical Aesthetics",
+        "slug": "medical-aesthetics",
+        "description": "Anti-aging and aesthetic treatments including PRP, dermal fillers, and skin rejuvenation",
+        "subServices": [
+          { "name": "PRP Therapy", "slug": "prp-therapy", "description": "Platelet-rich plasma for facial rejuvenation and hair restoration" },
+          { "name": "Dermal Fillers", "slug": "dermal-fillers", "description": "Natural volume restoration and facial contouring" }
+        ]
+      }
+    ]
+  }
+}
