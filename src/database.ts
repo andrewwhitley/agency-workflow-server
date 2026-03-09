@@ -268,6 +268,39 @@ Always provide specific, implementable recommendations with expected impact leve
       CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
     `,
   },
+  {
+    id: "010_scheduled_jobs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS scheduled_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(200) NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
+        cron_expression VARCHAR(100) NOT NULL,
+        job_type VARCHAR(50) NOT NULL DEFAULT 'prompt',
+        config JSONB NOT NULL DEFAULT '{}',
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        last_run_at TIMESTAMPTZ,
+        next_run_at TIMESTAMPTZ,
+        last_result TEXT,
+        last_error TEXT,
+        created_by VARCHAR(200),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS job_runs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id UUID NOT NULL REFERENCES scheduled_jobs(id) ON DELETE CASCADE,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        status VARCHAR(20) NOT NULL DEFAULT 'running',
+        result TEXT,
+        error TEXT,
+        duration_ms INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id, started_at DESC);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

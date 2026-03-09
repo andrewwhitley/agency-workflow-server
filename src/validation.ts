@@ -97,6 +97,70 @@ export const upsertMemorySchema = z.object({
   created_by: z.string().max(200).optional(),
 });
 
+// ── Content Factory schemas ──────────────────────────────────
+
+export const subServiceSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+
+export const coreServiceSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  subServices: z.array(subServiceSchema).optional(),
+});
+
+export const storyBrandSchema = z.object({
+  hero: z.string().max(2000),
+  problem: z.string().max(2000),
+  guide: z.string().max(2000),
+  plan: z.string().max(2000),
+  callToAction: z.string().max(500),
+  avoidFailure: z.string().max(2000),
+  achieveSuccess: z.string().max(2000),
+});
+
+export const brandVoiceSchema = z.object({
+  tone: z.string().max(500),
+  style: z.string().max(500),
+  avoidWords: z.array(z.string().max(100)).optional(),
+  preferWords: z.array(z.string().max(100)).optional(),
+});
+
+export const contentProfileSchema = z.object({
+  businessType: z.string().min(1).max(200),
+  tagline: z.string().max(500).optional(),
+  cities: z.array(z.string().max(200)).optional(),
+  coreServices: z.array(coreServiceSchema).optional(),
+  storybrand: storyBrandSchema.optional(),
+  brandVoice: brandVoiceSchema.optional(),
+  contentPrompts: z.record(z.string().max(10000)).optional(),
+});
+
+export const contentFactoryInputSchema = z.object({
+  clientSlug: z.string().max(200).optional(),
+  contentProfile: contentProfileSchema.optional(),
+  contentTypes: z.array(z.enum(["website-page", "blog-post", "gbp-post"])).optional(),
+  dryRun: z.boolean().optional(),
+  outputFolderId: z.string().max(200).optional(),
+});
+
+// ── Scheduled Job schemas ────────────────────────────────────
+
+export const createScheduledJobSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  cron_expression: z.string().min(1).max(100),
+  job_type: z.enum(["prompt", "workflow", "drive_sync"]),
+  config: z.record(z.unknown()),
+  enabled: z.boolean().optional(),
+  created_by: z.string().max(200).optional(),
+});
+
+export const updateScheduledJobSchema = createScheduledJobSchema.partial();
+
 // ── Workflow run validation ───────────────────────────────────
 
 export const workflowRunSchema = z.record(z.unknown());

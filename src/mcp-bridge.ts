@@ -10,10 +10,14 @@ import { WorkflowEngine, InputType, InputDef } from "./workflow-engine.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
-import { inputTypeToZod } from "./validation.js";
+import { inputTypeToZod, contentProfileSchema, contentFactoryInputSchema } from "./validation.js";
 import { threadService } from "./thread-service.js";
 import { taskService } from "./task-service.js";
 import { memoryService } from "./memory-service.js";
+import { buildContentPlan, runContentFactory, getRunStatus, type ContentProfile, type ContentType } from "./content-factory.js";
+import { loadClientConfig } from "./workbook-service.js";
+import { GoogleDriveService } from "./google-drive.js";
+import type { GoogleAuthService } from "./google-auth.js";
 
 function buildZodShape(inputs: Record<string, InputType | InputDef> | undefined): ZodRawShape {
   const shape: ZodRawShape = {};
@@ -454,6 +458,97 @@ export function bridgeMemoriesToMcp(server: McpServer): void {
       }
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ success: true, deleted_key: key }) }],
+      };
+    }
+  );
+}
+
+// ── Content Factory ───────────────────────────────────────
+
+export function bridgeContentFactoryToMcp(server: McpServer, authService?: GoogleAuthService): void {
+  server.tool(
+    "generate_content_plan",
+    "Generate a content plan (dry run) for a client. Returns the list of pages that would be created without actually generating content. Use this to preview before running the full factory.",
+    {
+      clientSlug: z.string().optional().describe("Client slug from local config (e.g. 'elevated-chiropractic')"),
+      contentProfile: contentProfileSchema.optional().describe("Inline content profile — overrides client config if both provided"),
+      contentTypes: z.array(z.enum(["website-page", "blog-post", "gbp-post"])).optional().describe("Content types to generate (default: website-page)"),
+    },
+    async ({ clientSlug, contentProfile, contentTypes }) => {
+      try {
+        const result = await runContentFactory({
+          clientSlug,
+          contentProfile: contentProfile as ContentProfile | undefined,
+          contentTypes: contentTypes as ContentType[] | undefined,
+          dryRun: true,
+        });
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "run_content_factory",
+    "Generate content for a client and save as Google Docs. Creates one Doc per page in a new folder in the client's Drive folder. Returns doc links and run status.",
+    {
+      clientSlug: z.string().optional().describe("Client slug from local config (e.g. 'elevated-chiropractic')"),
+      contentProfile: contentProfileSchema.optional().describe("Inline content profile — overrides client config if both provided"),
+      contentTypes: z.array(z.enum(["website-page", "blog-post", "gbp-post"])).optional().describe("Content types to generate (default: website-page)"),
+      outputFolderId: z.string().optional().describe("Google Drive folder ID for output (overrides client config)"),
+    },
+    async ({ clientSlug, contentProfile, contentTypes, outputFolderId }) => {
+      try {
+        let driveService: GoogleDriveService | undefined;
+        if (authService?.isAuthenticated()) {
+          driveService = new GoogleDriveService(authService.getClient());
+        }
+
+        const result = await runContentFactory(
+          {
+            clientSlug,
+            contentProfile: contentProfile as ContentProfile | undefined,
+            contentTypes: contentTypes as ContentType[] | undefined,
+            outputFolderId,
+          },
+          driveService
+        );
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "get_content_factory_status",
+    "Check the status of a content factory run by its run ID.",
+    {
+      runId: z.string().describe("The run ID returned by run_content_factory"),
+    },
+    async ({ runId }) => {
+      const status = getRunStatus(runId);
+      if (!status) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Run not found" }) }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }],
       };
     }
   );

@@ -139,6 +139,18 @@ export class GoogleDriveService {
     this.authClient = authClient;
   }
 
+  async createFolder(name: string, parentId: string): Promise<string> {
+    const res = await this.drive.files.create({
+      requestBody: {
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [parentId],
+      },
+      fields: "id",
+    });
+    return res.data.id!;
+  }
+
   async listFolders(parentId?: string): Promise<DriveFolder[]> {
     const query = parentId
       ? `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`

@@ -8,7 +8,10 @@ import { threadService, type Message } from "./thread-service.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { GoogleDriveService, extractGoogleId, type FormatOperation, type DocEdit } from "./google-drive.js";
-import { listClients, createWorkbook } from "./workbook-service.js";
+import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
+import { buildContentPlan, runContentFactory, getRunStatus } from "./content-factory.js";
+import type { ContentProfile, ContentType } from "./content-factory.js";
+import { memoryService, type Memory } from "./memory-service.js";
 
 const anthropic = new Anthropic();
 
@@ -279,6 +282,70 @@ function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveS
     },
   });
 
+  // Content Factory tools
+  tools.push({
+    name: "generate_content_plan",
+    description: "Generate a content plan (dry run) for a client — returns the list of pages that would be created. Available clients: " + listClients().map(c => `${c.slug} (${c.name})`).join(", "),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        client_slug: { type: "string", description: "Client slug (e.g. 'elevated-chiropractic')" },
+        content_types: {
+          type: "array",
+          items: { type: "string", enum: ["website-page", "blog-post", "gbp-post"] },
+          description: "Content types to plan (default: website-page)",
+        },
+      },
+      required: ["client_slug"],
+    },
+  });
+
+  tools.push({
+    name: "run_content_factory",
+    description: "Generate content for a client and save as Google Docs. Creates one Doc per page. This runs the full generation — use generate_content_plan first to preview. Available clients: " + listClients().map(c => `${c.slug} (${c.name})`).join(", "),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        client_slug: { type: "string", description: "Client slug (e.g. 'elevated-chiropractic')" },
+        content_types: {
+          type: "array",
+          items: { type: "string", enum: ["website-page", "blog-post", "gbp-post"] },
+          description: "Content types to generate (default: website-page)",
+        },
+      },
+      required: ["client_slug"],
+    },
+  });
+
+  // Memory tools (if database is available)
+  if (process.env.DATABASE_URL) {
+    tools.push({
+      name: "save_memory",
+      description: "Save an important fact, preference, or piece of information to persistent memory. Use this when the user shares something worth remembering across conversations — preferences, project details, client facts, decisions made.",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          key: { type: "string", description: "Unique key (e.g. 'andrew-timezone', 'client-phw-brand-colors', 'project-deadline')" },
+          content: { type: "string", description: "The information to remember" },
+          category: { type: "string", description: "Optional category (e.g. 'preference', 'client', 'project', 'decision')" },
+        },
+        required: ["key", "content"],
+      },
+    });
+
+    tools.push({
+      name: "recall_memory",
+      description: "Search persistent memory for previously saved information. Use this to look up facts, preferences, or context from past conversations.",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          query: { type: "string", description: "Search keyword or phrase" },
+        },
+        required: ["query"],
+      },
+    });
+  }
+
   return tools;
 }
 
@@ -524,7 +591,105 @@ async function executeToolCall(
     }
   }
 
+  if (toolName === "generate_content_plan") {
+    try {
+      const result = await runContentFactory({
+        clientSlug: toolInput.client_slug as string,
+        contentTypes: toolInput.content_types as ContentType[] | undefined,
+        dryRun: true,
+      });
+      return JSON.stringify(result, null, 2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Content plan failed: ${message}` });
+    }
+  }
+
+  if (toolName === "run_content_factory") {
+    try {
+      const result = await runContentFactory(
+        {
+          clientSlug: toolInput.client_slug as string,
+          contentTypes: toolInput.content_types as ContentType[] | undefined,
+        },
+        driveService
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Content factory failed: ${message}` });
+    }
+  }
+
+  if (toolName === "save_memory" && process.env.DATABASE_URL) {
+    try {
+      const result = await memoryService.upsert({
+        key: toolInput.key as string,
+        content: toolInput.content as string,
+        category: (toolInput.category as string) || undefined,
+        created_by: "assistant",
+      });
+      return JSON.stringify({ saved: true, key: result.key });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Failed to save memory: ${message}` });
+    }
+  }
+
+  if (toolName === "recall_memory" && process.env.DATABASE_URL) {
+    try {
+      const results = await memoryService.search(toolInput.query as string);
+      return JSON.stringify(
+        results.map((m) => ({ key: m.key, content: m.content, category: m.category })),
+        null,
+        2
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Failed to recall memory: ${message}` });
+    }
+  }
+
   return JSON.stringify({ error: `Unknown tool: ${toolName}` });
+}
+
+// ── Memory context injection ──────────────────────────
+
+async function buildMemoryContext(userMessage: string): Promise<string | undefined> {
+  // 1. Get 5 most recently updated memories
+  const recent = await memoryService.listRecent(5);
+
+  // 2. Extract significant keywords from user message and search
+  const keywords = userMessage
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 5);
+
+  const relevant = keywords.length > 0 ? await memoryService.searchMultiple(keywords) : [];
+
+  // 3. Deduplicate (relevant first, then recent)
+  const seen = new Set<string>();
+  const combined: Memory[] = [];
+  for (const m of [...relevant, ...recent]) {
+    if (!seen.has(m.key)) {
+      seen.add(m.key);
+      combined.push(m);
+    }
+  }
+
+  if (combined.length === 0) return undefined;
+
+  // 4. Cap at ~8000 chars (~2000 tokens)
+  let output = "";
+  for (const m of combined.slice(0, 10)) {
+    const entry = `- **${m.key}**${m.category ? ` [${m.category}]` : ""}: ${m.content}\n`;
+    if (output.length + entry.length > 8000) break;
+    output += entry;
+  }
+
+  return output || undefined;
 }
 
 // ── Context assembly ──────────────────────────────────
@@ -532,7 +697,8 @@ async function executeToolCall(
 function assembleSystemPrompt(
   agent: Agent,
   trainingDocs: { title: string; content: string; doc_type: string }[],
-  clientContext?: string
+  clientContext?: string,
+  memoryContext?: string
 ): string {
   const today = new Date().toLocaleDateString("en-AU", {
     weekday: "long",
@@ -547,6 +713,10 @@ function assembleSystemPrompt(
     for (const doc of trainingDocs) {
       system += `\n### ${doc.title} (${doc.doc_type})\n${doc.content}\n`;
     }
+  }
+
+  if (memoryContext) {
+    system += `\n\n## Remembered Context\nThe following are relevant memories from previous conversations and stored knowledge. Use these to maintain continuity — don't ask the user things you already know.\n${memoryContext}\n`;
   }
 
   if (clientContext) {
@@ -627,7 +797,17 @@ export async function* streamChat(
     }
   }
 
-  const systemPrompt = assembleSystemPrompt(agent, trainingDocs, clientContext);
+  // Inject relevant memories into context
+  let memoryContext: string | undefined;
+  if (process.env.DATABASE_URL) {
+    try {
+      memoryContext = await buildMemoryContext(messageText);
+    } catch (err) {
+      console.error("Memory injection failed (non-fatal):", err);
+    }
+  }
+
+  const systemPrompt = assembleSystemPrompt(agent, trainingDocs, clientContext, memoryContext);
 
   // Load conversation history
   const allMessages = await threadService.getMessages(threadId);

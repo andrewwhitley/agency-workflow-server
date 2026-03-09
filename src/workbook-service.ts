@@ -32,8 +32,10 @@ export interface ClientConfig {
     providerPhoto1?: string;
     providerPhoto2?: string;
   };
+  replacements?: Record<string, string>;
   stockImageFolder?: string;
   outputFolder?: string;
+  contentProfile?: import("./content-factory.js").ContentProfile;
 }
 
 export interface WorkbookResult {
@@ -252,6 +254,22 @@ export async function createWorkbook(
           },
         })),
       },
+    });
+  }
+
+  // Step 2b: Text replacements (swap provider names, practice names, etc.)
+  if (config.replacements && Object.keys(config.replacements).length > 0) {
+    const replaceRequests = Object.entries(config.replacements).map(
+      ([find, replace]) => ({
+        replaceAllText: {
+          containsText: { text: find, matchCase: true },
+          replaceText: replace,
+        },
+      })
+    );
+    await docsApi.documents.batchUpdate({
+      documentId: newDocId,
+      requestBody: { requests: replaceRequests },
     });
   }
 

@@ -12,6 +12,8 @@
  */
 
 import { WorkflowEngine } from "./workflow-engine.js";
+import { loadClientConfig } from "./workbook-service.js";
+import { buildContentPlan, runContentFactory, type ContentType } from "./content-factory.js";
 
 export function registerAgencyWorkflows(engine: WorkflowEngine): void {
 
@@ -511,6 +513,106 @@ export function registerAgencyWorkflows(engine: WorkflowEngine): void {
               data,
             })),
             executiveSummary: `This month, we continued to drive growth across your active channels. See detailed metrics below.`,
+          };
+        },
+      },
+    ],
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  //  CONTENT FACTORY
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  engine.register({
+    name: "content-factory",
+    description: "Generate batches of website content (pages, blog posts) for a client using their brand profile, then save as Google Docs",
+    category: "Content",
+    tags: ["content", "website", "copywriting", "google-docs"],
+    inputs: {
+      clientSlug: { type: "string", description: "Client slug (e.g. 'elevated-chiropractic')", required: true },
+      contentTypes: { type: "string", description: "Comma-separated content types: website-page, blog-post, gbp-post (default: website-page)", default: "website-page" },
+      dryRun: { type: "boolean", description: "If true, returns the plan without generating content", default: false },
+    },
+    steps: [
+      {
+        id: "load_client",
+        description: "Load client configuration and content profile",
+        action: async (ctx) => {
+          const slug = String(ctx.inputs.clientSlug);
+          const config = loadClientConfig(slug);
+          if (!config) throw new Error(`Client not found: ${slug}`);
+
+          const profile = config.contentProfile;
+          if (!profile) throw new Error(`No contentProfile found in client config: ${slug}`);
+
+          return {
+            slug,
+            name: config.name,
+            hasProfile: true,
+            outputFolder: config.outputFolder || null,
+          };
+        },
+      },
+      {
+        id: "build_plan",
+        description: "Generate the content plan — list of all pages to create",
+        action: async (ctx) => {
+          const slug = String(ctx.inputs.clientSlug);
+          const config = loadClientConfig(slug)!;
+          const profile = config.contentProfile!;
+          const typesStr = String(ctx.inputs.contentTypes || "website-page");
+          const contentTypes = typesStr.split(",").map(t => t.trim()) as ContentType[];
+
+          const plan = buildContentPlan(profile, config.name, contentTypes);
+          return {
+            totalPages: plan.length,
+            pages: plan.map(p => ({ id: p.id, title: p.title, slug: p.slug, type: p.type })),
+          };
+        },
+      },
+      {
+        id: "generate_content",
+        description: "Generate all content pages and save as Google Docs",
+        action: async (ctx) => {
+          const dryRun = ctx.inputs.dryRun === true || ctx.inputs.dryRun === "true";
+          if (dryRun) {
+            return {
+              dryRun: true,
+              message: "Dry run — content plan generated but no pages were created. Review the plan in the previous step.",
+              plan: ctx.results.build_plan,
+            };
+          }
+
+          const slug = String(ctx.inputs.clientSlug);
+          const typesStr = String(ctx.inputs.contentTypes || "website-page");
+          const contentTypes = typesStr.split(",").map(t => t.trim()) as ContentType[];
+
+          const result = await runContentFactory({
+            clientSlug: slug,
+            contentTypes,
+          });
+
+          return result;
+        },
+      },
+      {
+        id: "create_tracking",
+        description: "Summarize the results",
+        action: async (ctx) => {
+          const gen = ctx.results.generate_content as Record<string, unknown>;
+          if (gen.dryRun) {
+            return { summary: "Dry run completed. No content was generated.", plan: gen.plan };
+          }
+
+          return {
+            summary: `Content factory complete: ${gen.completedPages}/${gen.totalPages} pages generated.${gen.failedPages ? ` ${gen.failedPages} failed.` : ""}`,
+            runId: gen.runId,
+            folderUrl: gen.folderUrl || "No Drive folder (Drive not connected)",
+            pages: (gen.pages as Array<Record<string, unknown>>)?.map(p => ({
+              title: p.title,
+              status: p.status,
+              url: p.docUrl || null,
+            })),
           };
         },
       },

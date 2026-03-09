@@ -26,6 +26,8 @@ import type { KnowledgeBase } from "./knowledge-base.js";
 import type { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
+import { buildContentPlan, runContentFactory, getRunStatus, listRuns } from "./content-factory.js";
+import { contentFactoryInputSchema } from "./validation.js";
 
 export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService): Router {
   const router = Router();
@@ -603,6 +605,60 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       console.error("Create workbook error:", err);
       res.status(500).json({ error: `Failed to create workbook: ${message}` });
     }
+  });
+
+  // ── Content Factory ─────────────────────────────────────
+
+  router.post("/content-factory/plan", async (req, res) => {
+    try {
+      const parsed = contentFactoryInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+      const result = await runContentFactory({ ...parsed.data, dryRun: true });
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content factory plan error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/content-factory/generate", async (req, res) => {
+    try {
+      const parsed = contentFactoryInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      // Build drive service if auth is available
+      let driveService: GoogleDriveService | undefined;
+      if (authService?.isAuthenticated()) {
+        driveService = new GoogleDriveService(authService.getClient());
+      }
+
+      const result = await runContentFactory(parsed.data, driveService);
+      res.status(201).json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content factory generate error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.get("/content-factory/status/:runId", async (req, res) => {
+    const status = getRunStatus(req.params.runId);
+    if (!status) {
+      res.status(404).json({ error: "Run not found" });
+      return;
+    }
+    res.json(status);
+  });
+
+  router.get("/content-factory/runs", async (_req, res) => {
+    res.json(listRuns());
   });
 
   return router;

@@ -21,7 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { WorkflowEngine } from "./workflow-engine.js";
-import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp } from "./mcp-bridge.js";
+import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp, bridgeContentFactoryToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
 import { getDashboardHtml, getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
 import { GoogleAuthService } from "./google-auth.js";
@@ -32,6 +32,11 @@ import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
 import { DiscordBot } from "./discord-bot.js";
 import { runMigrations, closePool } from "./database.js";
+import { Scheduler, type JobExecutor } from "./scheduler.js";
+import { streamChat } from "./chat-engine.js";
+import { agentService } from "./agent-service.js";
+import { threadService } from "./thread-service.js";
+import { createScheduledJobSchema, updateScheduledJobSchema } from "./validation.js";
 import { apiRouter } from "./api-routes.js";
 import { redactionMiddleware } from "./redaction.js";
 import {
@@ -394,7 +399,7 @@ async function main(): Promise<void> {
   });
 
   app.get("/api/sops/:id/parsed", (req, res) => {
-    const doc = indexer.getById(req.params.id);
+    const doc = indexer.getById(String(req.params.id));
     if (!doc || doc.type !== "sop") {
       res.status(404).json({ error: "SOP not found" });
       return;
@@ -404,7 +409,7 @@ async function main(): Promise<void> {
   });
 
   app.post("/api/sops/:id/register", (req, res) => {
-    const doc = indexer.getById(req.params.id);
+    const doc = indexer.getById(String(req.params.id));
     if (!doc || doc.type !== "sop") {
       res.status(404).json({ error: "SOP not found" });
       return;
@@ -575,6 +580,7 @@ async function main(): Promise<void> {
     bridgeThreadsToMcp(server);
     bridgeTasksToMcp(server);
     bridgeMemoriesToMcp(server);
+    bridgeContentFactoryToMcp(server, authService);
     return server;
   }
 
@@ -681,7 +687,145 @@ async function main(): Promise<void> {
     knowledgeBase,
     indexer,
     clientAgent,
+    authService,
   });
+
+  // ─── 15b. Scheduler ──────────────────────────────
+  let scheduler: Scheduler | null = null;
+
+  if (process.env.DATABASE_URL) {
+    const jobExecutor: JobExecutor = {
+      async executePrompt(config) {
+        let threadId = config.thread_id;
+        if (!threadId) {
+          const agents = await agentService.list();
+          const agent = config.agent_id
+            ? agents.find((a) => a.id === config.agent_id)
+            : agents.find((a) => a.name === "General Assistant") || agents[0];
+          if (!agent) throw new Error("No agents configured");
+          const thread = await threadService.create({
+            title: `Scheduled: ${config.prompt.slice(0, 50)}`,
+            agent_id: agent.id,
+            created_by: "scheduler",
+          });
+          threadId = thread.id;
+        }
+
+        let response = "";
+        const driveService = authService.isAuthenticated()
+          ? new GoogleDriveService(authService.getClient())
+          : undefined;
+        const generator = streamChat(threadId, config.prompt, engine, knowledgeBase, driveService);
+        for await (const event of generator) {
+          if (event.type === "text") response += event.content;
+        }
+
+        if (config.discord_channel_id && discordBot.isConnected()) {
+          await discordBot.sendToChannel(config.discord_channel_id, response);
+        }
+
+        return response;
+      },
+
+      async executeWorkflow(config) {
+        const result = await engine.run(config.workflow_name, config.inputs || {});
+        const summary = result.success
+          ? `Workflow **${config.workflow_name}** completed in ${result.durationMs}ms`
+          : `Workflow **${config.workflow_name}** failed: ${result.error}`;
+
+        if (config.discord_channel_id && discordBot.isConnected()) {
+          await discordBot.sendToChannel(config.discord_channel_id, summary);
+        }
+
+        return summary;
+      },
+
+      async executeDriveSync(config) {
+        if (!authService.isAuthenticated()) return "Drive not authenticated";
+        const drive = new GoogleDriveService(authService.getClient());
+        const count = await indexer.refreshIndex(drive);
+        return `Synced ${count} documents`;
+      },
+    };
+
+    scheduler = new Scheduler(jobExecutor);
+  }
+
+  // ─── 15c. Scheduler API Routes ──────────────────────
+  if (process.env.DATABASE_URL && scheduler) {
+    const sched = scheduler; // for closure
+
+    app.get("/api/scheduler/jobs", requireAuth, async (_req, res) => {
+      try {
+        res.json(await sched.listAll());
+      } catch (err) {
+        console.error("List jobs error:", err);
+        res.status(500).json({ error: "Failed to list jobs" });
+      }
+    });
+
+    app.post("/api/scheduler/jobs", requireAuth, async (req, res) => {
+      try {
+        const parsed = createScheduledJobSchema.safeParse(req.body);
+        if (!parsed.success) {
+          res.status(400).json({ error: parsed.error.flatten() });
+          return;
+        }
+        const job = await sched.createJob(parsed.data);
+        res.status(201).json(job);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        res.status(400).json({ error: message });
+      }
+    });
+
+    app.get("/api/scheduler/jobs/:id", requireAuth, async (req, res) => {
+      const job = await sched.getJob(String(req.params.id));
+      if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+      res.json(job);
+    });
+
+    app.put("/api/scheduler/jobs/:id", requireAuth, async (req, res) => {
+      try {
+        const parsed = updateScheduledJobSchema.safeParse(req.body);
+        if (!parsed.success) {
+          res.status(400).json({ error: parsed.error.flatten() });
+          return;
+        }
+        const job = await sched.updateJob(String(req.params.id), parsed.data);
+        if (!job) { res.status(404).json({ error: "Job not found" }); return; }
+        res.json(job);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        res.status(400).json({ error: message });
+      }
+    });
+
+    app.delete("/api/scheduler/jobs/:id", requireAuth, async (req, res) => {
+      const deleted = await sched.deleteJob(String(req.params.id));
+      res.json({ success: deleted });
+    });
+
+    app.get("/api/scheduler/jobs/:id/runs", requireAuth, async (req, res) => {
+      try {
+        const runs = await sched.getJobRuns(String(req.params.id), Number(req.query.limit) || 20);
+        res.json(runs);
+      } catch (err) {
+        console.error("Get job runs error:", err);
+        res.status(500).json({ error: "Failed to get job runs" });
+      }
+    });
+
+    app.post("/api/scheduler/jobs/:id/run", requireAuth, async (req, res) => {
+      try {
+        const result = await sched.triggerNow(String(req.params.id));
+        res.json({ success: true, result });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        res.status(500).json({ error: message });
+      }
+    });
+  }
 
   // ─── 16. Start ────────────────────────────────────
   const server = app.listen(PORT, async () => {
@@ -703,6 +847,14 @@ async function main(): Promise<void> {
     // Start Discord bot (logs its own status line)
     await discordBot.start();
 
+    // Start scheduler
+    if (scheduler) {
+      await scheduler.start();
+      console.log(`  Scheduler:   Active`);
+    } else {
+      console.log(`  Scheduler:   Disabled (no DATABASE_URL)`);
+    }
+
     console.log("═══════════════════════════════════════════════");
     console.log("");
   });
@@ -717,6 +869,7 @@ async function main(): Promise<void> {
 
     try {
       server.close();
+      if (scheduler) scheduler.stop();
       indexer.stopPeriodicSync();
       await closePool();
       console.log("Shutdown complete.");

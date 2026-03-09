@@ -7,12 +7,15 @@ import type { ClientAgent } from "./client-agent.js";
 import { threadService } from "./thread-service.js";
 import { agentService } from "./agent-service.js";
 import { streamChat } from "./chat-engine.js";
+import type { GoogleAuthService } from "./google-auth.js";
+import { GoogleDriveService } from "./google-drive.js";
 
 interface Services {
   engine: WorkflowEngine;
   knowledgeBase: KnowledgeBase;
   indexer: DocumentIndexer;
   clientAgent: ClientAgent;
+  authService?: GoogleAuthService;
 }
 
 interface ConversationMessage {
@@ -396,11 +399,15 @@ export class DiscordBot {
 
     // Stream the response using the chat engine
     let fullResponse = "";
+    const driveService = this.services.authService?.isAuthenticated()
+      ? new GoogleDriveService(this.services.authService.getClient())
+      : undefined;
     const generator = streamChat(
       thread.id,
       content,
       this.services.engine,
-      this.services.knowledgeBase
+      this.services.knowledgeBase,
+      driveService
     );
 
     for await (const event of generator) {
@@ -481,13 +488,8 @@ export class DiscordBot {
 
   // ─── Helpers ──────────────────────────────────────────
 
-  private async sendLong(message: Message, text: string): Promise<void> {
-    if (text.length <= MAX_DISCORD_LENGTH) {
-      await message.reply(text);
-      return;
-    }
-
-    // Split into chunks at line boundaries
+  private splitMessage(text: string): string[] {
+    if (text.length <= MAX_DISCORD_LENGTH) return [text];
     const chunks: string[] = [];
     let current = "";
     for (const line of text.split("\n")) {
@@ -499,9 +501,25 @@ export class DiscordBot {
       }
     }
     if (current) chunks.push(current);
+    return chunks;
+  }
 
-    for (const chunk of chunks) {
+  private async sendLong(message: Message, text: string): Promise<void> {
+    for (const chunk of this.splitMessage(text)) {
       await message.reply(chunk);
+    }
+  }
+
+  /**
+   * Send a message to a Discord channel by ID (for proactive/scheduled messages).
+   */
+  async sendToChannel(channelId: string, text: string): Promise<void> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (!channel || !("send" in channel)) {
+      throw new Error(`Cannot send to channel ${channelId}`);
+    }
+    for (const chunk of this.splitMessage(text)) {
+      await (channel as any).send(chunk);
     }
   }
 }

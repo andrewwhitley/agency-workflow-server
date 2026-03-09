@@ -64,6 +64,27 @@ export const memoryService = {
     return rows;
   },
 
+  async listRecent(limit = 5): Promise<Memory[]> {
+    const { rows } = await query(
+      "SELECT * FROM memories ORDER BY updated_at DESC LIMIT $1",
+      [limit]
+    );
+    return rows;
+  },
+
+  async searchMultiple(keywords: string[]): Promise<Memory[]> {
+    if (keywords.length === 0) return [];
+    const conditions = keywords.map(
+      (_, i) => `(key ILIKE $${i + 1} OR content ILIKE $${i + 1} OR category ILIKE $${i + 1})`
+    );
+    const values = keywords.map((k) => `%${k}%`);
+    const { rows } = await query(
+      `SELECT * FROM memories WHERE ${conditions.join(" OR ")} ORDER BY updated_at DESC LIMIT 20`,
+      values
+    );
+    return rows;
+  },
+
   async delete(key: string): Promise<boolean> {
     const { rowCount } = await query("DELETE FROM memories WHERE key = $1", [key]);
     return (rowCount ?? 0) > 0;
