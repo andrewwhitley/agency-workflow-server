@@ -10,11 +10,12 @@ import { WorkflowEngine, InputType, InputDef } from "./workflow-engine.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
-import { inputTypeToZod, contentProfileSchema, contentFactoryInputSchema } from "./validation.js";
+import { inputTypeToZod, contentProfileSchema, contentFactoryInputSchema, contentPlannerInputSchema } from "./validation.js";
 import { threadService } from "./thread-service.js";
 import { taskService } from "./task-service.js";
 import { memoryService } from "./memory-service.js";
 import { buildContentPlan, runContentFactory, getRunStatus, type ContentProfile, type ContentType } from "./content-factory.js";
+import { generateContentStrategy, strategyToCSV, type ContentPlannerInput } from "./content-planner.js";
 import { loadClientConfig } from "./workbook-service.js";
 import { GoogleDriveService } from "./google-drive.js";
 import type { GoogleAuthService } from "./google-auth.js";
@@ -550,6 +551,68 @@ export function bridgeContentFactoryToMcp(server: McpServer, authService?: Googl
       return {
         content: [{ type: "text" as const, text: JSON.stringify(status, null, 2) }],
       };
+    }
+  );
+
+  // ── Content Planner tools ─────────────────────────────────
+
+  server.tool(
+    "generate_content_strategy",
+    "Generate a comprehensive content strategy for a client: primary sitemap (service pages, area pages, core pages) plus a 12-month SEO editorial calendar with blog topics, target keywords, and internal linking plan. Returns structured JSON or CSV.",
+    {
+      clientSlug: z.string().optional().describe("Client slug from local config (e.g. 'elevated-chiropractic')"),
+      clientName: z.string().optional().describe("Business name (required if not using clientSlug)"),
+      domain: z.string().optional().describe("Client website domain (e.g. 'example.com')"),
+      contentProfile: contentProfileSchema.optional().describe("Inline content profile (overrides client config)"),
+      postsPerMonth: z.number().optional().describe("Blog posts per month (default: 4)"),
+      startMonth: z.number().optional().describe("Starting month 1-12 (default: current)"),
+      startYear: z.number().optional().describe("Starting year (default: current)"),
+      format: z.enum(["json", "csv"]).optional().describe("Output format (default: json)"),
+    },
+    async ({ clientSlug, clientName, domain, contentProfile, postsPerMonth, startMonth, startYear, format }) => {
+      try {
+        let profile = contentProfile as ContentProfile | undefined;
+        let name = clientName || "";
+
+        if (clientSlug) {
+          const config = loadClientConfig(clientSlug);
+          if (!config?.contentProfile) {
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify({ error: `No content profile for client: ${clientSlug}` }) }],
+              isError: true,
+            };
+          }
+          profile = profile || config.contentProfile;
+          name = name || config.name;
+        }
+
+        if (!profile) {
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "Provide contentProfile or a clientSlug with a configured profile" }) }],
+            isError: true,
+          };
+        }
+
+        const strategy = await generateContentStrategy({
+          clientName: name,
+          domain,
+          contentProfile: profile,
+          postsPerMonth,
+          startMonth,
+          startYear,
+        });
+
+        const output = format === "csv" ? strategyToCSV(strategy) : JSON.stringify(strategy, null, 2);
+        return {
+          content: [{ type: "text" as const, text: output }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+          isError: true,
+        };
+      }
     }
   );
 }

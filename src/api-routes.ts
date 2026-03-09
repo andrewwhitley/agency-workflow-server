@@ -27,7 +27,9 @@ import type { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
 import { buildContentPlan, runContentFactory, getRunStatus, listRuns } from "./content-factory.js";
-import { contentFactoryInputSchema } from "./validation.js";
+import { generateContentStrategy, strategyToCSV, type ContentPlannerInput } from "./content-planner.js";
+import { reviewContent } from "./content-qa.js";
+import { contentFactoryInputSchema, contentPlannerInputSchema } from "./validation.js";
 
 export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService): Router {
   const router = Router();
@@ -659,6 +661,57 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
 
   router.get("/content-factory/runs", async (_req, res) => {
     res.json(listRuns());
+  });
+
+  // ── Content Planner ───────────────────────────────────────
+
+  router.post("/content-planner/strategy", async (req, res) => {
+    try {
+      const parsed = contentPlannerInputSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      // Resolve content profile from clientSlug if not inline
+      let contentProfile = parsed.data.contentProfile;
+      let clientName = parsed.data.clientName;
+
+      if (!contentProfile && parsed.data.clientSlug) {
+        const config = loadClientConfig(parsed.data.clientSlug);
+        if (!config?.contentProfile) {
+          res.status(400).json({ error: `No content profile found for client: ${parsed.data.clientSlug}` });
+          return;
+        }
+        contentProfile = config.contentProfile;
+        clientName = clientName || config.name;
+      }
+
+      if (!contentProfile) {
+        res.status(400).json({ error: "Provide contentProfile inline or a clientSlug with a configured profile" });
+        return;
+      }
+
+      const strategy = await generateContentStrategy({
+        ...parsed.data,
+        clientName,
+        contentProfile,
+      });
+
+      // Return CSV if requested
+      if (req.query.format === "csv") {
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="${clientName}-content-strategy.csv"`);
+        res.send(strategyToCSV(strategy));
+        return;
+      }
+
+      res.json(strategy);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content planner error:", err);
+      res.status(500).json({ error: message });
+    }
   });
 
   return router;

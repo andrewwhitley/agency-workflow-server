@@ -11,6 +11,7 @@ import { GoogleDriveService, extractGoogleId, type FormatOperation, type DocEdit
 import { listClients, loadClientConfig, createWorkbook } from "./workbook-service.js";
 import { buildContentPlan, runContentFactory, getRunStatus } from "./content-factory.js";
 import type { ContentProfile, ContentType } from "./content-factory.js";
+import { generateContentStrategy, type ContentPlannerInput } from "./content-planner.js";
 import { memoryService, type Memory } from "./memory-service.js";
 
 const anthropic = new Anthropic();
@@ -317,6 +318,21 @@ function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveS
     },
   });
 
+  tools.push({
+    name: "generate_content_strategy",
+    description: "Generate a comprehensive content strategy for a client: primary sitemap + 12-month SEO editorial calendar with blog topics, keywords, and internal linking plan. Available clients: " + listClients().map(c => `${c.slug} (${c.name})`).join(", "),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        client_slug: { type: "string", description: "Client slug (e.g. 'elevated-chiropractic')" },
+        client_name: { type: "string", description: "Business name (if not using client_slug)" },
+        domain: { type: "string", description: "Client website domain (e.g. 'example.com')" },
+        posts_per_month: { type: "number", description: "Blog posts per month (default: 4)" },
+      },
+      required: ["client_slug"],
+    },
+  });
+
   // Memory tools (if database is available)
   if (process.env.DATABASE_URL) {
     tools.push({
@@ -618,6 +634,26 @@ async function executeToolCall(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       return JSON.stringify({ error: `Content factory failed: ${message}` });
+    }
+  }
+
+  if (toolName === "generate_content_strategy") {
+    try {
+      const clientSlug = toolInput.client_slug as string;
+      const config = loadClientConfig(clientSlug);
+      if (!config?.contentProfile) {
+        return JSON.stringify({ error: `No content profile for client: ${clientSlug}` });
+      }
+      const strategy = await generateContentStrategy({
+        clientName: (toolInput.client_name as string) || config.name,
+        domain: toolInput.domain as string | undefined,
+        contentProfile: config.contentProfile,
+        postsPerMonth: (toolInput.posts_per_month as number) || 4,
+      });
+      return JSON.stringify(strategy, null, 2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return JSON.stringify({ error: `Content strategy failed: ${message}` });
     }
   }
 

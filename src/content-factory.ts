@@ -10,6 +10,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { loadClientConfig, type ClientConfig } from "./workbook-service.js";
 import { GoogleDriveService } from "./google-drive.js";
+import { reviewContent, type QAResult, type QAConfig } from "./content-qa.js";
+import { buildSitemap } from "./content-planner.js";
 
 const anthropic = new Anthropic();
 
@@ -74,6 +76,8 @@ export interface ContentFactoryInput {
   contentTypes?: ContentType[];
   dryRun?: boolean;
   outputFolderId?: string;
+  enableQA?: boolean;
+  qaPassThreshold?: number;
 }
 
 export interface PageResult {
@@ -84,6 +88,12 @@ export interface PageResult {
   docId?: string;
   docUrl?: string;
   error?: string;
+  qa?: {
+    overall: number;
+    grade: string;
+    passed: boolean;
+    issues: number;
+  };
 }
 
 export interface ContentFactoryResult {
@@ -103,31 +113,86 @@ export interface ContentFactoryResult {
 
 // ── Default system prompts per content type ─────────────────
 
+// ── Writing guidelines (adapted from proven agency playbook) ──
+
+const WRITING_GUIDELINES = `
+## WRITING GUIDELINES
+
+### OVERALL
+- DO NOT use em dashes, long dashes, long hyphens, or double hyphens. Restructure the sentence instead.
+- Write naturally, as if speaking to a real person.
+- Cover what the reader needs (not generic benefits if they're past that stage).
+- Use SUMMARY, MEAT, CTA structure (NOT intro, meat, CTA).
+- Write in 2nd person.
+- Use keyword variations and extenders naturally.
+- Keep tone positive; avoid negatives (especially for service/area pages).
+
+### META TITLE & DESCRIPTION
+- Meta title: start with the main keyword or topic, include city/state if local, end with brand name separated by " | ". Keep under 60-70 characters (not counting the brand).
+- Service/area page meta descriptions must have a CTA and phone number.
+- Provide a meta description for every page.
+
+### HEADLINES
+- No company names in headlines.
+- Each headline's keywords must appear in the following paragraph(s).
+- If meta title has a number, number the meat section headlines.
+
+### SUMMARY (FIRST SECTION)
+- The H1 should be very similar to the meta title.
+- Give a REAL summary, not an intro. Answer the main questions fast, with specifics.
+- Don't try to hook readers; deliver info right away.
+- Mention target location naturally, if needed.
+
+### MEAT (DETAIL SECTIONS)
+- Use scannable items (bold, bullets, etc.).
+- Be consistent with formatting (all lists use the same style and detail level).
+- Add at least one callout statement (1-2 short, visually distinct sentences).
+
+### CTA (FINAL SECTION)
+- The CTA has a headline.
+- Include a phone number if relevant.
+- Add a differentiator about the company if possible.
+- Mention target areas if applicable.
+
+### ADDITIONAL RULES
+- Don't make it sound like listed cities are the only service areas (use "and nearby areas").
+- Mention the state sometimes with the city (helps avoid confusion).
+- Don't overuse the company name.
+- Make all phone numbers clickable (tel: links in HTML/markdown).
+- Internal links use relative URLs.
+- External links open in a new tab/window.
+- Never use: free, cheap, affordable, low-cost, guarantee (unless the client says otherwise).
+- Check all statements are 100% factual; if unsure, leave them out.
+- Avoid AI writing patterns: no "additionally", "furthermore", "moreover", "in conclusion", "it's important to note", "that being said", "overall", "ultimately". Restructure instead.
+
+### OUTPUT FORMAT
+- Output in markdown.
+- Include at the end: meta title, meta description, suggested slug, and JSON-LD schema.org markup for the page.
+`;
+
 const DEFAULT_PROMPTS: Record<ContentType, string> = {
-  "website-page": `You are a professional website copywriter. Write compelling, SEO-optimized website page content.
+  "website-page": `You are an expert website content writer focused on local business sites that outrank competitors in search and AI results. Write content that is specific, useful, and optimized for both humans and search engines.
+
+Your content must follow the StoryBrand framework: the customer is the hero, the business is the guide.
 
 Rules:
-- Write in the brand voice provided
-- Use the StoryBrand framework: the customer is the hero, the business is the guide
-- Include a clear call-to-action
+- Write 500-1000 words per page (adjust based on topic depth)
 - Use H2 and H3 headings to structure content
-- Write 400-800 words per page
-- Include relevant keywords naturally
-- Do NOT use generic filler — every sentence should be specific to this business
-- Output clean text with markdown headings (## for H2, ### for H3)
-- Do NOT include the page title as an H1 — that will be added separately`,
+- Every sentence should be specific to this business — no generic filler
+- Include relevant internal links using relative URLs where appropriate
+- Append JSON-LD schema.org markup at the end
+${WRITING_GUIDELINES}`,
 
-  "blog-post": `You are a professional content writer specializing in blog posts. Write informative, engaging blog content.
+  "blog-post": `You are an expert content writer specializing in SEO blog posts for local businesses. Write informative content that targets specific consumer questions and builds topical authority for the business's services.
 
 Rules:
-- Write in the brand voice provided
-- Target 800-1500 words
+- Write 800-1500 words
+- Target a specific micro-topic or consumer question (not generic "benefits of" content)
 - Use H2 and H3 headings for structure
-- Include an engaging introduction that hooks the reader
-- Provide actionable advice and specific examples
-- End with a clear call-to-action
-- Write for both humans and search engines
-- Output clean text with markdown headings`,
+- Provide actionable advice, specific examples, and local detail
+- Include internal links to relevant service pages using relative URLs
+- Append JSON-LD Article schema markup at the end
+${WRITING_GUIDELINES}`,
 
   "gbp-post": `You are a local business marketing specialist writing Google Business Profile posts.
 
@@ -137,7 +202,9 @@ Rules:
 - Include a call-to-action (call, visit, book online)
 - Reference the local area when relevant
 - Focus on one service or topic per post
-- Keep it engaging and to the point`,
+- Keep it engaging and to the point
+- DO NOT use em dashes or long dashes
+- Avoid AI-sounding phrases ("additionally", "furthermore", "it's important to note")`,
 };
 
 // ── In-memory run tracking ──────────────────────────────────
@@ -414,6 +481,25 @@ export async function runContentFactory(
     try {
       console.log(`[content-factory] Generating ${i + 1}/${pages.length}: ${spec.title}`);
       const content = await generatePageContent(spec, profile, clientName);
+
+      // QA review if enabled
+      if (input.enableQA) {
+        console.log(`[content-factory] QA reviewing: ${spec.title}`);
+        const sitemap = buildSitemap(profile, clientName);
+        const qaResult = await reviewContent(content, spec, profile, clientName, {
+          passThreshold: input.qaPassThreshold ?? 70,
+          sitemap,
+        });
+        pageResult.qa = {
+          overall: qaResult.scores.overall,
+          grade: qaResult.scores.grade,
+          passed: qaResult.passed,
+          issues: qaResult.issues.length,
+        };
+        if (!qaResult.passed) {
+          console.log(`[content-factory] QA FAILED (${qaResult.scores.grade}, ${qaResult.scores.overall}%): ${spec.title}`);
+        }
+      }
 
       // Save to Google Drive if available
       if (driveService && contentFolderId) {

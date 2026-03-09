@@ -147,6 +147,19 @@ export const contentFactoryInputSchema = z.object({
   outputFolderId: z.string().max(200).optional(),
 });
 
+// ── Content Planner schemas ──────────────────────────────────
+
+export const contentPlannerInputSchema = z.object({
+  clientName: z.string().min(1).max(200),
+  clientSlug: z.string().max(200).optional(),
+  domain: z.string().max(500).optional(),
+  contentProfile: contentProfileSchema.optional(),
+  postsPerMonth: z.number().int().min(1).max(20).optional(),
+  includesCaseStudies: z.boolean().optional(),
+  startMonth: z.number().int().min(1).max(12).optional(),
+  startYear: z.number().int().min(2024).max(2030).optional(),
+});
+
 // ── Scheduled Job schemas ────────────────────────────────────
 
 export const createScheduledJobSchema = z.object({
