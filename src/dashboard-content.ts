@@ -677,32 +677,42 @@ export function getContentViewJs(): string {
       if (tab === "deliverables") loadDeliverables();
     }
 
+    function renderSheetTable(data, emptyMsg) {
+      if (!data.headers?.length || !data.rows?.length) {
+        return '<div class="empty-state"><p>' + escapeHtml(emptyMsg) + '</p></div>';
+      }
+      let html = '<div style="overflow-x:auto;"><table class="content-plan-table"><thead><tr>';
+      for (const h of data.headers) {
+        html += '<th>' + escapeHtml(h) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+      for (const row of data.rows) {
+        const isEmpty = data.headers.every(function(h) { return !(row[h] || "").trim(); });
+        if (isEmpty) continue;
+        html += '<tr>';
+        for (const h of data.headers) {
+          const val = row[h] || "";
+          const upper = val.toUpperCase();
+          if (upper === "TRUE" || upper === "FALSE") {
+            html += '<td style="text-align:center;">' + (upper === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>') + '</td>';
+          } else if (val.length > 120) {
+            html += '<td style="font-size:12px;max-width:300px;"><details><summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">' + escapeHtml(val.slice(0, 80)) + '…</summary><div style="white-space:pre-wrap;margin-top:6px;">' + escapeHtml(val) + '</div></details></td>';
+          } else {
+            html += '<td style="font-size:12px;">' + escapeHtml(val) + '</td>';
+          }
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table></div>';
+      return html;
+    }
+
     async function loadContentTracking() {
       const body = document.getElementById("content-sheet-body");
       body.innerHTML = '<div class="empty-state"><p>Loading content tracking...</p></div>';
       try {
         const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/content-tracking");
-        if (!data.rows?.length) {
-          body.innerHTML = '<div class="empty-state"><p>No content tracking entries found.</p></div>';
-          return;
-        }
-        let html = '<table class="content-plan-table"><thead><tr>';
-        html += '<th>Topic</th><th>Date</th><th>Type</th><th>Title</th><th>Keyword</th><th>Assigned</th><th>Status</th>';
-        html += '</tr></thead><tbody>';
-        for (const row of data.rows) {
-          const completed = (row["Completed"] || "").toUpperCase() === "TRUE";
-          html += '<tr>';
-          html += '<td><span class="type-badge service">' + escapeHtml(row["Service Topic"] || "") + '</span></td>';
-          html += '<td style="font-size:12px;white-space:nowrap;">' + escapeHtml(row["Scheduled (m/yyyy)"] || "") + '</td>';
-          html += '<td style="font-size:12px;">' + escapeHtml(row["Type"] || "") + '</td>';
-          html += '<td style="font-weight:500;">' + escapeHtml(row["Title (<65 Characters)"] || "") + '</td>';
-          html += '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(row["Focus SEO Keyword(s)"] || "") + '</td>';
-          html += '<td style="font-size:12px;">' + escapeHtml(row["Assigned To"] || "Unassigned") + '</td>';
-          html += '<td class="' + (completed ? "sheet-status-done" : "sheet-status-pending") + '" style="font-weight:500;">' + (completed ? "Done" : "Pending") + '</td>';
-          html += '</tr>';
-        }
-        html += '</tbody></table>';
-        body.innerHTML = html;
+        body.innerHTML = renderSheetTable(data, "No content tracking entries found.");
       } catch (e) {
         body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
       }
@@ -713,29 +723,7 @@ export function getContentViewJs(): string {
       body.innerHTML = '<div class="empty-state"><p>Loading topical sitemap...</p></div>';
       try {
         const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/sitemap");
-        if (!data.rows?.length) {
-          body.innerHTML = '<div class="empty-state"><p>No sitemap entries found.</p></div>';
-          return;
-        }
-        let html = '<table class="content-plan-table"><thead><tr>';
-        html += '<th>Page</th><th>URL</th><th>SEO Keywords</th><th>SEO Score</th><th>Title</th><th>Words</th>';
-        html += '</tr></thead><tbody>';
-        for (const row of data.rows) {
-          const score = parseInt(row["SEO Score"] || row["SEO Score "] || "0");
-          const scoreColor = score >= 80 ? "#34d399" : score >= 60 ? "#fbbf24" : "#f87171";
-          html += '<tr>';
-          html += '<td style="font-weight:500;">' + escapeHtml(row["Page"] || "") + '</td>';
-          html += '<td style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">';
-          if (row["URL"]) html += '<a href="' + escapeHtml(row["URL"]) + '" target="_blank" style="color:var(--primary);">' + escapeHtml(row["URL"].replace("https://","")) + '</a>';
-          html += '</td>';
-          html += '<td style="font-size:12px;">' + escapeHtml(row["SEO Keywords"] || row["SEO Keywords "] || "") + '</td>';
-          html += '<td style="font-weight:600;color:' + scoreColor + ';">' + (score || "—") + '</td>';
-          html += '<td style="font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(row["Title (Max 60 Ch / 580 Px)"] || "") + '</td>';
-          html += '<td style="font-size:12px;">' + escapeHtml(row["Word Count"] || "") + '</td>';
-          html += '</tr>';
-        }
-        html += '</tbody></table>';
-        body.innerHTML = html;
+        body.innerHTML = renderSheetTable(data, "No sitemap entries found.");
       } catch (e) {
         body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
       }
@@ -750,27 +738,13 @@ export function getContentViewJs(): string {
           body.innerHTML = '<div class="empty-state"><p>No deliverables data found.</p></div>';
           return;
         }
-        let html = '<table class="content-plan-table"><thead><tr>';
         const headers = data.values[0] || [];
-        for (const h of headers) html += '<th>' + escapeHtml(h) + '</th>';
-        html += '</tr></thead><tbody>';
-        for (let i = 1; i < data.values.length; i++) {
-          const row = data.values[i];
-          if (!row?.length || !row.some(c => c?.trim())) continue;
-          html += '<tr>';
-          for (let j = 0; j < headers.length; j++) {
-            const val = row[j] || "";
-            const isBool = val.toUpperCase() === "TRUE" || val.toUpperCase() === "FALSE";
-            if (isBool) {
-              html += '<td style="text-align:center;">' + (val.toUpperCase() === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>') + '</td>';
-            } else {
-              html += '<td style="font-size:13px;">' + escapeHtml(val) + '</td>';
-            }
-          }
-          html += '</tr>';
-        }
-        html += '</tbody></table>';
-        body.innerHTML = html;
+        const rows = data.values.slice(1).map(function(row) {
+          const obj = {};
+          headers.forEach(function(h, i) { obj[h] = row[i] || ""; });
+          return obj;
+        });
+        body.innerHTML = renderSheetTable({ headers: headers, rows: rows }, "No deliverables data found.");
       } catch (e) {
         body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
       }
