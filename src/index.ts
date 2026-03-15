@@ -128,7 +128,11 @@ async function main(): Promise<void> {
     message: { error: "Too many requests, please try again later." },
   });
   app.use("/api", apiLimiter);
-  app.use("/api", redactionMiddleware as any);
+  app.use("/api", (req: any, res: any, next: any) => {
+    // Skip redaction for content-management routes (sheet data has arbitrary column names)
+    if (req.path.startsWith("/content-management/")) return next();
+    return (redactionMiddleware as any)(req, res, next);
+  });
 
   // ─── 3d. Auth Routes (public) ────────────────────
   app.get("/auth/login", (_req, res) => {
