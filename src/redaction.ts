@@ -4,10 +4,14 @@
  */
 
 const SENSITIVE_KEYS =
-  /token|secret|key|password|cookie|oauth|authorization|bearer|credential|private_key|client_secret|refresh_token|access_token|api_key|apikey|webhook/i;
+  /^(token|secret|password|cookie|oauth|authorization|bearer|credential|private_key|client_secret|refresh_token|access_token|api_key|apikey|webhook|session_secret)$|_token$|_secret$|_key$|_password$/i;
 
 const BASE64_OR_LONG_RANDOM =
   /^[A-Za-z0-9+/=_-]{40,}$/;
+
+/** Keys whose values should never be redacted (e.g. sheet data, content) */
+const SAFE_KEYS =
+  /^(headers|rows|values|title|sheetTitle|name|slug|description|body|content|text|outline|summary|page|url|type|status)$/i;
 
 const REDACTED = "[REDACTED]";
 
@@ -17,19 +21,21 @@ const REDACTED = "[REDACTED]";
  * - String values that look like long tokens/base64 are masked
  * - Works recursively on nested objects and arrays
  */
-export function redact<T>(data: T): T {
+export function redact<T>(data: T, parentKey?: string): T {
   if (data === null || data === undefined) return data;
 
   if (typeof data === "string") {
-    // Mask strings that look like tokens/keys (long random or base64)
-    if (BASE64_OR_LONG_RANDOM.test(data) && data.length >= 40) {
+    // Don't redact string values under safe parent keys
+    if (parentKey && SAFE_KEYS.test(parentKey)) return data;
+    // Mask strings that look like tokens/keys (long random or base64, no spaces)
+    if (BASE64_OR_LONG_RANDOM.test(data) && data.length >= 40 && !data.includes(" ")) {
       return REDACTED as T;
     }
     return data;
   }
 
   if (Array.isArray(data)) {
-    return data.map((item) => redact(item)) as T;
+    return data.map((item) => redact(item, parentKey)) as T;
   }
 
   if (typeof data === "object") {
@@ -38,7 +44,7 @@ export function redact<T>(data: T): T {
       if (SENSITIVE_KEYS.test(key)) {
         result[key] = REDACTED;
       } else {
-        result[key] = redact(value);
+        result[key] = redact(value, key);
       }
     }
     return result as T;
