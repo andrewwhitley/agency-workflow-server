@@ -191,6 +191,29 @@ export const createScheduledJobSchema = z.object({
 
 export const updateScheduledJobSchema = createScheduledJobSchema.partial();
 
+// ── Keyword / SEO schemas ─────────────────────────────────────
+
+export const keywordEnrichSchema = z.object({
+  keywords: z.array(z.string().min(1).max(500)).min(1).max(700),
+  locationCode: z.number().int().optional(),
+});
+
+export const keywordSuggestSchema = z.object({
+  seed: z.string().min(1).max(500),
+  locationCode: z.number().int().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+// ── Planning rows ─────────────────────────────────────────────
+
+export const updatePlanningRowSchema = z.object({
+  data: z.record(z.string(), z.string().max(10000)),
+});
+
+export const createPlanningRowSchema = z.object({
+  data: z.record(z.string(), z.string().max(10000)),
+});
+
 // ── Workflow run validation ───────────────────────────────────
 
 export const workflowRunSchema = z.record(z.unknown());

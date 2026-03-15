@@ -56,7 +56,10 @@ export function getContentViewHtml(): string {
         <div id="content-tab-calendar" class="content-tab hidden">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <h2 style="font-size:18px;margin:0;">Editorial Calendar</h2>
-            <button class="btn btn-primary btn-sm" id="gen-calendar-btn" onclick="generateCalendar()">Generate 12-Month Calendar</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm hidden" id="enrich-seo-btn" onclick="enrichCalendarWithSEO()">Enrich with SEO Data</button>
+              <button class="btn btn-primary btn-sm" id="gen-calendar-btn" onclick="generateCalendar()">Generate 12-Month Calendar</button>
+            </div>
           </div>
           <div id="content-calendar-body">
             <div class="empty-state"><p>Click "Generate" to create an AI-powered 12-month editorial calendar</p></div>
@@ -93,6 +96,16 @@ export function getContentViewHtml(): string {
             <span id="gen-selected-count" style="color:var(--text-muted);font-size:13px;line-height:36px;margin-left:8px;"></span>
           </div>
 
+          <!-- Keyword Research Section -->
+          <div id="content-keyword-research" style="margin-top:32px;border-top:1px solid var(--border);padding-top:20px;">
+            <h3 style="font-size:15px;margin-bottom:12px;">Keyword Research</h3>
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="keyword-seed-input" placeholder="Enter a seed keyword (e.g. chiropractic care)" style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" id="keyword-suggest-btn" onclick="runKeywordSuggestions()">Get Suggestions</button>
+            </div>
+            <div id="keyword-suggest-results"></div>
+          </div>
+
           <!-- Progress Section -->
           <div id="content-gen-progress" class="hidden" style="margin-top:24px;">
             <h3 style="font-size:15px;margin-bottom:12px;">Generation Progress</h3>
@@ -107,13 +120,16 @@ export function getContentViewHtml(): string {
         <!-- Planning Sheet Tab -->
         <div id="content-tab-sheet" class="content-tab hidden">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h2 style="font-size:18px;margin:0;">Planning Sheet</h2>
-            <div style="display:flex;gap:8px;">
+            <h2 style="font-size:18px;margin:0;">Planning Data</h2>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="sheet-sync-status" style="font-size:11px;color:var(--text-muted);"></span>
               <div class="filter-pills">
                 <button class="pill pill-active" onclick="switchSheetSubTab('tracking')" data-sheet-tab="tracking">Content Tracking</button>
                 <button class="pill" onclick="switchSheetSubTab('sitemap')" data-sheet-tab="sitemap">Topical Sitemap</button>
                 <button class="pill" onclick="switchSheetSubTab('deliverables')" data-sheet-tab="deliverables">Deliverables</button>
               </div>
+              <button class="btn btn-ghost btn-sm" onclick="importFromSheet()" id="sheet-import-btn" style="font-size:12px;">Import from Sheet</button>
+              <button class="btn btn-ghost btn-sm" onclick="syncToSheet()" id="sheet-sync-btn" style="font-size:12px;">Sync to Sheet</button>
               <a id="sheet-open-link" href="#" target="_blank" class="btn btn-ghost btn-sm hidden" style="font-size:12px;">Open in Sheets</a>
             </div>
           </div>
@@ -237,6 +253,13 @@ export function getContentViewCss(): string {
       padding-bottom: 6px;
       border-bottom: 1px solid var(--border);
     }
+
+    .seo-vol-high { color: #34d399; font-weight: 600; }
+    .seo-vol-med { color: #fbbf24; font-weight: 600; }
+    .seo-vol-low { color: #6b7280; }
+    .seo-diff-easy { color: #34d399; font-weight: 600; }
+    .seo-diff-med { color: #fbbf24; font-weight: 600; }
+    .seo-diff-hard { color: #f87171; font-weight: 600; }
 
     .content-settings-form {
       max-width: 500px;
@@ -397,10 +420,18 @@ export function getContentViewJs(): string {
 
     function renderCalendar(strategy) {
       const body = document.getElementById("content-calendar-body");
+      const enrichBtn = document.getElementById("enrich-seo-btn");
       if (!strategy?.calendar?.length) {
         body.innerHTML = '<div class="empty-state"><p>No calendar entries generated.</p></div>';
+        if (enrichBtn) enrichBtn.classList.add("hidden");
         return;
       }
+
+      // Show enrich button when calendar exists
+      if (enrichBtn) enrichBtn.classList.remove("hidden");
+
+      // Check if any items have SEO metrics
+      const hasMetrics = strategy.calendar.some(function(item) { return item.seoMetrics; });
 
       const months = {};
       for (const item of strategy.calendar) {
@@ -412,12 +443,25 @@ export function getContentViewJs(): string {
       let html = '';
       for (const [month, items] of Object.entries(months)) {
         html += '<div class="calendar-month-group"><h3>' + escapeHtml(String(month)) + '</h3>';
-        html += '<table class="content-plan-table"><thead><tr><th>Title</th><th>Type</th><th>Primary Keyword</th><th>Parent Page</th></tr></thead><tbody>';
+        html += '<table class="content-plan-table"><thead><tr><th>Title</th><th>Type</th><th>Primary Keyword</th>';
+        if (hasMetrics) html += '<th>Vol</th><th>Diff</th><th>CPC</th>';
+        html += '<th>Parent Page</th></tr></thead><tbody>';
         for (const item of items) {
           html += '<tr>';
           html += '<td style="font-weight:500;">' + escapeHtml(item.title || item.name || "") + '</td>';
           html += '<td><span class="type-badge blog">' + escapeHtml(item.type || "blog") + '</span></td>';
           html += '<td style="font-size:12px;">' + escapeHtml(item.primaryKeyword || "") + '</td>';
+          if (hasMetrics) {
+            var seo = item.seoMetrics || {};
+            var vol = seo.primaryKeywordVolume;
+            var diff = seo.primaryKeywordDifficulty;
+            var cpc = seo.primaryKeywordCpc;
+            var volClass = vol > 100 ? "seo-vol-high" : vol > 10 ? "seo-vol-med" : "seo-vol-low";
+            var diffClass = diff != null ? (diff < 30 ? "seo-diff-easy" : diff < 60 ? "seo-diff-med" : "seo-diff-hard") : "";
+            html += '<td class="' + volClass + '" style="font-size:12px;">' + (vol != null ? vol.toLocaleString() : "—") + '</td>';
+            html += '<td class="' + diffClass + '" style="font-size:12px;">' + (diff != null ? diff : "—") + '</td>';
+            html += '<td style="font-size:12px;color:var(--text-muted);">' + (cpc != null ? "$" + cpc.toFixed(2) : "—") + '</td>';
+          }
           html += '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(item.parentServicePage || "") + '</td>';
           html += '</tr>';
         }
@@ -433,6 +477,114 @@ export function getContentViewJs(): string {
       }
 
       body.innerHTML = html;
+    }
+
+    async function enrichCalendarWithSEO() {
+      if (!contentCalendar?.calendar?.length) return;
+      var btn = document.getElementById("enrich-seo-btn");
+      btn.disabled = true;
+      btn.textContent = "Enriching...";
+
+      try {
+        // Collect all unique keywords (primary + secondary)
+        var keywordSet = {};
+        for (var item of contentCalendar.calendar) {
+          if (item.primaryKeyword) keywordSet[item.primaryKeyword.toLowerCase()] = true;
+          if (item.secondaryKeywords) {
+            for (var sk of item.secondaryKeywords) {
+              keywordSet[sk.toLowerCase()] = true;
+            }
+          }
+        }
+        var allKeywords = Object.keys(keywordSet);
+        if (!allKeywords.length) { alert("No keywords to enrich."); return; }
+
+        var result = await api("/content-management/keywords/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keywords: allKeywords })
+        });
+
+        // Build lookup map
+        var metricsMap = {};
+        for (var m of (result.keywords || [])) {
+          metricsMap[m.keyword.toLowerCase()] = m;
+        }
+
+        // Attach metrics to calendar items
+        var now = new Date().toISOString();
+        for (var item of contentCalendar.calendar) {
+          var pk = (item.primaryKeyword || "").toLowerCase();
+          var pkData = metricsMap[pk];
+          var secondaryVols = {};
+          if (item.secondaryKeywords) {
+            for (var sk of item.secondaryKeywords) {
+              var skData = metricsMap[sk.toLowerCase()];
+              if (skData) secondaryVols[sk] = skData.searchVolume;
+            }
+          }
+          item.seoMetrics = {
+            primaryKeywordVolume: pkData ? pkData.searchVolume : undefined,
+            primaryKeywordDifficulty: pkData ? pkData.keywordDifficulty : undefined,
+            primaryKeywordCpc: pkData ? pkData.cpc : undefined,
+            primaryKeywordCompetition: pkData ? pkData.competitionLevel : undefined,
+            secondaryKeywordVolumes: Object.keys(secondaryVols).length ? secondaryVols : undefined,
+            enrichedAt: now,
+          };
+        }
+
+        renderCalendar(contentCalendar);
+      } catch (e) {
+        alert("SEO enrichment failed: " + (e.message || "Unknown error"));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Enrich with SEO Data";
+      }
+    }
+
+    async function runKeywordSuggestions() {
+      var seed = document.getElementById("keyword-seed-input").value.trim();
+      if (!seed) { alert("Enter a seed keyword."); return; }
+      var btn = document.getElementById("keyword-suggest-btn");
+      var results = document.getElementById("keyword-suggest-results");
+      btn.disabled = true;
+      btn.textContent = "Searching...";
+      results.innerHTML = '<div class="empty-state"><p>Fetching suggestions...</p></div>';
+
+      try {
+        var data = await api("/content-management/keywords/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seed: seed, limit: 50 })
+        });
+
+        if (!data.keywords?.length) {
+          results.innerHTML = '<div class="empty-state"><p>No suggestions found for "' + escapeHtml(seed) + '".</p></div>';
+          return;
+        }
+
+        var html = '<table class="content-plan-table"><thead><tr><th>Keyword</th><th>Volume</th><th>Difficulty</th><th>CPC</th><th>Competition</th></tr></thead><tbody>';
+        for (var kw of data.keywords) {
+          var vol = kw.searchVolume || 0;
+          var diff = kw.keywordDifficulty;
+          var volClass = vol > 100 ? "seo-vol-high" : vol > 10 ? "seo-vol-med" : "seo-vol-low";
+          var diffClass = diff != null ? (diff < 30 ? "seo-diff-easy" : diff < 60 ? "seo-diff-med" : "seo-diff-hard") : "";
+          html += '<tr>';
+          html += '<td style="font-weight:500;">' + escapeHtml(kw.keyword) + '</td>';
+          html += '<td class="' + volClass + '">' + vol.toLocaleString() + '</td>';
+          html += '<td class="' + diffClass + '">' + (diff != null ? diff : "—") + '</td>';
+          html += '<td style="color:var(--text-muted);">$' + (kw.cpc || 0).toFixed(2) + '</td>';
+          html += '<td>' + escapeHtml(kw.competitionLevel || "—") + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "Failed to get suggestions") + '</p></div>';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Get Suggestions";
+      }
     }
 
     async function loadGenerateView() {
@@ -649,8 +801,9 @@ export function getContentViewJs(): string {
       }
     }
 
-    // ─── Planning Sheet ───────────────────────────────
+    // ─── Planning Data (DB-backed) ─────────────────────
     let sheetCurrentSubTab = "tracking";
+    let sheetCurrentData = null;
 
     async function loadSheetView() {
       const body = document.getElementById("content-sheet-body");
@@ -671,80 +824,182 @@ export function getContentViewJs(): string {
       document.querySelectorAll("[data-sheet-tab]").forEach(p => p.classList.remove("pill-active"));
       const pill = document.querySelector('[data-sheet-tab="' + tab + '"]');
       if (pill) pill.classList.add("pill-active");
-
-      if (tab === "tracking") loadContentTracking();
-      if (tab === "sitemap") loadTopicalSitemap();
-      if (tab === "deliverables") loadDeliverables();
+      loadPlanningTab(tab);
     }
 
-    function renderSheetTable(data, emptyMsg) {
-      if (!data.headers?.length || !data.rows?.length) {
+    function updateSyncStatus(data) {
+      const el = document.getElementById("sheet-sync-status");
+      if (!el) return;
+      if (data?.lastSyncedFromSheet) {
+        const ago = timeAgo(data.lastSyncedFromSheet);
+        el.textContent = "Imported " + ago;
+      } else {
+        el.textContent = "";
+      }
+    }
+
+    function timeAgo(dateStr) {
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return mins + "m ago";
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + "h ago";
+      const days = Math.floor(hrs / 24);
+      return days + "d ago";
+    }
+
+    function renderPlanningTable(data, emptyMsg) {
+      if (data?.needsImport) {
+        return '<div class="empty-state"><p>No data imported yet. Click "Import from Sheet" to load data from Google Sheets.</p></div>';
+      }
+      if (!data?.headers?.length || !data?.rows?.length) {
         return '<div class="empty-state"><p>' + escapeHtml(emptyMsg) + '</p></div>';
       }
       let html = '<div style="overflow-x:auto;"><table class="content-plan-table"><thead><tr>';
+      html += '<th style="width:40px;"></th>';
       for (const h of data.headers) {
         html += '<th>' + escapeHtml(h) + '</th>';
       }
       html += '</tr></thead><tbody>';
       for (const row of data.rows) {
+        const rowId = row._id || "";
         const isEmpty = data.headers.every(function(h) { return !(row[h] || "").trim(); });
         if (isEmpty) continue;
-        html += '<tr>';
+        html += '<tr data-row-id="' + escapeHtml(rowId) + '">';
+        html += '<td style="text-align:center;"><button class="btn-icon" onclick="deletePlanningRow(\\x27' + escapeHtml(rowId) + '\\x27)" title="Delete row" style="opacity:0.4;font-size:14px;">&times;</button></td>';
         for (const h of data.headers) {
           const val = row[h] || "";
           const upper = val.toUpperCase();
           if (upper === "TRUE" || upper === "FALSE") {
-            html += '<td style="text-align:center;">' + (upper === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>') + '</td>';
+            html += '<td style="text-align:center;cursor:pointer;" onclick="toggleBoolCell(this, \\x27' + escapeHtml(rowId) + '\\x27, \\x27' + escapeHtml(h) + '\\x27, \\x27' + upper + '\\x27)">';
+            html += (upper === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>');
+            html += '</td>';
           } else if (val.length > 120) {
-            html += '<td style="font-size:12px;max-width:300px;"><details><summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">' + escapeHtml(val.slice(0, 80)) + '…</summary><div style="white-space:pre-wrap;margin-top:6px;">' + escapeHtml(val) + '</div></details></td>';
+            html += '<td style="font-size:12px;max-width:300px;"><details><summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">' + escapeHtml(val.slice(0, 80)) + '…</summary><div contenteditable="true" class="editable-cell" data-row-id="' + escapeHtml(rowId) + '" data-col="' + escapeHtml(h) + '" style="white-space:pre-wrap;margin-top:6px;">' + escapeHtml(val) + '</div></details></td>';
           } else {
-            html += '<td style="font-size:12px;">' + escapeHtml(val) + '</td>';
+            html += '<td><span contenteditable="true" class="editable-cell" data-row-id="' + escapeHtml(rowId) + '" data-col="' + escapeHtml(h) + '" style="font-size:12px;display:block;min-width:40px;outline:none;border-bottom:1px solid transparent;transition:border-color 0.2s;" onfocus="this.style.borderColor=\\x27var(--primary)\\x27" onblur="this.style.borderColor=\\x27transparent\\x27;saveCellEdit(this)">' + escapeHtml(val) + '</span></td>';
           }
         }
         html += '</tr>';
       }
       html += '</tbody></table></div>';
+      html += '<div style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="addPlanningRow()">+ Add Row</button></div>';
       return html;
     }
 
-    async function loadContentTracking() {
-      const body = document.getElementById("content-sheet-body");
-      body.innerHTML = '<div class="empty-state"><p>Loading content tracking...</p></div>';
+    async function saveCellEdit(el) {
+      const rowId = el.getAttribute("data-row-id");
+      const col = el.getAttribute("data-col");
+      const newVal = el.textContent.trim();
+      if (!rowId || !col) return;
       try {
-        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/content-tracking");
-        body.innerHTML = renderSheetTable(data, "No content tracking entries found.");
-      } catch (e) {
-        body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
-      }
-    }
-
-    async function loadTopicalSitemap() {
-      const body = document.getElementById("content-sheet-body");
-      body.innerHTML = '<div class="empty-state"><p>Loading topical sitemap...</p></div>';
-      try {
-        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet/sitemap");
-        body.innerHTML = renderSheetTable(data, "No sitemap entries found.");
-      } catch (e) {
-        body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
-      }
-    }
-
-    async function loadDeliverables() {
-      const body = document.getElementById("content-sheet-body");
-      body.innerHTML = '<div class="empty-state"><p>Loading deliverables...</p></div>';
-      try {
-        const data = await api("/content-management/clients/" + contentCurrentSlug + "/sheet?tab=Deliverables");
-        if (!data.values?.length) {
-          body.innerHTML = '<div class="empty-state"><p>No deliverables data found.</p></div>';
-          return;
-        }
-        const headers = data.values[0] || [];
-        const rows = data.values.slice(1).map(function(row) {
-          const obj = {};
-          headers.forEach(function(h, i) { obj[h] = row[i] || ""; });
-          return obj;
+        el.style.opacity = "0.5";
+        await api("/content-management/clients/" + contentCurrentSlug + "/planning/" + sheetCurrentSubTab + "/rows/" + rowId, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: { [col]: newVal } })
         });
-        body.innerHTML = renderSheetTable({ headers: headers, rows: rows }, "No deliverables data found.");
+        el.style.opacity = "1";
+      } catch (e) {
+        el.style.opacity = "1";
+        el.style.borderColor = "#f87171";
+        console.error("Save failed:", e);
+      }
+    }
+
+    async function toggleBoolCell(td, rowId, col, current) {
+      const newVal = current === "TRUE" ? "FALSE" : "TRUE";
+      try {
+        await api("/content-management/clients/" + contentCurrentSlug + "/planning/" + sheetCurrentSubTab + "/rows/" + rowId, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: { [col]: newVal } })
+        });
+        // Reload the tab to get clean re-render
+        loadPlanningTab(sheetCurrentSubTab);
+      } catch (e) {
+        console.error("Toggle failed:", e);
+      }
+    }
+
+    async function deletePlanningRow(rowId) {
+      if (!confirm("Delete this row?")) return;
+      try {
+        await api("/content-management/clients/" + contentCurrentSlug + "/planning/" + sheetCurrentSubTab + "/rows/" + rowId, {
+          method: "DELETE"
+        });
+        loadPlanningTab(sheetCurrentSubTab);
+      } catch (e) {
+        alert("Error deleting row: " + (e.message || ""));
+      }
+    }
+
+    async function addPlanningRow() {
+      if (!sheetCurrentData?.headers?.length) return;
+      const data = {};
+      sheetCurrentData.headers.forEach(function(h) { data[h] = ""; });
+      try {
+        await api("/content-management/clients/" + contentCurrentSlug + "/planning/" + sheetCurrentSubTab + "/rows", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: data })
+        });
+        loadPlanningTab(sheetCurrentSubTab);
+      } catch (e) {
+        alert("Error adding row: " + (e.message || ""));
+      }
+    }
+
+    async function importFromSheet() {
+      if (!confirm("Import data from Google Sheet? This will replace current database data for all tabs.")) return;
+      const btn = document.getElementById("sheet-import-btn");
+      btn.textContent = "Importing...";
+      btn.disabled = true;
+      try {
+        const result = await api("/content-management/clients/" + contentCurrentSlug + "/planning/import", {
+          method: "POST"
+        });
+        const counts = result.imported || {};
+        const summary = Object.entries(counts).map(function(e) { return e[0] + ": " + e[1] + " rows"; }).join(", ");
+        alert("Import complete! " + summary);
+        loadPlanningTab(sheetCurrentSubTab);
+      } catch (e) {
+        alert("Import failed: " + (e.message || ""));
+      } finally {
+        btn.textContent = "Import from Sheet";
+        btn.disabled = false;
+      }
+    }
+
+    async function syncToSheet() {
+      if (!confirm("Sync current data back to Google Sheet? This will overwrite the sheet.")) return;
+      const btn = document.getElementById("sheet-sync-btn");
+      btn.textContent = "Syncing...";
+      btn.disabled = true;
+      try {
+        const result = await api("/content-management/clients/" + contentCurrentSlug + "/planning/sync-back", {
+          method: "POST"
+        });
+        const counts = result.synced || {};
+        const summary = Object.entries(counts).map(function(e) { return e[0] + ": " + e[1] + " rows"; }).join(", ");
+        alert("Sync complete! " + summary);
+      } catch (e) {
+        alert("Sync failed: " + (e.message || ""));
+      } finally {
+        btn.textContent = "Sync to Sheet";
+        btn.disabled = false;
+      }
+    }
+
+    async function loadPlanningTab(tab) {
+      const body = document.getElementById("content-sheet-body");
+      body.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
+      try {
+        const data = await api("/content-management/clients/" + contentCurrentSlug + "/planning/" + tab);
+        sheetCurrentData = data;
+        updateSyncStatus(data);
+        body.innerHTML = renderPlanningTable(data, "No data found for this tab.");
       } catch (e) {
         body.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
       }

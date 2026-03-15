@@ -301,6 +301,34 @@ Always provide specific, implementable recommendations with expected impact leve
       CREATE INDEX IF NOT EXISTS idx_job_runs_job_id ON job_runs(job_id, started_at DESC);
     `,
   },
+  {
+    id: "011_planning_sheets",
+    sql: `
+      CREATE TABLE IF NOT EXISTS planning_sheets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_slug VARCHAR(100) NOT NULL,
+        tab_name VARCHAR(200) NOT NULL,
+        headers JSONB NOT NULL DEFAULT '[]',
+        source_sheet_id VARCHAR(200),
+        last_synced_from_sheet TIMESTAMPTZ,
+        last_synced_to_sheet TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(client_slug, tab_name)
+      );
+
+      CREATE TABLE IF NOT EXISTS planning_rows (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sheet_id UUID NOT NULL REFERENCES planning_sheets(id) ON DELETE CASCADE,
+        row_index INTEGER NOT NULL,
+        data JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_planning_rows_sheet ON planning_rows(sheet_id, row_index);
+      CREATE INDEX IF NOT EXISTS idx_planning_sheets_client ON planning_sheets(client_slug);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

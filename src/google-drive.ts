@@ -383,6 +383,35 @@ export class GoogleDriveService {
     return { updatedRows: res.data.updates?.updatedRows || 0 };
   }
 
+  async writeGoogleSheetTab(
+    sheetId: string,
+    tabName: string,
+    values: string[][]
+  ): Promise<{ updatedRows: number; updatedColumns: number }> {
+    const id = extractGoogleId(sheetId);
+    const sheets = google.sheets({ version: "v4", auth: this.authClient });
+    const range = `'${tabName}'!A1`;
+
+    // Clear existing content first
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: id,
+      range: `'${tabName}'`,
+    });
+
+    // Write new values
+    const res = await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values },
+    });
+
+    return {
+      updatedRows: res.data.updatedRows || 0,
+      updatedColumns: res.data.updatedColumns || 0,
+    };
+  }
+
   // ── Read, edit & format methods ───────────────────────
 
   async readGoogleDoc(docId: string): Promise<DocStructure> {

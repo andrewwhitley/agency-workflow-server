@@ -22,18 +22,22 @@ import {
   upsertMemorySchema,
   contentGenerateRequestSchema,
   updateClientConfigSchema,
+  keywordEnrichSchema,
+  keywordSuggestSchema,
 } from "./validation.js";
 import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
 import type { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
+import type { DataForSEOService } from "./dataforseo.js";
 import { listClients, loadClientConfig, saveClientConfig, createWorkbook } from "./workbook-service.js";
 import { buildContentPlan, runContentFactory, getRunStatus, listRuns, type ContentPageSpec } from "./content-factory.js";
 import { generateContentStrategy, buildSitemap, strategyToCSV, type ContentPlannerInput } from "./content-planner.js";
 import { contentQueue } from "./content-queue.js";
-import { contentFactoryInputSchema, contentPlannerInputSchema } from "./validation.js";
+import { contentFactoryInputSchema, contentPlannerInputSchema, updatePlanningRowSchema, createPlanningRowSchema } from "./validation.js";
+import * as planningService from "./planning-sheet-service.js";
 
-export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService): Router {
+export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, authService?: GoogleAuthService, seoService?: DataForSEOService): Router {
   const router = Router();
 
   // ── Agents ──────────────────────────────────────────
@@ -830,24 +834,22 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
     res.json(contentQueue.stats);
   });
 
-  // ── Planning Sheet Integration ────────────────────────────
+  // ── Planning Data (DB-backed, Sheet as backup) ────────────
 
-  /** Read a specific tab from a client's planning sheet */
-  router.get("/content-management/clients/:slug/sheet", async (req, res) => {
+  /** Read planning tab data from database */
+  router.get("/content-management/clients/:slug/planning/:tab", async (req, res) => {
     try {
-      const config = loadClientConfig(req.params.slug);
-      if (!config?.planningSheetId) {
-        res.status(400).json({ error: "No planning sheet configured for this client. Set planningSheetId in client config." });
+      const data = await planningService.getSheetData(req.params.slug, req.params.tab);
+      if (!data) {
+        // No DB data yet — check if there's a planning sheet to import from
+        const config = loadClientConfig(req.params.slug);
+        if (config?.planningSheetId) {
+          res.json({ headers: [], rows: [], needsImport: true });
+        } else {
+          res.json({ headers: [], rows: [], needsImport: false });
+        }
         return;
       }
-      if (!authService?.isAuthenticated()) {
-        res.status(500).json({ error: "Google service account not configured" });
-        return;
-      }
-      const driveService = new GoogleDriveService(authService.getClient());
-      const tab = typeof req.query.tab === "string" ? req.query.tab : undefined;
-      const range = tab ? `'${tab}'` : undefined;
-      const data = await driveService.readGoogleSheet(config.planningSheetId, range);
       res.json(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -855,64 +857,138 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
     }
   });
 
-  /** Read the content tracking tab specifically (parsed into structured rows) */
-  router.get("/content-management/clients/:slug/sheet/content-tracking", async (req, res) => {
+  /** Update a planning row */
+  router.put("/content-management/clients/:slug/planning/:tab/rows/:rowId", async (req, res) => {
+    const parsed = updatePlanningRowSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     try {
-      const config = loadClientConfig(req.params.slug);
-      if (!config?.planningSheetId) {
-        res.status(400).json({ error: "No planning sheet configured" });
-        return;
-      }
-      if (!authService?.isAuthenticated()) {
-        res.status(500).json({ error: "Google service account not configured" });
-        return;
-      }
-      const driveService = new GoogleDriveService(authService.getClient());
-      const data = await driveService.readGoogleSheet(config.planningSheetId, "'New Content Tracking'");
-      if (!data.values?.length) {
-        res.json({ headers: [], rows: [] });
-        return;
-      }
-      const headers = data.values[0];
-      const rows = data.values.slice(1).map((row) => {
-        const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { obj[h.trim()] = row[i] || ""; });
-        return obj;
-      });
-      res.json({ headers, rows, sheetTitle: data.title });
+      const row = await planningService.updateRow(req.params.rowId, parsed.data.data);
+      if (!row) { res.status(404).json({ error: "Row not found" }); return; }
+      res.json(row);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       res.status(500).json({ error: message });
     }
   });
 
-  /** Read the topical sitemap tab (parsed) */
-  router.get("/content-management/clients/:slug/sheet/sitemap", async (req, res) => {
+  /** Create a new planning row */
+  router.post("/content-management/clients/:slug/planning/:tab/rows", async (req, res) => {
+    const parsed = createPlanningRowSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
     try {
-      const config = loadClientConfig(req.params.slug);
-      if (!config?.planningSheetId) {
-        res.status(400).json({ error: "No planning sheet configured" });
-        return;
-      }
-      if (!authService?.isAuthenticated()) {
-        res.status(500).json({ error: "Google service account not configured" });
-        return;
-      }
-      const driveService = new GoogleDriveService(authService.getClient());
-      const data = await driveService.readGoogleSheet(config.planningSheetId, "'Topical Sitemap'");
-      if (!data.values?.length) {
-        res.json({ headers: [], rows: [] });
-        return;
-      }
-      const headers = data.values[0];
-      const rows = data.values.slice(1).map((row) => {
-        const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { obj[h.trim()] = row[i] || ""; });
-        return obj;
-      });
-      res.json({ headers, rows, sheetTitle: data.title });
+      const row = await planningService.createRow(req.params.slug, req.params.tab, parsed.data.data);
+      if (!row) { res.status(404).json({ error: "No planning sheet found for this client/tab. Import first." }); return; }
+      res.json(row);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Delete a planning row */
+  router.delete("/content-management/clients/:slug/planning/:tab/rows/:rowId", async (req, res) => {
+    try {
+      const deleted = await planningService.deleteRow(req.params.rowId);
+      if (!deleted) { res.status(404).json({ error: "Row not found" }); return; }
+      res.json({ deleted: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Import from Google Sheet into database */
+  router.post("/content-management/clients/:slug/planning/import", async (req, res) => {
+    if (!authService?.isAuthenticated()) {
+      res.status(500).json({ error: "Google service account not configured" });
+      return;
+    }
+    try {
+      const driveService = new GoogleDriveService(authService.getClient());
+      const tab = typeof req.query.tab === "string" ? req.query.tab : undefined;
+      let results: Record<string, number>;
+      if (tab) {
+        const tabName = planningService.resolveTabName(tab);
+        const { imported } = await planningService.importSheetTab(req.params.slug, tabName, driveService);
+        results = { [tab]: imported };
+      } else {
+        results = await planningService.importAllTabs(req.params.slug, driveService);
+      }
+      res.json({ imported: results });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Sync database data back to Google Sheet */
+  router.post("/content-management/clients/:slug/planning/sync-back", async (req, res) => {
+    if (!authService?.isAuthenticated()) {
+      res.status(500).json({ error: "Google service account not configured" });
+      return;
+    }
+    try {
+      const driveService = new GoogleDriveService(authService.getClient());
+      const tab = typeof req.query.tab === "string" ? req.query.tab : undefined;
+      let results: Record<string, number>;
+      if (tab) {
+        const { synced } = await planningService.syncBackToSheet(req.params.slug, tab, driveService);
+        results = { [tab]: synced };
+      } else {
+        results = await planningService.syncAllTabs(req.params.slug, driveService);
+      }
+      res.json({ synced: results });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── Keyword / SEO ─────────────────────────────────────────────
+
+  router.post("/content-management/keywords/enrich", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD." });
+      return;
+    }
+    const parsed = keywordEnrichSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const metrics = await seoService.getKeywordMetrics(
+        parsed.data.keywords,
+        parsed.data.locationCode,
+      );
+      res.json({ keywords: metrics, count: metrics.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Keyword enrich error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/content-management/keywords/suggest", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD." });
+      return;
+    }
+    const parsed = keywordSuggestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+    try {
+      const suggestions = await seoService.getKeywordSuggestions(
+        parsed.data.seed,
+        parsed.data.locationCode,
+        parsed.data.limit,
+      );
+      res.json({ keywords: suggestions, count: suggestions.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Keyword suggest error:", err);
       res.status(500).json({ error: message });
     }
   });
