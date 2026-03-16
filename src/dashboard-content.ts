@@ -38,6 +38,7 @@ export function getContentViewHtml(): string {
             <button class="pill" onclick="switchContentTab('calendar')" data-content-tab="calendar">Editorial Calendar</button>
             <button class="pill" onclick="switchContentTab('generate')" data-content-tab="generate">Generate</button>
             <button class="pill" onclick="switchContentTab('sheet')" data-content-tab="sheet">Planning Sheet</button>
+            <button class="pill" onclick="switchContentTab('seo')" data-content-tab="seo">SEO Research</button>
             <button class="pill" onclick="switchContentTab('runs')" data-content-tab="runs">Run History</button>
             <button class="pill" onclick="switchContentTab('settings')" data-content-tab="settings">Settings</button>
           </div>
@@ -148,6 +149,67 @@ export function getContentViewHtml(): string {
           <h2 style="font-size:18px;margin-bottom:16px;">Run History</h2>
           <div id="content-runs-body">
             <div class="empty-state"><p>No content generation runs yet</p></div>
+          </div>
+        </div>
+
+        <!-- SEO Research Tab -->
+        <div id="content-tab-seo" class="content-tab hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 style="font-size:18px;margin:0;">SEO Research</h2>
+          </div>
+
+          <!-- SEO Sub-tabs -->
+          <div class="filter-pills" style="margin-bottom:20px;">
+            <button class="pill pill-active" onclick="switchSeoSubTab('serp')" data-seo-tab="serp">SERP Analysis</button>
+            <button class="pill" onclick="switchSeoSubTab('domain')" data-seo-tab="domain">Domain Analytics</button>
+            <button class="pill" onclick="switchSeoSubTab('onpage')" data-seo-tab="onpage">On-Page Audit</button>
+            <button class="pill" onclick="switchSeoSubTab('content')" data-seo-tab="content">Content Analysis</button>
+            <button class="pill" onclick="switchSeoSubTab('business')" data-seo-tab="business">Business Listings</button>
+          </div>
+
+          <!-- SERP Sub-tab -->
+          <div id="seo-panel-serp">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="seo-serp-keyword" placeholder="Enter a search query..." style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" onclick="runSerpAnalysis()">Search</button>
+            </div>
+            <div id="seo-serp-results"></div>
+          </div>
+
+          <!-- Domain Sub-tab -->
+          <div id="seo-panel-domain" class="hidden">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="seo-domain-input" placeholder="Enter a domain (e.g. example.com)" style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" onclick="runDomainOverview()">Analyze</button>
+            </div>
+            <div id="seo-domain-results"></div>
+          </div>
+
+          <!-- On-Page Sub-tab -->
+          <div id="seo-panel-onpage" class="hidden">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="seo-onpage-url" placeholder="Enter a full URL (e.g. https://example.com/)" style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" onclick="runOnPageAudit()">Audit</button>
+            </div>
+            <div id="seo-onpage-results"></div>
+          </div>
+
+          <!-- Content Analysis Sub-tab -->
+          <div id="seo-panel-content" class="hidden">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="seo-content-keyword" placeholder="Search for content about..." style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" onclick="runContentAnalysis()">Search</button>
+            </div>
+            <div id="seo-content-results"></div>
+          </div>
+
+          <!-- Business Listings Sub-tab -->
+          <div id="seo-panel-business" class="hidden">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+              <input type="text" id="seo-business-keyword" placeholder="Search businesses (e.g. chiropractor phoenix az)" style="flex:1;padding:8px 12px;" />
+              <button class="btn btn-primary btn-sm" onclick="runBusinessSearch()">Search</button>
+            </div>
+            <div id="seo-business-results"></div>
           </div>
         </div>
 
@@ -373,6 +435,7 @@ export function getContentViewJs(): string {
       if (tab === "generate") loadGenerateView();
       if (tab === "sheet") loadSheetView();
       if (tab === "runs") loadContentRuns();
+      if (tab === "seo") initSeoTab();
       if (tab === "settings") loadContentSettings();
     }
 
@@ -1129,6 +1192,258 @@ export function getContentViewJs(): string {
         onContentClientChange(contentCurrentSlug); // Refresh connection status
       } catch (e) {
         alert("Error saving: " + (e.message || "Unknown error"));
+      }
+    }
+
+    // ─── SEO Research ─────────────────────────────────────
+    let seoCurrentSubTab = "serp";
+
+    function initSeoTab() {
+      switchSeoSubTab(seoCurrentSubTab);
+    }
+
+    function switchSeoSubTab(tab) {
+      seoCurrentSubTab = tab;
+      var panels = ["serp", "domain", "onpage", "content", "business"];
+      panels.forEach(function(p) {
+        var el = document.getElementById("seo-panel-" + p);
+        if (el) el.classList.toggle("hidden", p !== tab);
+      });
+      document.querySelectorAll("[data-seo-tab]").forEach(function(pill) {
+        pill.classList.toggle("pill-active", pill.getAttribute("data-seo-tab") === tab);
+      });
+    }
+
+    async function runSerpAnalysis() {
+      var keyword = document.getElementById("seo-serp-keyword").value.trim();
+      if (!keyword) return;
+      var results = document.getElementById("seo-serp-results");
+      results.innerHTML = '<div class="empty-state"><p>Searching...</p></div>';
+      try {
+        var data = await api("/seo/serp", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: keyword })
+        });
+        var html = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">' + (data.totalResults || 0).toLocaleString() + ' results</div>';
+
+        if (data.peopleAlsoAsk && data.peopleAlsoAsk.length) {
+          html += '<div style="margin-bottom:16px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);"><strong style="font-size:13px;">People Also Ask</strong><ul style="margin:8px 0 0 16px;font-size:13px;">';
+          data.peopleAlsoAsk.forEach(function(q) { html += '<li style="margin-bottom:4px;">' + escapeHtml(q) + '</li>'; });
+          html += '</ul></div>';
+        }
+
+        html += '<table class="content-plan-table"><thead><tr><th>#</th><th>Title</th><th>Type</th><th>URL</th></tr></thead><tbody>';
+        (data.items || []).forEach(function(item) {
+          var typeClass = item.type === "organic" ? "core" : item.type === "local_pack" ? "area" : "support";
+          html += '<tr>';
+          html += '<td style="font-weight:600;text-align:center;">' + (item.position || "") + '</td>';
+          html += '<td style="font-weight:500;">' + escapeHtml(item.title || "") + '</td>';
+          html += '<td><span class="type-badge ' + typeClass + '">' + escapeHtml(item.type || "") + '</span></td>';
+          html += '<td style="font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">';
+          if (item.url) html += '<a href="' + escapeHtml(item.url) + '" target="_blank" style="color:var(--primary);">' + escapeHtml(item.domain || item.url) + '</a>';
+          html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+
+        if (data.relatedSearches && data.relatedSearches.length) {
+          html += '<div style="margin-top:16px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);"><strong style="font-size:13px;">Related Searches</strong><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">';
+          data.relatedSearches.forEach(function(rs) {
+            html += '<span class="pill" style="cursor:pointer;font-size:12px;" onclick="document.getElementById(\\x27seo-serp-keyword\\x27).value=\\x27' + escapeHtml(rs).replace(/'/g, "\\x27") + '\\x27;runSerpAnalysis();">' + escapeHtml(rs) + '</span>';
+          });
+          html += '</div></div>';
+        }
+
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function runDomainOverview() {
+      var domain = document.getElementById("seo-domain-input").value.trim();
+      if (!domain) return;
+      var results = document.getElementById("seo-domain-results");
+      results.innerHTML = '<div class="empty-state"><p>Analyzing ' + escapeHtml(domain) + '...</p></div>';
+      try {
+        var overview = await api("/seo/domain/overview", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain: domain })
+        });
+        var keywords = await api("/seo/domain/keywords", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain: domain, limit: 20 })
+        });
+        var competitors = await api("/seo/domain/competitors", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain: domain, limit: 10 })
+        });
+
+        var html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + (overview.organicTraffic || 0).toLocaleString() + '</div><div style="font-size:12px;color:var(--text-muted);">Est. Monthly Traffic</div></div>';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + (overview.organicKeywords || 0).toLocaleString() + '</div><div style="font-size:12px;color:var(--text-muted);">Ranked Keywords</div></div>';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + (overview.rank || 0).toLocaleString() + '</div><div style="font-size:12px;color:var(--text-muted);">Domain Rank</div></div>';
+        html += '</div>';
+
+        if (keywords.keywords && keywords.keywords.length) {
+          html += '<h3 style="font-size:15px;margin-bottom:10px;">Top Ranked Keywords</h3>';
+          html += '<table class="content-plan-table"><thead><tr><th>Keyword</th><th>Pos</th><th>Vol</th><th>CPC</th><th>URL</th></tr></thead><tbody>';
+          keywords.keywords.forEach(function(kw) {
+            var volClass = kw.searchVolume > 100 ? "seo-vol-high" : kw.searchVolume > 10 ? "seo-vol-med" : "seo-vol-low";
+            html += '<tr>';
+            html += '<td style="font-weight:500;">' + escapeHtml(kw.keyword) + '</td>';
+            html += '<td style="text-align:center;font-weight:600;">' + kw.position + '</td>';
+            html += '<td class="' + volClass + '">' + (kw.searchVolume || 0).toLocaleString() + '</td>';
+            html += '<td style="color:var(--text-muted);">$' + (kw.cpc || 0).toFixed(2) + '</td>';
+            html += '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><a href="' + escapeHtml(kw.url || "") + '" target="_blank" style="color:var(--primary);">' + escapeHtml((kw.url || "").replace(/^https?:\\/\\/[^/]+/, "")) + '</a></td>';
+            html += '</tr>';
+          });
+          html += '</tbody></table>';
+        }
+
+        if (competitors.competitors && competitors.competitors.length) {
+          html += '<h3 style="font-size:15px;margin:20px 0 10px;">Competitors</h3>';
+          html += '<table class="content-plan-table"><thead><tr><th>Domain</th><th>Avg Position</th><th>Keyword Overlap</th><th>Est. Traffic</th></tr></thead><tbody>';
+          competitors.competitors.forEach(function(c) {
+            html += '<tr>';
+            html += '<td style="font-weight:500;"><a href="#" onclick="document.getElementById(\\x27seo-domain-input\\x27).value=\\x27' + escapeHtml(c.domain) + '\\x27;runDomainOverview();return false;" style="color:var(--primary);">' + escapeHtml(c.domain) + '</a></td>';
+            html += '<td style="text-align:center;">' + (c.avgPosition || 0).toFixed(1) + '</td>';
+            html += '<td>' + (c.keywordIntersections || 0).toLocaleString() + '</td>';
+            html += '<td>' + (c.organicTraffic ? c.organicTraffic.toLocaleString() : "—") + '</td>';
+            html += '</tr>';
+          });
+          html += '</tbody></table>';
+        }
+
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function runOnPageAudit() {
+      var url = document.getElementById("seo-onpage-url").value.trim();
+      if (!url) return;
+      var results = document.getElementById("seo-onpage-results");
+      results.innerHTML = '<div class="empty-state"><p>Auditing ' + escapeHtml(url) + '...</p></div>';
+      try {
+        var data = await api("/seo/onpage", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url })
+        });
+
+        var scoreColor = data.onpageScore >= 80 ? "#34d399" : data.onpageScore >= 50 ? "#fbbf24" : "#f87171";
+        var html = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:36px;font-weight:700;color:' + scoreColor + ';">' + (data.onpageScore || 0).toFixed(0) + '</div><div style="font-size:12px;color:var(--text-muted);">SEO Score</div></div>';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + (data.statusCode || 0) + '</div><div style="font-size:12px;color:var(--text-muted);">Status Code</div></div>';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + ((data.loadTime || 0) * 1000).toFixed(0) + 'ms</div><div style="font-size:12px;color:var(--text-muted);">Load Time</div></div>';
+        html += '<div class="agent-card" style="flex:1;min-width:140px;padding:14px;"><div style="font-size:24px;font-weight:600;">' + ((data.size || 0) / 1024).toFixed(0) + 'KB</div><div style="font-size:12px;color:var(--text-muted);">Page Size</div></div>';
+        html += '</div>';
+
+        html += '<h3 style="font-size:15px;margin-bottom:10px;">Meta Tags</h3>';
+        html += '<div style="background:var(--surface-2);padding:14px;border-radius:var(--radius-sm);margin-bottom:16px;font-size:13px;">';
+        html += '<div style="margin-bottom:8px;"><strong>Title:</strong> ' + escapeHtml(data.title || "Missing") + '</div>';
+        html += '<div style="margin-bottom:8px;"><strong>Description:</strong> ' + escapeHtml(data.description || "Missing") + '</div>';
+        html += '<div><strong>H1:</strong> ' + (data.h1 && data.h1.length ? data.h1.map(function(h) { return escapeHtml(h); }).join(", ") : "Missing") + '</div>';
+        html += '</div>';
+
+        if (data.brokenLinks || data.brokenResources || data.duplicateTitle || data.duplicateDescription) {
+          html += '<h3 style="font-size:15px;margin-bottom:10px;color:#f87171;">Issues Found</h3>';
+          html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">';
+          if (data.brokenLinks) html += '<span class="pill" style="background:rgba(239,68,68,0.15);color:#f87171;">' + data.brokenLinks + ' broken links</span>';
+          if (data.brokenResources) html += '<span class="pill" style="background:rgba(239,68,68,0.15);color:#f87171;">' + data.brokenResources + ' broken resources</span>';
+          if (data.duplicateTitle) html += '<span class="pill" style="background:rgba(245,158,11,0.15);color:#fbbf24;">Duplicate title</span>';
+          if (data.duplicateDescription) html += '<span class="pill" style="background:rgba(245,158,11,0.15);color:#fbbf24;">Duplicate description</span>';
+          html += '</div>';
+        }
+
+        html += '<h3 style="font-size:15px;margin-bottom:10px;">Technical Checks</h3>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+        var checks = data.checks || {};
+        Object.keys(checks).forEach(function(key) {
+          var val = checks[key];
+          var isGood = !val;
+          if (key === "is_https" || key === "has_meta_title" || key === "has_meta_description") isGood = val;
+          var label = key.replace(/_/g, " ").replace(/^is /, "").replace(/^has /, "").replace(/^no /, "missing ");
+          html += '<span class="pill" style="font-size:11px;background:' + (isGood ? "rgba(16,185,129,0.1);color:#34d399" : "rgba(239,68,68,0.1);color:#f87171") + ';">' + (isGood ? "&#10003;" : "&#10007;") + ' ' + escapeHtml(label) + '</span>';
+        });
+        html += '</div>';
+
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function runContentAnalysis() {
+      var keyword = document.getElementById("seo-content-keyword").value.trim();
+      if (!keyword) return;
+      var results = document.getElementById("seo-content-results");
+      results.innerHTML = '<div class="empty-state"><p>Searching content...</p></div>';
+      try {
+        var data = await api("/seo/content", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: keyword, limit: 20 })
+        });
+
+        if (!data.results || !data.results.length) {
+          results.innerHTML = '<div class="empty-state"><p>No content found for "' + escapeHtml(keyword) + '".</p></div>';
+          return;
+        }
+
+        var html = '<table class="content-plan-table"><thead><tr><th>Title</th><th>URL</th><th>Published</th><th>Length</th></tr></thead><tbody>';
+        data.results.forEach(function(item) {
+          var date = item.datePublished ? new Date(item.datePublished).toLocaleDateString() : "—";
+          var length = item.contentLength ? (item.contentLength > 1000 ? (item.contentLength / 1000).toFixed(1) + "K" : item.contentLength) + " chars" : "—";
+          html += '<tr>';
+          html += '<td style="font-weight:500;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(item.title || "") + '</td>';
+          html += '<td style="font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><a href="' + escapeHtml(item.url || "") + '" target="_blank" style="color:var(--primary);">' + escapeHtml(item.url || "").replace(/^https?:\\/\\//, "").slice(0, 60) + '</a></td>';
+          html += '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(date) + '</td>';
+          html += '<td style="font-size:12px;color:var(--text-muted);">' + length + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+      }
+    }
+
+    async function runBusinessSearch() {
+      var keyword = document.getElementById("seo-business-keyword").value.trim();
+      if (!keyword) return;
+      var results = document.getElementById("seo-business-results");
+      results.innerHTML = '<div class="empty-state"><p>Searching businesses...</p></div>';
+      try {
+        var data = await api("/seo/business", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: keyword, limit: 20 })
+        });
+
+        if (!data.listings || !data.listings.length) {
+          results.innerHTML = '<div class="empty-state"><p>No listings found.</p></div>';
+          return;
+        }
+
+        var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">';
+        data.listings.forEach(function(biz) {
+          html += '<div class="agent-card" style="padding:14px;">';
+          html += '<div style="font-weight:600;font-size:14px;margin-bottom:6px;">' + escapeHtml(biz.title || "") + '</div>';
+          if (biz.rating) {
+            html += '<div style="margin-bottom:6px;">';
+            var stars = Math.round(biz.rating);
+            for (var s = 0; s < 5; s++) html += '<span style="color:' + (s < stars ? "#fbbf24" : "#374151") + ';">&#9733;</span>';
+            html += ' <span style="font-size:12px;color:var(--text-muted);">' + biz.rating.toFixed(1) + ' (' + (biz.reviewCount || 0) + ' reviews)</span></div>';
+          }
+          if (biz.address) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">' + escapeHtml(biz.address) + '</div>';
+          if (biz.phone) html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">' + escapeHtml(biz.phone) + '</div>';
+          if (biz.category) html += '<div style="font-size:11px;"><span class="type-badge core">' + escapeHtml(biz.category) + '</span></div>';
+          if (biz.url) html += '<div style="margin-top:6px;"><a href="' + escapeHtml(biz.url) + '" target="_blank" style="color:var(--primary);font-size:12px;">Website</a></div>';
+          html += '</div>';
+        });
+        html += '</div>';
+        results.innerHTML = html;
+      } catch (e) {
+        results.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
       }
     }
   `;

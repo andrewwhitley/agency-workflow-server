@@ -204,6 +204,33 @@ export const keywordSuggestSchema = z.object({
   limit: z.number().int().min(1).max(200).optional(),
 });
 
+export const serpQuerySchema = z.object({
+  keyword: z.string().min(1).max(500),
+  locationCode: z.number().int().optional(),
+  depth: z.number().int().min(1).max(100).optional(),
+});
+
+export const domainQuerySchema = z.object({
+  domain: z.string().min(1).max(500),
+  locationCode: z.number().int().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+export const onPageQuerySchema = z.object({
+  url: z.string().url().max(2000),
+});
+
+export const contentSearchSchema = z.object({
+  keyword: z.string().min(1).max(500),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
+export const businessSearchSchema = z.object({
+  keyword: z.string().min(1).max(500),
+  locationCode: z.number().int().optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+
 // ── Planning rows ─────────────────────────────────────────────
 
 export const updatePlanningRowSchema = z.object({

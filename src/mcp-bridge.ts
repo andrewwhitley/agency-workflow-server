@@ -671,4 +671,136 @@ export function bridgeKeywordResearchToMcp(server: McpServer, seoService?: DataF
       }
     }
   );
+
+  // ── SERP ───────────────────────────────────────────────
+
+  server.tool(
+    "serp_analysis",
+    "Get live Google search results for a keyword. Returns organic results, local pack, featured snippets, People Also Ask, and related searches. Great for competitive analysis.",
+    {
+      keyword: z.string().min(1).describe("Search query to look up"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = US)"),
+      depth: z.number().optional().describe("Number of results (default: 20, max: 100)"),
+    },
+    async ({ keyword, location_code, depth }) => {
+      try {
+        const result = await seoService.getSerpResults(keyword, location_code, depth);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  // ── Domain Analytics ────────────────────────────────────
+
+  server.tool(
+    "domain_overview",
+    "Get SEO overview for a domain: organic traffic estimate, keyword count, and rank. Use to assess a client's or competitor's online presence.",
+    {
+      domain: z.string().min(1).describe("Domain to analyze (e.g. 'example.com')"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = US)"),
+    },
+    async ({ domain, location_code }) => {
+      try {
+        const result = await seoService.getDomainOverview(domain, location_code);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  server.tool(
+    "domain_keywords",
+    "Get the keywords a domain ranks for in Google, with positions, search volume, and URLs. Use for competitor keyword analysis or auditing a client's visibility.",
+    {
+      domain: z.string().min(1).describe("Domain to analyze"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = US)"),
+      limit: z.number().optional().describe("Max keywords to return (default: 50)"),
+    },
+    async ({ domain, location_code, limit }) => {
+      try {
+        const result = await seoService.getDomainRankedKeywords(domain, location_code, limit);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ keywords: result, count: result.length }, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  server.tool(
+    "domain_competitors",
+    "Find competing domains based on keyword overlap. Returns domains that rank for similar keywords with intersection counts.",
+    {
+      domain: z.string().min(1).describe("Domain to find competitors for"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = US)"),
+      limit: z.number().optional().describe("Max competitors to return (default: 20)"),
+    },
+    async ({ domain, location_code, limit }) => {
+      try {
+        const result = await seoService.getDomainCompetitors(domain, location_code, limit);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ competitors: result, count: result.length }, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  // ── On-Page Analysis ────────────────────────────────────
+
+  server.tool(
+    "onpage_audit",
+    "Run an instant on-page SEO audit for a URL. Returns SEO score, meta tags, load time, broken links, and technical issues. Use for technical SEO audits.",
+    {
+      url: z.string().min(1).describe("Full URL to audit (e.g. 'https://example.com/')"),
+    },
+    async ({ url }) => {
+      try {
+        const result = await seoService.analyzePageInstant(url);
+        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  // ── Content Analysis ────────────────────────────────────
+
+  server.tool(
+    "content_analysis",
+    "Search published content across the web for a topic. Returns articles with titles, URLs, publish dates, and sentiment. Use for content gap analysis and research.",
+    {
+      keyword: z.string().min(1).describe("Topic or keyword to search for"),
+      limit: z.number().optional().describe("Max results (default: 20)"),
+    },
+    async ({ keyword, limit }) => {
+      try {
+        const result = await seoService.searchContent(keyword, limit);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ results: result, count: result.length }, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
+
+  // ── Business Data ───────────────────────────────────────
+
+  server.tool(
+    "business_search",
+    "Search Google Maps for business listings. Returns names, addresses, ratings, review counts, and contact info. Use for local SEO research and GBP audits.",
+    {
+      keyword: z.string().min(1).describe("Search query (e.g. 'chiropractor phoenix az')"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = US)"),
+      limit: z.number().optional().describe("Max results (default: 20)"),
+    },
+    async ({ keyword, location_code, limit }) => {
+      try {
+        const result = await seoService.searchBusinessListings(keyword, location_code, limit);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ listings: result, count: result.length }, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (err as Error).message }) }], isError: true };
+      }
+    }
+  );
 }

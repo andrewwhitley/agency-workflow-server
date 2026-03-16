@@ -24,6 +24,11 @@ import {
   updateClientConfigSchema,
   keywordEnrichSchema,
   keywordSuggestSchema,
+  serpQuerySchema,
+  domainQuerySchema,
+  onPageQuerySchema,
+  contentSearchSchema,
+  businessSearchSchema,
 } from "./validation.js";
 import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
@@ -990,6 +995,147 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("Keyword suggest error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── SERP ─────────────────────────────────────────────────────
+
+  router.post("/seo/serp", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = serpQuerySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.getSerpResults(
+        parsed.data.keyword, parsed.data.locationCode, parsed.data.depth,
+      );
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("SERP error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── Domain Analytics ──────────────────────────────────────────
+
+  router.post("/seo/domain/overview", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = domainQuerySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.getDomainOverview(
+        parsed.data.domain, parsed.data.locationCode,
+      );
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Domain overview error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/seo/domain/keywords", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = domainQuerySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.getDomainRankedKeywords(
+        parsed.data.domain, parsed.data.locationCode, parsed.data.limit,
+      );
+      res.json({ keywords: result, count: result.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Domain keywords error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post("/seo/domain/competitors", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = domainQuerySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.getDomainCompetitors(
+        parsed.data.domain, parsed.data.locationCode, parsed.data.limit,
+      );
+      res.json({ competitors: result, count: result.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Domain competitors error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── On-Page Analysis ──────────────────────────────────────────
+
+  router.post("/seo/onpage", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = onPageQuerySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.analyzePageInstant(parsed.data.url);
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("On-page error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── Content Analysis ──────────────────────────────────────────
+
+  router.post("/seo/content", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = contentSearchSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.searchContent(
+        parsed.data.keyword, parsed.data.limit,
+      );
+      res.json({ results: result, count: result.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Content analysis error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ── Business Data ─────────────────────────────────────────────
+
+  router.post("/seo/business", async (req, res) => {
+    if (!seoService?.isAuthenticated()) {
+      res.status(503).json({ error: "DataForSEO not configured." });
+      return;
+    }
+    const parsed = businessSearchSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const result = await seoService.searchBusinessListings(
+        parsed.data.keyword, parsed.data.locationCode, parsed.data.limit,
+      );
+      res.json({ listings: result, count: result.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Business data error:", err);
       res.status(500).json({ error: message });
     }
   });
