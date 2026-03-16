@@ -7,7 +7,6 @@ import { AgentsPage } from "./pages/AgentsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { MemoriesPage } from "./pages/MemoriesPage";
 import { DrivePage } from "./pages/DrivePage";
-import { ClientsPage } from "./pages/ClientsPage";
 import { SOPsPage } from "./pages/SOPsPage";
 import { ContentPage } from "./pages/ContentPage";
 import { WorkbooksPage } from "./pages/WorkbooksPage";
@@ -26,6 +25,11 @@ import { SerpAnalysisPage } from "./pages/seo/SerpAnalysisPage";
 import { KeywordResearchPage } from "./pages/seo/KeywordResearchPage";
 import { ClientsListPage } from "./pages/clients/ClientsListPage";
 import { ClientDetailPage } from "./pages/clients/ClientDetailPage";
+import { CampaignsPage } from "./pages/clients/CampaignsPage";
+import { DeliverablesPage } from "./pages/clients/DeliverablesPage";
+import { AgencyTeamPage } from "./pages/clients/AgencyTeamPage";
+import { WeeklyCheckInPage } from "./pages/clients/WeeklyCheckInPage";
+import { TrafficLightSettingsPage } from "./pages/clients/TrafficLightSettingsPage";
 
 export default function App() {
   return (
@@ -33,24 +37,29 @@ export default function App() {
       <Route element={<DashboardLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/workflows" element={<WorkflowsPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/agents" element={<AgentsPage />} />
-        <Route path="/tasks" element={<TasksPage />} />
-        <Route path="/memories" element={<MemoriesPage />} />
-        <Route path="/drive" element={<DrivePage />} />
         <Route path="/clients" element={<ClientsListPage />} />
         <Route path="/clients/:slug" element={<ClientDetailPage />} />
-        <Route path="/sops" element={<SOPsPage />} />
-        <Route path="/content" element={<ContentPage />} />
-        <Route path="/workbooks" element={<WorkbooksPage />} />
-        <Route path="/discord" element={<DiscordLogsPage />} />
+        <Route path="/campaigns" element={<CampaignsPage />} />
+        <Route path="/deliverables" element={<DeliverablesPage />} />
+        <Route path="/team" element={<AgencyTeamPage />} />
+        <Route path="/weekly-check-in" element={<WeeklyCheckInPage />} />
+        <Route path="/settings/traffic-light" element={<TrafficLightSettingsPage />} />
         <Route path="/seo" element={<SeoDashboardPage />} />
         <Route path="/seo/keywords" element={<KeywordTrackerPage />} />
         <Route path="/seo/gaps" element={<ContentGapsPage />} />
         <Route path="/seo/audit" element={<TechnicalAuditPage />} />
         <Route path="/seo/serp" element={<SerpAnalysisPage />} />
         <Route path="/seo/research" element={<KeywordResearchPage />} />
+        <Route path="/content" element={<ContentPage />} />
+        <Route path="/workbooks" element={<WorkbooksPage />} />
+        <Route path="/agents" element={<AgentsPage />} />
+        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/memories" element={<MemoriesPage />} />
+        <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/drive" element={<DrivePage />} />
+        <Route path="/sops" element={<SOPsPage />} />
+        <Route path="/discord" element={<DiscordLogsPage />} />
         <Route path="/eos/rocks" element={<RocksPage />} />
         <Route path="/eos/scorecard" element={<ScorecardPage />} />
         <Route path="/eos/issues" element={<IssuesPage />} />
