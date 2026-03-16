@@ -20,10 +20,14 @@ export function getContentViewHtml(): string {
               <option value="">Select a client...</option>
             </select>
           </div>
-          <div id="content-client-info" class="hidden" style="display:flex;gap:12px;align-items:center;margin-left:auto;">
+          <div id="content-client-info" class="hidden" style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
             <span id="content-client-profile-badge" class="pill pill-green hidden">Content Profile</span>
             <span id="content-client-folder-badge" class="pill pill-blue hidden">Fulfillment Folder</span>
             <span id="content-client-sheet-badge" class="pill pill-purple hidden">Planning Sheet</span>
+            <span id="content-client-output-badge" class="pill hidden">Output Folder</span>
+          </div>
+          <div id="content-missing-notice" class="hidden" style="width:100%;margin-top:8px;padding:10px 14px;background:#fef3c7;border:1px solid #f59e0b;border-radius:var(--radius-sm);font-size:12px;color:#92400e;">
+            <strong>Missing connections:</strong> <span id="content-missing-list"></span> — <a href="#" onclick="switchContentTab('settings');return false;" style="color:#92400e;text-decoration:underline;">Configure in Settings</a>
           </div>
         </div>
 
@@ -127,6 +131,7 @@ export function getContentViewHtml(): string {
                 <button class="pill pill-active" onclick="switchSheetSubTab('tracking')" data-sheet-tab="tracking">Content Tracking</button>
                 <button class="pill" onclick="switchSheetSubTab('sitemap')" data-sheet-tab="sitemap">Topical Sitemap</button>
                 <button class="pill" onclick="switchSheetSubTab('deliverables')" data-sheet-tab="deliverables">Deliverables</button>
+                <button class="pill" onclick="switchSheetSubTab('completed')" data-sheet-tab="completed">Completed Articles</button>
               </div>
               <button class="btn btn-ghost btn-sm" onclick="importFromSheet()" id="sheet-import-btn" style="font-size:12px;">Import from Sheet</button>
               <button class="btn btn-ghost btn-sm" onclick="syncToSheet()" id="sheet-sync-btn" style="font-size:12px;">Sync to Sheet</button>
@@ -308,9 +313,11 @@ export function getContentViewJs(): string {
       contentCalendar = null;
       const tabs = document.getElementById("content-tabs");
       const info = document.getElementById("content-client-info");
+      const notice = document.getElementById("content-missing-notice");
       if (!slug) {
         tabs.classList.add("hidden");
         info.classList.add("hidden");
+        notice.classList.add("hidden");
         document.querySelectorAll(".content-tab").forEach(t => t.classList.add("hidden"));
         return;
       }
@@ -321,9 +328,35 @@ export function getContentViewJs(): string {
       const profileBadge = document.getElementById("content-client-profile-badge");
       const folderBadge = document.getElementById("content-client-folder-badge");
       const sheetBadge = document.getElementById("content-client-sheet-badge");
+      const outputBadge = document.getElementById("content-client-output-badge");
       profileBadge.classList.toggle("hidden", !client?.hasContentProfile);
       folderBadge.classList.toggle("hidden", !client?.hasFulfillmentFolder);
       sheetBadge.classList.toggle("hidden", !client?.hasPlanningSheet);
+      // Output folder badge: green if linked, amber warning if missing
+      if (client?.hasOutputFolder) {
+        outputBadge.classList.remove("hidden");
+        outputBadge.className = "pill pill-green";
+        outputBadge.textContent = "Output Folder";
+      } else {
+        outputBadge.classList.remove("hidden");
+        outputBadge.className = "pill";
+        outputBadge.style.background = "#fef3c7";
+        outputBadge.style.color = "#92400e";
+        outputBadge.style.border = "1px solid #f59e0b";
+        outputBadge.textContent = "No Output Folder";
+      }
+      // Show missing connections notice
+      var missing = [];
+      if (!client?.hasContentProfile) missing.push("Content Profile");
+      if (!client?.hasFulfillmentFolder) missing.push("Fulfillment Folder");
+      if (!client?.hasPlanningSheet) missing.push("Planning Sheet");
+      if (!client?.hasOutputFolder) missing.push("Output Folder");
+      if (missing.length > 0) {
+        notice.classList.remove("hidden");
+        document.getElementById("content-missing-list").textContent = missing.join(", ");
+      } else {
+        notice.classList.add("hidden");
+      }
       switchContentTab("plan");
     }
 
@@ -783,9 +816,9 @@ export function getContentViewJs(): string {
         let html = '<div class="content-settings-form">';
         html += '<div class="form-group"><label>Client Name</label><input type="text" value="' + escapeHtml(config.name || "") + '" disabled /></div>';
         html += '<div class="form-group"><label>Provider</label><input type="text" value="' + escapeHtml(config.provider || "") + '" disabled /></div>';
-        html += '<div class="form-group"><label>Fulfillment Folder ID</label><input type="text" id="settings-fulfillment-folder" value="' + escapeHtml(config.fulfillmentFolderId || "") + '" placeholder="Google Drive folder ID for deliverables" /></div>';
-        html += '<div class="form-group"><label>Planning Sheet ID</label><input type="text" id="settings-planning-sheet" value="' + escapeHtml(config.planningSheetId || "") + '" placeholder="Google Sheets ID for content tracking" /></div>';
-        html += '<div class="form-group"><label>Output Folder ID</label><input type="text" value="' + escapeHtml(config.outputFolder || "") + '" disabled /><small style="color:var(--text-muted);font-size:11px;">Set in client JSON config</small></div>';
+        html += '<div class="form-group"><label>Fulfillment Folder ID</label><input type="text" id="settings-fulfillment-folder" value="' + escapeHtml(config.fulfillmentFolderId || "") + '" placeholder="Google Drive folder ID for deliverables" /><small style="color:var(--text-muted);font-size:11px;">Google Drive folder for client deliverables</small></div>';
+        html += '<div class="form-group"><label>Planning Sheet ID</label><input type="text" id="settings-planning-sheet" value="' + escapeHtml(config.planningSheetId || "") + '" placeholder="Google Sheets ID for content tracking" /><small style="color:var(--text-muted);font-size:11px;">Google Sheet with content tracking tabs</small></div>';
+        html += '<div class="form-group"><label>Output Folder ID</label><input type="text" id="settings-output-folder" value="' + escapeHtml(config.outputFolder || "") + '" placeholder="Google Drive folder ID for generated content output" /><small style="color:var(--text-muted);font-size:11px;">Where generated content (blog posts, pages) gets saved</small></div>';
         html += '<div class="form-group"><label>Content Profile</label>';
         if (config.contentProfile) {
           html += '<div style="font-size:12px;color:var(--text-muted);background:var(--surface-2);padding:10px;border-radius:var(--radius-sm);max-height:200px;overflow:auto;"><pre style="margin:0;white-space:pre-wrap;">' + escapeHtml(JSON.stringify(config.contentProfile, null, 2)) + '</pre></div>';
@@ -856,8 +889,10 @@ export function getContentViewJs(): string {
       if (!data?.headers?.length || !data?.rows?.length) {
         return '<div class="empty-state"><p>' + escapeHtml(emptyMsg) + '</p></div>';
       }
+      var isTracking = sheetCurrentSubTab === "tracking";
       let html = '<div style="overflow-x:auto;"><table class="content-plan-table"><thead><tr>';
       html += '<th style="width:40px;"></th>';
+      if (isTracking) html += '<th style="width:50px;">Actions</th>';
       for (const h of data.headers) {
         html += '<th>' + escapeHtml(h) + '</th>';
       }
@@ -868,6 +903,9 @@ export function getContentViewJs(): string {
         if (isEmpty) continue;
         html += '<tr data-row-id="' + escapeHtml(rowId) + '">';
         html += '<td style="text-align:center;"><button class="btn-icon" onclick="deletePlanningRow(\\x27' + escapeHtml(rowId) + '\\x27)" title="Delete row" style="opacity:0.4;font-size:14px;">&times;</button></td>';
+        if (isTracking) {
+          html += '<td style="text-align:center;"><button class="btn btn-primary btn-sm" onclick="sendToWriter(\\x27' + escapeHtml(rowId) + '\\x27)" title="Send to Content Writer" style="font-size:10px;padding:2px 8px;white-space:nowrap;">Write</button></td>';
+        }
         for (const h of data.headers) {
           const val = row[h] || "";
           const upper = val.toUpperCase();
@@ -992,6 +1030,72 @@ export function getContentViewJs(): string {
       }
     }
 
+    async function sendToWriter(rowId) {
+      // Find the row data from current sheet data
+      if (!sheetCurrentData?.rows) return;
+      var row = sheetCurrentData.rows.find(function(r) { return r._id === rowId; });
+      if (!row) { alert("Row not found"); return; }
+
+      // Build a content brief from the row data
+      var title = row["Title"] || row["Service Topic"] || row["Topic"] || "Untitled";
+      var briefParts = ["Please write the following content piece:\\n"];
+      var headers = sheetCurrentData.headers || [];
+      for (var i = 0; i < headers.length; i++) {
+        var h = headers[i];
+        var val = row[h];
+        if (val && val.trim()) {
+          briefParts.push("**" + h + ":** " + val);
+        }
+      }
+      briefParts.push("\\nPlease write this content following the specifications above. Use proper heading structure, incorporate the keywords naturally, and ensure the content is engaging and SEO-optimized.");
+
+      var brief = briefParts.join("\\n");
+
+      // Find the Content Writer agent
+      try {
+        var agents = await api("/agents");
+        var writer = agents.find(function(a) { return a.name === "Content Writer"; });
+        if (!writer) { alert("Content Writer agent not found. Please create one in the Agents section."); return; }
+
+        // Create a new thread with the Content Writer
+        var thread = await fetch("/api/threads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent_id: writer.id,
+            title: "Write: " + title,
+            client: contentCurrentSlug || undefined
+          })
+        }).then(function(r) {
+          if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || r.statusText); });
+          return r.json();
+        });
+
+        // Store the brief so the chat can pick it up
+        window._pendingWriterBrief = { threadId: thread.id, brief: brief };
+
+        // Navigate to workspace and open this thread
+        switchView("workspace");
+        // Small delay to let workspace init, then open thread with pre-filled brief
+        setTimeout(function() {
+          openThread(thread.id);
+          setTimeout(function() {
+            var input = document.getElementById("chat-input");
+            if (input) {
+              input.value = brief;
+              input.style.height = "auto";
+              input.style.height = Math.min(input.scrollHeight, 150) + "px";
+              input.focus();
+            }
+          }, 300);
+        }, 500);
+
+      } catch (e) {
+        alert("Failed to send to writer: " + (e.message || ""));
+        console.error("sendToWriter error:", e);
+      }
+    }
+
     async function loadPlanningTab(tab) {
       const body = document.getElementById("content-sheet-body");
       body.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
@@ -1009,6 +1113,7 @@ export function getContentViewJs(): string {
       if (!contentCurrentSlug) return;
       const fulfillmentFolder = document.getElementById("settings-fulfillment-folder")?.value?.trim();
       const planningSheet = document.getElementById("settings-planning-sheet")?.value?.trim();
+      const outputFolder = document.getElementById("settings-output-folder")?.value?.trim();
       try {
         await api("/content-management/clients/" + contentCurrentSlug + "/config", {
           method: "PATCH",
@@ -1016,10 +1121,12 @@ export function getContentViewJs(): string {
           body: JSON.stringify({
             fulfillmentFolderId: fulfillmentFolder || undefined,
             planningSheetId: planningSheet || undefined,
+            outputFolder: outputFolder || undefined,
           })
         });
         alert("Settings saved!");
-        loadContentClients(); // Refresh badges
+        loadContentClients(); // Refresh badges and notices
+        onContentClientChange(contentCurrentSlug); // Refresh connection status
       } catch (e) {
         alert("Error saving: " + (e.message || "Unknown error"));
       }

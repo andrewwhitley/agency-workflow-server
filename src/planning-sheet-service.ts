@@ -15,6 +15,7 @@ const TAB_ALIASES: Record<string, string> = {
   tracking: "New Content Tracking",
   sitemap: "Topical Sitemap",
   deliverables: "Deliverables",
+  completed: "Completed Articles",
 };
 
 export function resolveTabName(tab: string): string {
