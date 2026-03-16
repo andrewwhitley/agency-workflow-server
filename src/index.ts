@@ -21,7 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { WorkflowEngine } from "./workflow-engine.js";
-import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp, bridgeContentFactoryToMcp } from "./mcp-bridge.js";
+import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp, bridgeContentFactoryToMcp, bridgeKeywordResearchToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
 import { getDashboardHtml, getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
 import { GoogleAuthService } from "./google-auth.js";
@@ -38,6 +38,7 @@ import { agentService } from "./agent-service.js";
 import { threadService } from "./thread-service.js";
 import { createScheduledJobSchema, updateScheduledJobSchema } from "./validation.js";
 import { apiRouter } from "./api-routes.js";
+import { DataForSEOService } from "./dataforseo.js";
 import { redactionMiddleware } from "./redaction.js";
 import {
   getOAuth2Client,
@@ -100,6 +101,9 @@ async function main(): Promise<void> {
   const clientAgent = new ClientAgent(indexer);
 
   console.log(`✓ Knowledge base loaded: ${indexer.getAll().length} documents, ${indexer.getClients().length} clients`);
+
+  // ─── 2b. DataForSEO ──────────────────────────────────
+  const seoService = new DataForSEOService();
 
   // ─── 3. Express App ────────────────────────────────
   const app = express();
@@ -479,7 +483,7 @@ async function main(): Promise<void> {
   if (process.env.DATABASE_URL) {
     // Higher body limit for file/image uploads in chat
     app.use("/api/threads", express.json({ limit: "25mb" }));
-    app.use("/api", apiRouter(engine, knowledgeBase, authService));
+    app.use("/api", apiRouter(engine, knowledgeBase, authService, seoService));
   }
 
   // ─── 13. Dashboard Summary (single endpoint) ──────
@@ -538,6 +542,7 @@ async function main(): Promise<void> {
         discord: { status: discordConnected ? "ok" : "down", label: "Discord" },
         oracle: { status: oracleConfigured && driveConnected ? "ok" : "down", label: "Oracle Folder" },
         mcp: { status: "ok", label: "MCP Endpoint" },
+        dataforseo: { status: seoService.isAuthenticated() ? "ok" : "down", label: "DataForSEO" },
       },
       stats: {
         workflows: engine.list().length,
@@ -585,6 +590,7 @@ async function main(): Promise<void> {
     bridgeTasksToMcp(server);
     bridgeMemoriesToMcp(server);
     bridgeContentFactoryToMcp(server, authService);
+    bridgeKeywordResearchToMcp(server, seoService);
     return server;
   }
 
@@ -846,7 +852,7 @@ async function main(): Promise<void> {
     console.log(`  MCP Auth:    ${isMcpOAuthConfigured() ? "OAuth 2.1 enabled" : process.env.MCP_API_KEY ? "API key only" : "Open access"}`);
     console.log(`  Database:    ${process.env.DATABASE_URL ? "Connected" : "Not configured"}`);
     console.log(`  Oracle:      ${process.env.ORACLE_FOLDER_ID ? "Configured" : "Not configured (set ORACLE_FOLDER_ID)"}`);
-
+    console.log(`  DataForSEO:  ${seoService.isAuthenticated() ? "Connected (" + seoService.getLogin() + ")" : "Not configured (set DATAFORSEO_LOGIN + DATAFORSEO_PASSWORD)"}`);
 
     // Start Discord bot (logs its own status line)
     await discordBot.start();

@@ -36,6 +36,14 @@ export interface ContentCalendarItem {
   secondaryKeywords: string[];
   seasonalRelevance?: string;
   internalLinkTargets: string[];
+  seoMetrics?: {
+    primaryKeywordVolume?: number;
+    primaryKeywordDifficulty?: number;
+    primaryKeywordCpc?: number;
+    primaryKeywordCompetition?: string;
+    secondaryKeywordVolumes?: Record<string, number>;
+    enrichedAt?: string;
+  };
 }
 
 export interface ContentStrategy {

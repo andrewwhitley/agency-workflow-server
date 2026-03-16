@@ -10,7 +10,7 @@ import { WorkflowEngine, InputType, InputDef } from "./workflow-engine.js";
 import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
-import { inputTypeToZod, contentProfileSchema, contentFactoryInputSchema, contentPlannerInputSchema } from "./validation.js";
+import { inputTypeToZod, contentProfileSchema, contentFactoryInputSchema, contentPlannerInputSchema, keywordEnrichSchema, keywordSuggestSchema } from "./validation.js";
 import { threadService } from "./thread-service.js";
 import { taskService } from "./task-service.js";
 import { memoryService } from "./memory-service.js";
@@ -19,6 +19,7 @@ import { generateContentStrategy, strategyToCSV, type ContentPlannerInput } from
 import { loadClientConfig } from "./workbook-service.js";
 import { GoogleDriveService } from "./google-drive.js";
 import type { GoogleAuthService } from "./google-auth.js";
+import type { DataForSEOService } from "./dataforseo.js";
 
 function buildZodShape(inputs: Record<string, InputType | InputDef> | undefined): ZodRawShape {
   const shape: ZodRawShape = {};
@@ -605,6 +606,61 @@ export function bridgeContentFactoryToMcp(server: McpServer, authService?: Googl
         const output = format === "csv" ? strategyToCSV(strategy) : JSON.stringify(strategy, null, 2);
         return {
           content: [{ type: "text" as const, text: output }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Keyword Research MCP Bridge
+// ═══════════════════════════════════════════════════════════════
+
+export function bridgeKeywordResearchToMcp(server: McpServer, seoService?: DataForSEOService): void {
+  if (!seoService?.isAuthenticated()) return;
+
+  server.tool(
+    "keyword_research",
+    "Look up real search volume, CPC, competition, and difficulty for a list of keywords using DataForSEO / Google Ads data. Use this to validate keyword choices in content calendars.",
+    {
+      keywords: z.array(z.string()).min(1).max(700).describe("Keywords to look up (max 700)"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = United States)"),
+    },
+    async ({ keywords, location_code }) => {
+      try {
+        const metrics = await seoService.getKeywordMetrics(keywords, location_code);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ keywords: metrics, count: metrics.length }, null, 2) }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "keyword_suggestions",
+    "Get keyword suggestions from a seed keyword using DataForSEO Labs. Returns related keywords with search volume, CPC, competition, and difficulty scores.",
+    {
+      seed: z.string().min(1).describe("Seed keyword to get suggestions for"),
+      location_code: z.number().optional().describe("Location code (default: 2840 = United States)"),
+      limit: z.number().optional().describe("Max results to return (default: 50, max: 200)"),
+    },
+    async ({ seed, location_code, limit }) => {
+      try {
+        const suggestions = await seoService.getKeywordSuggestions(seed, location_code, limit);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ keywords: suggestions, count: suggestions.length }, null, 2) }],
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
