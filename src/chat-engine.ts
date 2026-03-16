@@ -29,7 +29,7 @@ interface ChatEvent {
 
 // ── Tool definitions for agentic capabilities ─────────
 
-function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveService?: GoogleDriveService): Anthropic.Tool[] {
+function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveService?: GoogleDriveService, clientSlug?: string): Anthropic.Tool[] {
   const tools: Anthropic.Tool[] = [
     {
       name: "search_knowledge",
@@ -210,6 +210,22 @@ function buildTools(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, driveS
     );
   }
 
+  // Client folder tool — available when Drive is configured AND thread has a client with a fulfillment folder
+  if (driveService && clientSlug) {
+    tools.push({
+      name: "save_to_client_folder",
+      description: "Save a Google Doc to the current client's fulfillment folder. ALWAYS use this tool when writing content (blog posts, articles, web pages) for a client — it ensures the document is saved to the correct client folder in Google Drive. The document will be created as a formatted Google Doc.",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string", description: "Document title" },
+          content: { type: "string", description: "Full document content (plain text with markdown-style headings)" },
+        },
+        required: ["title", "content"],
+      },
+    });
+  }
+
   // Web search tool — available when Tavily is configured
   if (process.env.TAVILY_API_KEY) {
     tools.push({
@@ -370,7 +386,8 @@ async function executeToolCall(
   toolInput: Record<string, unknown>,
   engine: WorkflowEngine,
   knowledgeBase: KnowledgeBase,
-  driveService?: GoogleDriveService
+  driveService?: GoogleDriveService,
+  clientSlug?: string
 ): Promise<string> {
   if (toolName === "search_knowledge") {
     const results = knowledgeBase.search(
@@ -515,6 +532,42 @@ async function executeToolCall(
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Drive tool "${toolName}" error:`, message);
       return JSON.stringify({ error: `Google Drive error: ${message}` });
+    }
+  }
+
+  // Save to client folder
+  if (toolName === "save_to_client_folder" && driveService && clientSlug) {
+    try {
+      const config = await loadClientConfig(clientSlug);
+      if (!config) {
+        return JSON.stringify({ error: `Client config not found for "${clientSlug}"` });
+      }
+      const folderId = config.fulfillmentFolderId;
+      if (!folderId) {
+        // Fall back to Oracle folder if no client folder configured
+        const fallback = process.env.ORACLE_FOLDER_ID;
+        if (!fallback) {
+          return JSON.stringify({ error: `No fulfillment folder configured for "${clientSlug}" and no fallback folder available` });
+        }
+        console.log(`[chat] No fulfillmentFolderId for ${clientSlug}, falling back to Oracle folder`);
+        const result = await driveService.createGoogleDoc(
+          toolInput.title as string,
+          fallback,
+          toolInput.content as string
+        );
+        return JSON.stringify({ success: true, ...result, note: "Saved to Oracle folder (no client folder configured)" });
+      }
+      const result = await driveService.createGoogleDoc(
+        toolInput.title as string,
+        folderId,
+        toolInput.content as string
+      );
+      console.log(`[chat] Saved doc "${toolInput.title}" to ${clientSlug} fulfillment folder`);
+      return JSON.stringify({ success: true, ...result, client: clientSlug, folder: folderId });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`save_to_client_folder error:`, message);
+      return JSON.stringify({ error: `Failed to save to client folder: ${message}` });
     }
   }
 
@@ -861,8 +914,8 @@ export async function* streamChat(
     }
   }
 
-  // Build tools
-  const tools = buildTools(engine, knowledgeBase, driveService);
+  // Build tools (pass client slug for client-folder-aware tools)
+  const tools = buildTools(engine, knowledgeBase, driveService, thread.client || undefined);
 
   // Stream response with tool use loop
   let fullResponse = "";
@@ -954,7 +1007,8 @@ export async function* streamChat(
           toolBlock.input,
           engine,
           knowledgeBase,
-          driveService
+          driveService,
+          thread.client || undefined
         );
         toolResults.push({
           type: "tool_result",
