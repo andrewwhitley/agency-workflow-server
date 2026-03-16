@@ -34,24 +34,26 @@ export function getDashboardHtml(user?: SessionUser): string {
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --surface-2: #1a1a26;
-      --surface-3: #22222e;
-      --border: #2a2a3a;
-      --border-accent: #3d3d55;
-      --text: #e8e8f0;
-      --text-muted: #8888a0;
-      --text-dim: #555570;
-      --accent: #6366f1;
-      --accent-glow: #818cf833;
-      --green: #34d399;
-      --green-dim: #34d39922;
-      --red: #f87171;
-      --red-dim: #f8717122;
-      --amber: #fbbf24;
-      --amber-dim: #fbbf2422;
-      --blue: #60a5fa;
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --surface-2: #eef1f6;
+      --surface-3: #e4e8ef;
+      --border: #d1d5de;
+      --border-accent: #b0b8c9;
+      --text: #1a1f2e;
+      --text-muted: #5a6478;
+      --text-dim: #8892a4;
+      --accent: #3964b2;
+      --accent-glow: #3964b233;
+      --primary: #3964b2;
+      --secondary: #3fd4e8;
+      --green: #0d9668;
+      --green-dim: #0d966822;
+      --red: #dc2626;
+      --red-dim: #dc262622;
+      --amber: #d97706;
+      --amber-dim: #d9770622;
+      --blue: #3fd4e8;
       --radius: 12px;
       --radius-sm: 8px;
     }
@@ -140,7 +142,7 @@ export function getDashboardHtml(user?: SessionUser): string {
     .logo-icon {
       width: 36px;
       height: 36px;
-      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      background: linear-gradient(135deg, var(--accent), var(--secondary));
       border-radius: 10px;
       display: flex;
       align-items: center;
@@ -369,7 +371,7 @@ export function getDashboardHtml(user?: SessionUser): string {
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      background: linear-gradient(90deg, var(--accent), var(--secondary));
       opacity: 0;
       transition: opacity 0.2s;
     }
@@ -2779,13 +2781,13 @@ export function getLoginPageHtml(): string {
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --border: #2a2a3a;
-      --text: #e8e8f0;
-      --text-muted: #8888a0;
-      --text-dim: #555570;
-      --accent: #6366f1;
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --border: #d1d5de;
+      --text: #1a1f2e;
+      --text-muted: #5a6478;
+      --text-dim: #8892a4;
+      --accent: #3964b2;
       --radius: 12px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2809,7 +2811,7 @@ export function getLoginPageHtml(): string {
     }
     .logo-icon {
       width: 56px; height: 56px;
-      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      background: linear-gradient(135deg, var(--accent), var(--secondary));
       border-radius: 14px;
       display: inline-flex;
       align-items: center; justify-content: center;
@@ -2862,14 +2864,14 @@ export function getAccessDeniedHtml(email: string): string {
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --border: #2a2a3a;
-      --text: #e8e8f0;
-      --text-muted: #8888a0;
-      --text-dim: #555570;
-      --red: #f87171;
-      --red-dim: #f8717122;
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --border: #d1d5de;
+      --text: #1a1f2e;
+      --text-muted: #5a6478;
+      --text-dim: #8892a4;
+      --red: #dc2626;
+      --red-dim: #dc262622;
       --radius: 12px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }

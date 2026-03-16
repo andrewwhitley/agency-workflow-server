@@ -196,15 +196,15 @@ export function getContentViewCss(): string {
       font-weight: 500;
       text-transform: uppercase;
     }
-    .type-badge.core { background: rgba(99,102,241,0.15); color: #818cf8; }
-    .type-badge.service { background: rgba(16,185,129,0.15); color: #34d399; }
-    .type-badge.area { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .type-badge.core { background: rgba(57,100,178,0.12); color: #3964b2; }
+    .type-badge.service { background: rgba(16,185,129,0.15); color: #0d9668; }
+    .type-badge.area { background: rgba(245,158,11,0.15); color: #d97706; }
     .type-badge.support { background: rgba(107,114,128,0.15); color: #9ca3af; }
     .type-badge.blog { background: rgba(236,72,153,0.15); color: #f472b6; }
-    .pill-purple { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .pill-purple { background: rgba(168,85,247,0.15); color: #7c3aed; }
 
-    .sheet-status-done { color: #34d399; }
-    .sheet-status-pending { color: #fbbf24; }
+    .sheet-status-done { color: #0d9668; }
+    .sheet-status-pending { color: #d97706; }
 
     .qa-grade {
       display: inline-block;
@@ -213,10 +213,10 @@ export function getContentViewCss(): string {
       font-size: 11px;
       font-weight: 600;
     }
-    .qa-grade.A { background: rgba(16,185,129,0.2); color: #34d399; }
-    .qa-grade.B { background: rgba(99,102,241,0.2); color: #818cf8; }
-    .qa-grade.C { background: rgba(245,158,11,0.2); color: #fbbf24; }
-    .qa-grade.D, .qa-grade.F { background: rgba(239,68,68,0.2); color: #f87171; }
+    .qa-grade.A { background: rgba(16,185,129,0.2); color: #0d9668; }
+    .qa-grade.B { background: rgba(57,100,178,0.15); color: #3964b2; }
+    .qa-grade.C { background: rgba(245,158,11,0.2); color: #d97706; }
+    .qa-grade.D, .qa-grade.F { background: rgba(239,68,68,0.2); color: #dc2626; }
 
     .content-progress-bar-container {
       height: 6px;
@@ -254,12 +254,12 @@ export function getContentViewCss(): string {
       border-bottom: 1px solid var(--border);
     }
 
-    .seo-vol-high { color: #34d399; font-weight: 600; }
-    .seo-vol-med { color: #fbbf24; font-weight: 600; }
+    .seo-vol-high { color: #0d9668; font-weight: 600; }
+    .seo-vol-med { color: #d97706; font-weight: 600; }
     .seo-vol-low { color: #6b7280; }
-    .seo-diff-easy { color: #34d399; font-weight: 600; }
-    .seo-diff-med { color: #fbbf24; font-weight: 600; }
-    .seo-diff-hard { color: #f87171; font-weight: 600; }
+    .seo-diff-easy { color: #0d9668; font-weight: 600; }
+    .seo-diff-med { color: #d97706; font-weight: 600; }
+    .seo-diff-hard { color: #dc2626; font-weight: 600; }
 
     .content-settings-form {
       max-width: 500px;
@@ -753,7 +753,7 @@ export function getContentViewJs(): string {
         let html = '<table class="content-plan-table"><thead><tr><th>Date</th><th>Client</th><th>Pages</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
         for (const run of runs) {
           const date = run.startedAt ? new Date(run.startedAt).toLocaleString() : "—";
-          const statusClass = run.status === "completed" ? "color:#34d399" : run.status === "failed" ? "color:#f87171" : "color:#fbbf24";
+          const statusClass = run.status === "completed" ? "color:#0d9668" : run.status === "failed" ? "color:#dc2626" : "color:#d97706";
           html += '<tr>';
           html += '<td style="font-size:12px;">' + escapeHtml(date) + '</td>';
           html += '<td>' + escapeHtml(run.clientName || "—") + '</td>';
@@ -873,7 +873,7 @@ export function getContentViewJs(): string {
           const upper = val.toUpperCase();
           if (upper === "TRUE" || upper === "FALSE") {
             html += '<td style="text-align:center;cursor:pointer;" onclick="toggleBoolCell(this, \\x27' + escapeHtml(rowId) + '\\x27, \\x27' + escapeHtml(h) + '\\x27, \\x27' + upper + '\\x27)">';
-            html += (upper === "TRUE" ? '<span style="color:#34d399;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>');
+            html += (upper === "TRUE" ? '<span style="color:#0d9668;">&#10003;</span>' : '<span style="color:#6b7280;">—</span>');
             html += '</td>';
           } else if (val.length > 120) {
             html += '<td style="font-size:12px;max-width:300px;"><details><summary style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">' + escapeHtml(val.slice(0, 80)) + '…</summary><div contenteditable="true" class="editable-cell" data-row-id="' + escapeHtml(rowId) + '" data-col="' + escapeHtml(h) + '" style="white-space:pre-wrap;margin-top:6px;">' + escapeHtml(val) + '</div></details></td>';
