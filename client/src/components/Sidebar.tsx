@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Workflow, Clock, Bot, CheckSquare, Brain,
   HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
   Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
+  Globe, TrendingUp, Radar, FileSearch, Search, Lightbulb,
 } from "lucide-react";
 
 interface User {
@@ -22,11 +23,22 @@ const navSections = [
     ],
   },
   {
-    label: "AI & Content",
+    label: "SEO",
     items: [
-      { to: "/agents", label: "AI Agents", icon: Bot },
-      { to: "/content", label: "Content", icon: PenTool },
+      { to: "/seo", label: "SEO Dashboard", icon: Globe },
+      { to: "/seo/keywords", label: "Keyword Tracker", icon: TrendingUp },
+      { to: "/seo/gaps", label: "Content Gaps", icon: Radar },
+      { to: "/seo/audit", label: "Technical Audit", icon: FileSearch },
+      { to: "/seo/serp", label: "SERP Analysis", icon: Search },
+      { to: "/seo/research", label: "Keyword Research", icon: Lightbulb },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { to: "/content", label: "Content Manager", icon: PenTool },
       { to: "/workbooks", label: "Workbooks", icon: BookOpen },
+      { to: "/agents", label: "AI Agents", icon: Bot },
     ],
   },
   {

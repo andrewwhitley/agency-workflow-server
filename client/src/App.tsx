@@ -18,6 +18,12 @@ import { IssuesPage } from "./pages/eos/IssuesPage";
 import { MeetingsPage } from "./pages/eos/MeetingsPage";
 import { PeoplePage } from "./pages/eos/PeoplePage";
 import { HeadlinesPage } from "./pages/eos/HeadlinesPage";
+import { SeoDashboardPage } from "./pages/seo/SeoDashboardPage";
+import { KeywordTrackerPage } from "./pages/seo/KeywordTrackerPage";
+import { ContentGapsPage } from "./pages/seo/ContentGapsPage";
+import { TechnicalAuditPage } from "./pages/seo/TechnicalAuditPage";
+import { SerpAnalysisPage } from "./pages/seo/SerpAnalysisPage";
+import { KeywordResearchPage } from "./pages/seo/KeywordResearchPage";
 
 export default function App() {
   return (
@@ -36,6 +42,12 @@ export default function App() {
         <Route path="/content" element={<ContentPage />} />
         <Route path="/workbooks" element={<WorkbooksPage />} />
         <Route path="/discord" element={<DiscordLogsPage />} />
+        <Route path="/seo" element={<SeoDashboardPage />} />
+        <Route path="/seo/keywords" element={<KeywordTrackerPage />} />
+        <Route path="/seo/gaps" element={<ContentGapsPage />} />
+        <Route path="/seo/audit" element={<TechnicalAuditPage />} />
+        <Route path="/seo/serp" element={<SerpAnalysisPage />} />
+        <Route path="/seo/research" element={<KeywordResearchPage />} />
         <Route path="/eos/rocks" element={<RocksPage />} />
         <Route path="/eos/scorecard" element={<ScorecardPage />} />
         <Route path="/eos/issues" element={<IssuesPage />} />

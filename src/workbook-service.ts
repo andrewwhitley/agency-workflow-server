@@ -38,6 +38,7 @@ export interface ClientConfig {
   fulfillmentFolderId?: string;
   planningSheetId?: string;
   contentProfile?: import("./content-factory.js").ContentProfile;
+  domain?: string;
 }
 
 export interface WorkbookResult {

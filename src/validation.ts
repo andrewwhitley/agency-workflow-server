@@ -231,6 +231,22 @@ export const businessSearchSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 });
 
+// ── SEO Tracking ─────────────────────────────────────────────
+
+export const createTrackedKeywordSchema = z.object({
+  keywords: z.array(z.string().min(1).max(500)).min(1).max(50),
+  locationCode: z.number().int().optional(),
+  targetUrl: z.string().max(2000).optional(),
+  tags: z.array(z.string().max(50)).max(10).optional(),
+});
+
+export const contentGapSchema = z.object({
+  domain: z.string().min(1).max(500),
+  competitorDomains: z.array(z.string().max(500)).min(1).max(5),
+  locationCode: z.number().int().optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
 // ── Planning rows ─────────────────────────────────────────────
 
 export const updatePlanningRowSchema = z.object({

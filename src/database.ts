@@ -582,6 +582,84 @@ Before saving, verify:
       WHERE name = 'Content Writer';
     `,
   },
+  {
+    id: "020_tracked_keywords",
+    sql: `
+      CREATE TABLE IF NOT EXISTS tracked_keywords (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_slug VARCHAR(200) NOT NULL,
+        keyword VARCHAR(500) NOT NULL,
+        location_code INT NOT NULL DEFAULT 2840,
+        target_url VARCHAR(2000),
+        tags TEXT[] DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(client_slug, keyword, location_code)
+      );
+    `,
+  },
+  {
+    id: "021_keyword_rankings",
+    sql: `
+      CREATE TABLE IF NOT EXISTS keyword_rankings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tracked_keyword_id UUID NOT NULL REFERENCES tracked_keywords(id) ON DELETE CASCADE,
+        client_slug VARCHAR(200) NOT NULL,
+        keyword VARCHAR(500) NOT NULL,
+        position INT,
+        url VARCHAR(2000),
+        search_volume INT,
+        cpc NUMERIC(8,2),
+        competition NUMERIC(5,4),
+        difficulty INT,
+        checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_keyword_rankings_keyword ON keyword_rankings(tracked_keyword_id, checked_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_keyword_rankings_client ON keyword_rankings(client_slug, checked_at DESC);
+    `,
+  },
+  {
+    id: "022_domain_snapshots",
+    sql: `
+      CREATE TABLE IF NOT EXISTS domain_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_slug VARCHAR(200) NOT NULL,
+        domain VARCHAR(500) NOT NULL,
+        organic_traffic INT,
+        organic_keywords INT,
+        rank INT,
+        backlinks INT,
+        referring_domains INT,
+        metrics JSONB DEFAULT '{}',
+        snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(client_slug, snapshot_date)
+      );
+    `,
+  },
+  {
+    id: "023_seo_audits",
+    sql: `
+      CREATE TABLE IF NOT EXISTS seo_audits (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_slug VARCHAR(200) NOT NULL,
+        url VARCHAR(2000) NOT NULL,
+        status_code INT,
+        onpage_score NUMERIC(5,2),
+        title VARCHAR(500),
+        description TEXT,
+        h1 TEXT[] DEFAULT '{}',
+        load_time NUMERIC(8,3),
+        size INT,
+        checks JSONB DEFAULT '{}',
+        broken_links INT DEFAULT 0,
+        broken_resources INT DEFAULT 0,
+        duplicate_title BOOLEAN DEFAULT FALSE,
+        duplicate_description BOOLEAN DEFAULT FALSE,
+        audited_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_seo_audits_client ON seo_audits(client_slug, audited_at DESC);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

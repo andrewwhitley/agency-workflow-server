@@ -29,6 +29,8 @@ import {
   onPageQuerySchema,
   contentSearchSchema,
   businessSearchSchema,
+  createTrackedKeywordSchema,
+  contentGapSchema,
 } from "./validation.js";
 import type { WorkflowEngine } from "./workflow-engine.js";
 import type { KnowledgeBase } from "./knowledge-base.js";
@@ -1137,6 +1139,246 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("Business data error:", err);
       res.status(500).json({ error: message });
+    }
+  });
+
+  // ── SEO Tracking ──────────────────────────────────────────
+
+  // List tracked keywords for a client
+  router.get("/seo/clients/:slug/keywords", async (req, res) => {
+    try {
+      const { rows } = await query(
+        `SELECT tk.*,
+          (SELECT kr.position FROM keyword_rankings kr WHERE kr.tracked_keyword_id = tk.id ORDER BY kr.checked_at DESC LIMIT 1) as current_position,
+          (SELECT kr.search_volume FROM keyword_rankings kr WHERE kr.tracked_keyword_id = tk.id ORDER BY kr.checked_at DESC LIMIT 1) as search_volume,
+          (SELECT kr.url FROM keyword_rankings kr WHERE kr.tracked_keyword_id = tk.id ORDER BY kr.checked_at DESC LIMIT 1) as ranking_url,
+          (SELECT kr.checked_at FROM keyword_rankings kr WHERE kr.tracked_keyword_id = tk.id ORDER BY kr.checked_at DESC LIMIT 1) as last_checked,
+          (SELECT kr.position FROM keyword_rankings kr WHERE kr.tracked_keyword_id = tk.id ORDER BY kr.checked_at DESC LIMIT 1 OFFSET 1) as previous_position
+        FROM tracked_keywords tk WHERE tk.client_slug = $1 ORDER BY tk.created_at`,
+        [req.params.slug]
+      );
+      res.json(rows);
+    } catch (err) {
+      console.error("List tracked keywords error:", err);
+      res.status(500).json({ error: "Failed to list tracked keywords" });
+    }
+  });
+
+  // Add tracked keywords (bulk)
+  router.post("/seo/clients/:slug/keywords", async (req, res) => {
+    const parsed = createTrackedKeywordSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const results = [];
+      for (const keyword of parsed.data.keywords) {
+        const { rows } = await query(
+          `INSERT INTO tracked_keywords (client_slug, keyword, location_code, target_url, tags)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (client_slug, keyword, location_code) DO NOTHING
+           RETURNING *`,
+          [req.params.slug, keyword, parsed.data.locationCode || 2840, parsed.data.targetUrl || null, parsed.data.tags || []]
+        );
+        if (rows[0]) results.push(rows[0]);
+      }
+      res.json({ added: results.length, keywords: results });
+    } catch (err) {
+      console.error("Add tracked keyword error:", err);
+      res.status(500).json({ error: "Failed to add tracked keywords" });
+    }
+  });
+
+  // Delete tracked keyword
+  router.delete("/seo/clients/:slug/keywords/:id", async (req, res) => {
+    try {
+      await query("DELETE FROM tracked_keywords WHERE id = $1 AND client_slug = $2", [req.params.id, req.params.slug]);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete tracked keyword error:", err);
+      res.status(500).json({ error: "Failed to delete tracked keyword" });
+    }
+  });
+
+  // Trigger ranking check for all tracked keywords of a client
+  router.post("/seo/clients/:slug/keywords/check", async (req, res) => {
+    if (!seoService?.isAuthenticated()) { res.status(503).json({ error: "DataForSEO not configured" }); return; }
+    try {
+      const config = loadClientConfig(req.params.slug);
+      const domain = config?.domain || (req.body as { domain?: string })?.domain;
+      if (!domain) { res.status(400).json({ error: "Client has no domain configured" }); return; }
+
+      const { rows: keywords } = await query(
+        "SELECT * FROM tracked_keywords WHERE client_slug = $1", [req.params.slug]
+      );
+      if (keywords.length === 0) { res.json({ checked: 0, results: [] }); return; }
+
+      // Get metrics for all keywords in one batch
+      const keywordStrings = keywords.map((k: { keyword: string }) => k.keyword);
+      const metrics = await seoService.getKeywordMetrics(keywordStrings, keywords[0].location_code);
+
+      // Get SERP results to find actual positions for the domain
+      const results = [];
+      for (const kw of keywords) {
+        try {
+          const serp = await seoService.getSerpResults(kw.keyword, kw.location_code, 30);
+          const match = serp.items?.find((item: { url?: string }) => item.url?.includes(domain));
+          const kwMetrics = metrics.find((m: { keyword: string }) => m.keyword.toLowerCase() === kw.keyword.toLowerCase());
+
+          const ranking = {
+            tracked_keyword_id: kw.id,
+            client_slug: req.params.slug,
+            keyword: kw.keyword,
+            position: match?.position || null,
+            url: match?.url || null,
+            search_volume: kwMetrics?.searchVolume || null,
+            cpc: kwMetrics?.cpc || null,
+            competition: kwMetrics?.competition || null,
+            difficulty: kwMetrics?.keywordDifficulty || null,
+          };
+
+          await query(
+            `INSERT INTO keyword_rankings (tracked_keyword_id, client_slug, keyword, position, url, search_volume, cpc, competition, difficulty)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [ranking.tracked_keyword_id, ranking.client_slug, ranking.keyword, ranking.position, ranking.url, ranking.search_volume, ranking.cpc, ranking.competition, ranking.difficulty]
+          );
+          results.push(ranking);
+        } catch (err) {
+          console.error(`SERP check failed for "${kw.keyword}":`, err);
+          results.push({ keyword: kw.keyword, error: "SERP check failed" });
+        }
+      }
+      res.json({ checked: results.length, results });
+    } catch (err) {
+      console.error("Keyword check error:", err);
+      res.status(500).json({ error: "Failed to check keywords" });
+    }
+  });
+
+  // Get ranking history for a tracked keyword
+  router.get("/seo/clients/:slug/keywords/:id/history", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 52, 200);
+      const { rows } = await query(
+        "SELECT * FROM keyword_rankings WHERE tracked_keyword_id = $1 ORDER BY checked_at DESC LIMIT $2",
+        [req.params.id, limit]
+      );
+      res.json(rows);
+    } catch (err) {
+      console.error("Keyword history error:", err);
+      res.status(500).json({ error: "Failed to get keyword history" });
+    }
+  });
+
+  // Get domain snapshot history
+  router.get("/seo/clients/:slug/domain/history", async (req, res) => {
+    try {
+      const { rows } = await query(
+        "SELECT * FROM domain_snapshots WHERE client_slug = $1 ORDER BY snapshot_date DESC LIMIT 24",
+        [req.params.slug]
+      );
+      res.json(rows);
+    } catch (err) {
+      console.error("Domain history error:", err);
+      res.status(500).json({ error: "Failed to get domain history" });
+    }
+  });
+
+  // Trigger domain overview snapshot
+  router.post("/seo/clients/:slug/domain/snapshot", async (req, res) => {
+    if (!seoService?.isAuthenticated()) { res.status(503).json({ error: "DataForSEO not configured" }); return; }
+    try {
+      const config = loadClientConfig(req.params.slug);
+      const domain = config?.domain || (req.body as { domain?: string })?.domain;
+      if (!domain) { res.status(400).json({ error: "Client has no domain configured" }); return; }
+
+      const overview = await seoService.getDomainOverview(domain);
+      await query(
+        `INSERT INTO domain_snapshots (client_slug, domain, organic_traffic, organic_keywords, rank, backlinks, referring_domains, metrics)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (client_slug, snapshot_date) DO UPDATE SET
+           organic_traffic = EXCLUDED.organic_traffic, organic_keywords = EXCLUDED.organic_keywords,
+           rank = EXCLUDED.rank, backlinks = EXCLUDED.backlinks, referring_domains = EXCLUDED.referring_domains,
+           metrics = EXCLUDED.metrics`,
+        [req.params.slug, domain, overview.organicTraffic, overview.organicKeywords, overview.rank, overview.backlinks, overview.referringDomains, JSON.stringify(overview)]
+      );
+      res.json({ success: true, snapshot: overview });
+    } catch (err) {
+      console.error("Domain snapshot error:", err);
+      res.status(500).json({ error: "Failed to take domain snapshot" });
+    }
+  });
+
+  // Content gap analysis
+  router.post("/seo/content-gaps", async (req, res) => {
+    if (!seoService?.isAuthenticated()) { res.status(503).json({ error: "DataForSEO not configured" }); return; }
+    const parsed = contentGapSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+    try {
+      const limit = parsed.data.limit || 100;
+      // Get client's keywords
+      const clientKws = await seoService.getDomainRankedKeywords(parsed.data.domain, parsed.data.locationCode, 200);
+      const clientKeywordSet = new Set(clientKws.map((k: { keyword: string }) => k.keyword.toLowerCase()));
+
+      // Get competitor keywords and find gaps
+      const gaps: Record<string, { keyword: string; searchVolume: number; difficulty: number; cpc: number; competitors: string[] }> = {};
+      for (const compDomain of parsed.data.competitorDomains) {
+        const compKws = await seoService.getDomainRankedKeywords(compDomain, parsed.data.locationCode, 200);
+        for (const kw of compKws) {
+          const lower = kw.keyword.toLowerCase();
+          if (!clientKeywordSet.has(lower)) {
+            if (!gaps[lower]) {
+              gaps[lower] = { keyword: kw.keyword, searchVolume: kw.searchVolume || 0, difficulty: kw.difficulty || 0, cpc: kw.cpc || 0, competitors: [] };
+            }
+            gaps[lower].competitors.push(compDomain);
+          }
+        }
+      }
+
+      // Sort by volume/difficulty ratio (higher = better opportunity)
+      const sorted = Object.values(gaps)
+        .sort((a, b) => {
+          const scoreA = a.searchVolume / Math.max(a.difficulty, 1);
+          const scoreB = b.searchVolume / Math.max(b.difficulty, 1);
+          return scoreB - scoreA;
+        })
+        .slice(0, limit);
+
+      res.json({ gaps: sorted, totalGaps: Object.keys(gaps).length, clientKeywords: clientKws.length });
+    } catch (err) {
+      console.error("Content gap error:", err);
+      res.status(500).json({ error: "Failed to analyze content gaps" });
+    }
+  });
+
+  // Run on-page audit and save
+  router.post("/seo/clients/:slug/audit", async (req, res) => {
+    if (!seoService?.isAuthenticated()) { res.status(503).json({ error: "DataForSEO not configured" }); return; }
+    const { url } = req.body as { url?: string };
+    if (!url) { res.status(400).json({ error: "url is required" }); return; }
+    try {
+      const result = await seoService.analyzePageInstant(url);
+      await query(
+        `INSERT INTO seo_audits (client_slug, url, status_code, onpage_score, title, description, h1, load_time, size, checks, broken_links, broken_resources, duplicate_title, duplicate_description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [req.params.slug, url, result.statusCode, result.onpageScore, result.title, result.description, result.h1 || [], result.loadTime, result.size, JSON.stringify(result.checks || {}), result.brokenLinks || 0, result.brokenResources || 0, result.duplicateTitle || false, result.duplicateDescription || false]
+      );
+      res.json(result);
+    } catch (err) {
+      console.error("On-page audit error:", err);
+      res.status(500).json({ error: "Failed to run audit" });
+    }
+  });
+
+  // List audit history for a client
+  router.get("/seo/clients/:slug/audits", async (req, res) => {
+    try {
+      const { rows } = await query(
+        "SELECT * FROM seo_audits WHERE client_slug = $1 ORDER BY audited_at DESC LIMIT 50",
+        [req.params.slug]
+      );
+      res.json(rows);
+    } catch (err) {
+      console.error("List audits error:", err);
+      res.status(500).json({ error: "Failed to list audits" });
     }
   });
 
