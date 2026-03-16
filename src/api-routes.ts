@@ -744,6 +744,7 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
         outputFolder: config?.outputFolder || null,
         fulfillmentFolderId: config?.fulfillmentFolderId || null,
         planningSheetId: config?.planningSheetId || null,
+        domain: config?.domain || null,
       };
     });
     res.json(clients);
