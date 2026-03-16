@@ -1124,78 +1124,88 @@ export function getDashboardHtml(user?: SessionUser): string {
     <!-- Sidebar -->
     <aside class="sidebar" id="main-sidebar">
       <div class="logo">
-        <div class="logo-icon">W</div>
+        <div class="logo-icon">A</div>
         <div>
-          <div class="logo-text">Workflow Server</div>
-          <div class="logo-sub">Agency Command Center</div>
+          <div class="logo-text">Agency Command Center</div>
+          <div class="logo-sub">AI Marketing Team</div>
         </div>
       </div>
 
       <nav class="nav-section">
-        <div class="nav-label">AI</div>
-        <div class="nav-item active" data-view="workspace" onclick="switchView('workspace')">
+        <div class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+          <span>&#9673;</span> Dashboard
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Clients</div>
+        <div class="nav-item" data-view="clients" onclick="switchView('clients')">
+          <span>&#9823;</span> Clients <span class="count" id="clients-count">0</span>
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Team</div>
+        <div class="nav-item" data-view="eos-rocks" onclick="switchView('eos-rocks')">
+          <span>&#9968;</span> Rocks
+        </div>
+        <div class="nav-item" data-view="eos-scorecard" onclick="switchView('eos-scorecard')">
+          <span>&#128202;</span> Scorecard
+        </div>
+        <div class="nav-item" data-view="eos-issues" onclick="switchView('eos-issues')">
+          <span>&#9888;</span> Issues (IDS)
+        </div>
+        <div class="nav-item" data-view="eos-meetings" onclick="switchView('eos-meetings')">
+          <span>&#128197;</span> Meetings
+        </div>
+        <div class="nav-item" data-view="eos-people" onclick="switchView('eos-people')">
+          <span>&#128101;</span> People
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Operations</div>
+        <div class="nav-item" data-view="sops" onclick="switchView('sops')">
+          <span>&#128203;</span> SOPs <span class="count" id="sops-count">0</span>
+        </div>
+        <div class="nav-item" data-view="drive" onclick="switchView('drive')">
+          <span>&#128193;</span> Resources <span class="count" id="drive-badge"></span>
+        </div>
+        <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">
+          <span>&#9745;</span> Tasks <span class="count" id="tasks-count">0</span>
+        </div>
+      </nav>
+
+      <nav class="nav-section">
+        <div class="nav-label">Content Factory</div>
+        <div class="nav-item" data-view="content" onclick="switchView('content')">
+          <span>&#9998;</span> Content Manager
+        </div>
+        <div class="nav-item" data-view="workspace" onclick="switchView('workspace')">
           <span>&#128172;</span> Workspace
         </div>
         <div class="nav-item" data-view="agents" onclick="switchView('agents')">
           <span>&#9881;</span> Agents <span class="count" id="agents-count">0</span>
         </div>
+        <div class="nav-item" data-view="workflows" onclick="switchView('workflows')">
+          <span>&#9889;</span> Workflows <span class="count" id="wf-count">0</span>
+        </div>
+        <div class="nav-item" data-view="workbooks" onclick="switchView('workbooks')">
+          <span>&#128214;</span> Workbooks
+        </div>
       </nav>
 
       <nav class="nav-section">
-        <div class="nav-label">Workflows</div>
-        <div class="nav-item" data-view="dashboard" onclick="switchView('dashboard')">
-          <span>&#9673;</span> Dashboard
-        </div>
-        <div class="nav-item" data-view="workflows" onclick="switchView('workflows')">
-          <span>&#9889;</span> Workflows <span class="count" id="wf-count">0</span>
+        <div class="nav-label">Logs &amp; Connections</div>
+        <div class="nav-item" data-view="discord-logs" onclick="switchView('discord-logs')">
+          <span>&#9993;</span> Discord
         </div>
         <div class="nav-item" data-view="history" onclick="switchView('history')">
           <span>&#9719;</span> Run History <span class="count" id="hist-count">0</span>
         </div>
-      </nav>
-
-      <nav class="nav-section">
-        <div class="nav-label">Knowledge Base</div>
-        <div class="nav-item" data-view="drive" onclick="switchView('drive')">
-          <span>&#9729;</span> Google Drive <span class="count" id="drive-badge"></span>
-        </div>
-        <div class="nav-item" data-view="clients" onclick="switchView('clients')">
-          <span>&#9823;</span> Clients <span class="count" id="clients-count">0</span>
-        </div>
-        <div class="nav-item" data-view="sops" onclick="switchView('sops')">
-          <span>&#9776;</span> SOPs <span class="count" id="sops-count">0</span>
-        </div>
-      </nav>
-
-      <nav class="nav-section">
-        <div class="nav-label">Integrations</div>
-        <div class="nav-item" data-view="discord-logs" onclick="switchView('discord-logs')">
-          <span>&#9993;</span> Discord Logs
-        </div>
-      </nav>
-
-      <nav class="nav-section">
-        <div class="nav-label">Content</div>
-        <div class="nav-item" data-view="content" onclick="switchView('content')">
-          <span>&#9998;</span> Content Manager
-        </div>
-      </nav>
-
-      <nav class="nav-section">
-        <div class="nav-label">Productivity</div>
-        <div class="nav-item" data-view="workbooks" onclick="switchView('workbooks')">
-          <span>&#128214;</span> Workbooks
-        </div>
-        <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">
-          <span>&#9745;</span> Tasks <span class="count" id="tasks-count">0</span>
-        </div>
         <div class="nav-item" data-view="memories" onclick="switchView('memories')">
           <span>&#128278;</span> Memories <span class="count" id="memories-count">0</span>
         </div>
-      </nav>
-
-      <nav class="nav-section" id="category-nav">
-        <div class="nav-label">Categories</div>
       </nav>
 
       <div class="sidebar-footer">
@@ -1546,6 +1556,94 @@ export function getDashboardHtml(user?: SessionUser): string {
         </div>
       </div>
 
+      <!-- EOS Views -->
+      <div id="view-eos-rocks" class="hidden">
+        <div class="page-header">
+          <h1>Rocks</h1>
+          <p>Quarterly priorities — what must get done this quarter</p>
+        </div>
+        <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;">
+          <select id="rocks-quarter-filter" onchange="loadRocks()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;">
+            <option value="">All Quarters</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="openRockForm()">+ Add Rock</button>
+        </div>
+        <div id="rocks-list"></div>
+        <div id="rock-form-container" class="hidden" style="margin-top:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <input type="hidden" id="rock-edit-id" />
+          <div class="form-group"><label>Title</label><input type="text" id="rock-title" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+          <div style="display:flex;gap:8px;">
+            <div class="form-group" style="flex:1;"><label>Owner</label><input type="text" id="rock-owner" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+            <div class="form-group" style="flex:1;"><label>Quarter</label><input type="text" id="rock-quarter" placeholder="Q1 2026" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+          </div>
+          <div class="form-group"><label>Notes</label><textarea id="rock-notes" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);resize:vertical;"></textarea></div>
+          <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="saveRock()">Save</button><button class="btn btn-ghost btn-sm" onclick="closeRockForm()">Cancel</button></div>
+        </div>
+      </div>
+
+      <div id="view-eos-scorecard" class="hidden">
+        <div class="page-header">
+          <h1>Scorecard</h1>
+          <p>Weekly metrics — track what matters</p>
+        </div>
+        <div style="margin-bottom:16px;"><button class="btn btn-primary btn-sm" onclick="openMetricForm()">+ Add Metric</button></div>
+        <div id="scorecard-list"></div>
+        <div id="metric-form-container" class="hidden" style="margin-top:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <div style="display:flex;gap:8px;">
+            <div class="form-group" style="flex:2;"><label>Metric Name</label><input type="text" id="metric-name" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+            <div class="form-group" style="flex:1;"><label>Owner</label><input type="text" id="metric-owner" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <div class="form-group" style="flex:1;"><label>Goal</label><input type="text" id="metric-goal" placeholder="e.g. >= 50" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+            <div class="form-group" style="flex:1;"><label>Unit</label><input type="text" id="metric-unit" placeholder="e.g. leads, %" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+          </div>
+          <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="saveMetric()">Save</button><button class="btn btn-ghost btn-sm" onclick="closeMetricForm()">Cancel</button></div>
+        </div>
+      </div>
+
+      <div id="view-eos-issues" class="hidden">
+        <div class="page-header">
+          <h1>Issues (IDS)</h1>
+          <p>Identify, Discuss, Solve — the EOS issue resolution process</p>
+        </div>
+        <div style="margin-bottom:16px;display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="openIssueForm()">+ Add Issue</button>
+          <select id="issues-status-filter" onchange="loadIssues()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;">
+            <option value="">All Statuses</option><option value="open">Open</option><option value="solving">Solving</option><option value="solved">Solved</option><option value="tabled">Tabled</option>
+          </select>
+        </div>
+        <div id="issues-list"></div>
+        <div id="issue-form-container" class="hidden" style="margin-top:16px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <input type="hidden" id="issue-edit-id" />
+          <div class="form-group"><label>Title</label><input type="text" id="issue-title" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+          <div class="form-group"><label>Description</label><textarea id="issue-desc" rows="2" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);resize:vertical;"></textarea></div>
+          <div style="display:flex;gap:8px;">
+            <div class="form-group" style="flex:1;"><label>Owner</label><input type="text" id="issue-owner" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);" /></div>
+            <div class="form-group" style="flex:1;"><label>Priority</label><select id="issue-priority" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);"><option value="1">1 — High</option><option value="2" selected>2 — Medium</option><option value="3">3 — Low</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="saveIssue()">Save</button><button class="btn btn-ghost btn-sm" onclick="closeIssueForm()">Cancel</button></div>
+        </div>
+      </div>
+
+      <div id="view-eos-meetings" class="hidden">
+        <div class="page-header">
+          <h1>L10 Meetings</h1>
+          <p>Weekly Level 10 meeting notes</p>
+        </div>
+        <div style="margin-bottom:16px;"><button class="btn btn-primary btn-sm" onclick="openMeetingForm()">+ New Meeting</button></div>
+        <div id="meetings-list"></div>
+      </div>
+
+      <div id="view-eos-people" class="hidden">
+        <div class="page-header">
+          <h1>People Analyzer</h1>
+          <p>Right person, right seat — GWO and core values assessment</p>
+        </div>
+        <div id="people-list">
+          <div class="empty-state"><p>People analyzer — coming soon</p></div>
+        </div>
+      </div>
+
       <!-- Memory Modal -->
       <div class="modal-overlay" id="memory-modal-overlay" onclick="if(event.target===this)closeMemoryModal()">
         <div class="modal" style="max-width:640px;">
@@ -1669,6 +1767,223 @@ export function getDashboardHtml(user?: SessionUser): string {
       return r.json();
     });
 
+    // ─── EOS Functions ─────────────────────────────────
+
+    // Rocks
+    async function loadRocks() {
+      const list = document.getElementById("rocks-list");
+      const filter = document.getElementById("rocks-quarter-filter");
+      const quarter = filter?.value || "";
+      try {
+        const rocks = await api("/eos/rocks" + (quarter ? "?quarter=" + encodeURIComponent(quarter) : ""));
+        // Populate quarter filter options
+        const quarters = [...new Set(rocks.map(r => r.quarter))].sort().reverse();
+        const currentVal = filter.value;
+        filter.innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => '<option value="' + escapeHtml(q) + '"' + (q === currentVal ? ' selected' : '') + '>' + escapeHtml(q) + '</option>').join("");
+        if (!rocks.length) { list.innerHTML = '<div class="empty-state"><p>No rocks yet. Click "+ Add Rock" to create one.</p></div>'; return; }
+        const statusColors = { on_track: "var(--green)", off_track: "var(--red)", done: "var(--text-dim)" };
+        const statusLabels = { on_track: "On Track", off_track: "Off Track", done: "Done" };
+        list.innerHTML = '<table class="content-plan-table"><thead><tr><th>Rock</th><th>Owner</th><th>Quarter</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>' +
+          rocks.map(r => '<tr>' +
+            '<td style="font-weight:500;">' + escapeHtml(r.title) + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml(r.owner) + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml(r.quarter) + '</td>' +
+            '<td><select onchange="updateRockStatus(\\x27' + r.id + '\\x27, this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:' + (statusColors[r.status] || 'var(--text)') + ';font-size:12px;font-weight:600;">' +
+              ['on_track','off_track','done'].map(s => '<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join("") +
+            '</select></td>' +
+            '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(r.notes || "") + '</td>' +
+            '<td><button class="btn-icon" onclick="editRock(\\x27' + r.id + '\\x27)" style="opacity:0.5;font-size:12px;">Edit</button> <button class="btn-icon" onclick="deleteRock(\\x27' + r.id + '\\x27)" style="opacity:0.4;font-size:14px;">&times;</button></td>' +
+          '</tr>').join("") +
+          '</tbody></table>';
+      } catch (e) { list.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>'; }
+    }
+    function openRockForm() { document.getElementById("rock-form-container").classList.remove("hidden"); document.getElementById("rock-edit-id").value = ""; }
+    function closeRockForm() { document.getElementById("rock-form-container").classList.add("hidden"); }
+    async function saveRock() {
+      const id = document.getElementById("rock-edit-id").value;
+      const data = { title: document.getElementById("rock-title").value, owner: document.getElementById("rock-owner").value, quarter: document.getElementById("rock-quarter").value, notes: document.getElementById("rock-notes").value };
+      try {
+        if (id) { await api("/eos/rocks/" + id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) }); }
+        else { await api("/eos/rocks", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) }); }
+        closeRockForm(); loadRocks();
+      } catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function editRock(id) {
+      try {
+        const rocks = await api("/eos/rocks");
+        const r = rocks.find(x => x.id === id);
+        if (!r) return;
+        document.getElementById("rock-edit-id").value = r.id;
+        document.getElementById("rock-title").value = r.title;
+        document.getElementById("rock-owner").value = r.owner;
+        document.getElementById("rock-quarter").value = r.quarter;
+        document.getElementById("rock-notes").value = r.notes || "";
+        openRockForm();
+      } catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function updateRockStatus(id, status) {
+      try { await api("/eos/rocks/" + id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ status }) }); loadRocks(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function deleteRock(id) {
+      if (!confirm("Delete this rock?")) return;
+      try { await api("/eos/rocks/" + id, { method: "DELETE" }); loadRocks(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+
+    // Scorecard
+    async function loadScorecard() {
+      const list = document.getElementById("scorecard-list");
+      try {
+        const metrics = await api("/eos/scorecard");
+        if (!metrics.length) { list.innerHTML = '<div class="empty-state"><p>No scorecard metrics yet. Click "+ Add Metric" to create one.</p></div>'; return; }
+        let html = '<table class="content-plan-table"><thead><tr><th>Metric</th><th>Owner</th><th>Goal</th><th>Latest</th><th>Trend (last 4 wks)</th><th></th></tr></thead><tbody>';
+        for (const m of metrics) {
+          const latest = m.entries?.[0];
+          const trend = (m.entries || []).slice(0, 4).reverse();
+          html += '<tr>';
+          html += '<td style="font-weight:500;">' + escapeHtml(m.metric_name) + '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(m.owner) + '</td>';
+          html += '<td style="font-size:12px;">' + escapeHtml(m.goal || "—") + ' ' + escapeHtml(m.unit || "") + '</td>';
+          html += '<td style="font-weight:600;color:' + (latest?.on_track ? 'var(--green)' : 'var(--red)') + ';">' + (latest ? escapeHtml(latest.value) : '—') + '</td>';
+          html += '<td style="font-size:12px;">' + (trend.length ? trend.map(e => '<span style="color:' + (e.on_track ? 'var(--green)' : 'var(--red)') + ';">' + escapeHtml(e.value) + '</span>').join(" → ") : '—') + '</td>';
+          html += '<td><button class="btn-icon" onclick="deleteMetric(\\x27' + m.id + '\\x27)" style="opacity:0.4;font-size:14px;">&times;</button></td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        list.innerHTML = html;
+      } catch (e) { list.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>'; }
+    }
+    function openMetricForm() { document.getElementById("metric-form-container").classList.remove("hidden"); }
+    function closeMetricForm() { document.getElementById("metric-form-container").classList.add("hidden"); }
+    async function saveMetric() {
+      const data = { metric_name: document.getElementById("metric-name").value, owner: document.getElementById("metric-owner").value, goal: document.getElementById("metric-goal").value, unit: document.getElementById("metric-unit").value };
+      try { await api("/eos/scorecard/metrics", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) }); closeMetricForm(); loadScorecard(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function deleteMetric(id) {
+      if (!confirm("Delete this metric and all its entries?")) return;
+      try { await api("/eos/scorecard/metrics/" + id, { method: "DELETE" }); loadScorecard(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+
+    // Issues
+    async function loadIssues() {
+      const list = document.getElementById("issues-list");
+      const status = document.getElementById("issues-status-filter")?.value || "";
+      try {
+        const issues = await api("/eos/issues" + (status ? "?status=" + status : ""));
+        if (!issues.length) { list.innerHTML = '<div class="empty-state"><p>No issues. Click "+ Add Issue" to create one.</p></div>'; return; }
+        const prioLabels = { 1: "High", 2: "Med", 3: "Low" };
+        const prioColors = { 1: "var(--red)", 2: "var(--amber)", 3: "var(--text-dim)" };
+        const statusLabels = { open: "Open", solving: "Solving", solved: "Solved", tabled: "Tabled" };
+        list.innerHTML = '<table class="content-plan-table"><thead><tr><th>P</th><th>Issue</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
+          issues.map(i => '<tr>' +
+            '<td style="font-weight:700;color:' + (prioColors[i.priority] || 'var(--text)') + ';">' + (prioLabels[i.priority] || i.priority) + '</td>' +
+            '<td><div style="font-weight:500;">' + escapeHtml(i.title) + '</div>' + (i.description ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(i.description.slice(0, 100)) + '</div>' : '') + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml(i.owner || "Unassigned") + '</td>' +
+            '<td><select onchange="updateIssueStatus(\\x27' + i.id + '\\x27, this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;">' +
+              ['open','solving','solved','tabled'].map(s => '<option value="' + s + '"' + (i.status === s ? ' selected' : '') + '>' + statusLabels[s] + '</option>').join("") +
+            '</select></td>' +
+            '<td><button class="btn-icon" onclick="editIssue(\\x27' + i.id + '\\x27)" style="opacity:0.5;font-size:12px;">Edit</button> <button class="btn-icon" onclick="deleteIssue(\\x27' + i.id + '\\x27)" style="opacity:0.4;font-size:14px;">&times;</button></td>' +
+          '</tr>').join("") +
+          '</tbody></table>';
+      } catch (e) { list.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>'; }
+    }
+    function openIssueForm() { document.getElementById("issue-form-container").classList.remove("hidden"); document.getElementById("issue-edit-id").value = ""; }
+    function closeIssueForm() { document.getElementById("issue-form-container").classList.add("hidden"); }
+    async function saveIssue() {
+      const id = document.getElementById("issue-edit-id").value;
+      const data = { title: document.getElementById("issue-title").value, description: document.getElementById("issue-desc").value, owner: document.getElementById("issue-owner").value, priority: parseInt(document.getElementById("issue-priority").value) || 2 };
+      try {
+        if (id) { await api("/eos/issues/" + id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) }); }
+        else { await api("/eos/issues", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) }); }
+        closeIssueForm(); loadIssues();
+      } catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function editIssue(id) {
+      try {
+        const issues = await api("/eos/issues");
+        const i = issues.find(x => x.id === id);
+        if (!i) return;
+        document.getElementById("issue-edit-id").value = i.id;
+        document.getElementById("issue-title").value = i.title;
+        document.getElementById("issue-desc").value = i.description || "";
+        document.getElementById("issue-owner").value = i.owner || "";
+        document.getElementById("issue-priority").value = i.priority || 2;
+        openIssueForm();
+      } catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function updateIssueStatus(id, status) {
+      try { await api("/eos/issues/" + id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ status }) }); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function deleteIssue(id) {
+      if (!confirm("Delete this issue?")) return;
+      try { await api("/eos/issues/" + id, { method: "DELETE" }); loadIssues(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+
+    // Meetings
+    async function loadMeetings() {
+      const list = document.getElementById("meetings-list");
+      try {
+        const meetings = await api("/eos/meetings");
+        if (!meetings.length) { list.innerHTML = '<div class="empty-state"><p>No meeting notes yet. Click "+ New Meeting" to create one.</p></div>'; return; }
+        list.innerHTML = '<table class="content-plan-table"><thead><tr><th>Date</th><th>Type</th><th>Attendees</th><th>Headlines</th><th></th></tr></thead><tbody>' +
+          meetings.map(m => '<tr>' +
+            '<td style="font-weight:500;white-space:nowrap;">' + escapeHtml(m.meeting_date?.slice(0, 10) || "") + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml(m.meeting_type || "L10") + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml((m.attendees || []).join(", ")) + '</td>' +
+            '<td style="font-size:12px;color:var(--text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(m.headlines || "—") + '</td>' +
+            '<td><button class="btn-icon" onclick="deleteMeeting(\\x27' + m.id + '\\x27)" style="opacity:0.4;font-size:14px;">&times;</button></td>' +
+          '</tr>').join("") +
+          '</tbody></table>';
+      } catch (e) { list.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>'; }
+    }
+    async function openMeetingForm() {
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        await api("/eos/meetings", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ meeting_date: today, meeting_type: "L10" }) });
+        loadMeetings();
+      } catch (e) { alert("Error: " + (e.message || "")); }
+    }
+    async function deleteMeeting(id) {
+      if (!confirm("Delete this meeting?")) return;
+      try { await api("/eos/meetings/" + id, { method: "DELETE" }); loadMeetings(); }
+      catch (e) { alert("Error: " + (e.message || "")); }
+    }
+
+    // People
+    async function loadPeople() {
+      const list = document.getElementById("people-list");
+      try {
+        const people = await api("/eos/people");
+        if (!people.length) { list.innerHTML = '<div class="empty-state"><p>No people analyzer entries yet.</p></div>'; return; }
+        list.innerHTML = '<table class="content-plan-table"><thead><tr><th>Team Member</th><th>Quarter</th><th>Right Person</th><th>Right Seat</th><th>GWO</th><th>Notes</th></tr></thead><tbody>' +
+          people.map(p => '<tr>' +
+            '<td style="font-weight:500;">' + escapeHtml(p.team_member) + '</td>' +
+            '<td style="font-size:12px;">' + escapeHtml(p.quarter) + '</td>' +
+            '<td style="text-align:center;">' + (p.right_person === true ? '<span style="color:var(--green);">&#10003;</span>' : p.right_person === false ? '<span style="color:var(--red);">&#10007;</span>' : '—') + '</td>' +
+            '<td style="text-align:center;">' + (p.right_seat === true ? '<span style="color:var(--green);">&#10003;</span>' : p.right_seat === false ? '<span style="color:var(--red);">&#10007;</span>' : '—') + '</td>' +
+            '<td style="font-size:12px;">' + [p.gwo_get_it, p.gwo_want_it, p.gwo_capacity].map(v => v === true ? '<span style="color:var(--green);">G</span>' : v === false ? '<span style="color:var(--red);">—</span>' : '?').join("/") + '</td>' +
+            '<td style="font-size:12px;color:var(--text-muted);">' + escapeHtml(p.notes || "") + '</td>' +
+          '</tr>').join("") +
+          '</tbody></table>';
+      } catch (e) {
+        if (e.message?.includes("403") || e.message?.includes("Admin")) {
+          list.innerHTML = '<div class="empty-state"><p>Admin access required to view People Analyzer.</p></div>';
+        } else {
+          list.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(e.message || "") + '</p></div>';
+        }
+      }
+    }
+
+    // Dashboard summary view
+    function loadDashboardSummary() {
+      // Already loaded by fetchSummary — just ensure the view shows
+    }
+
     // ─── Init ───────────────────────────────────────────
     async function init() {
       await fetchSummary(false);
@@ -1676,13 +1991,11 @@ export function getDashboardHtml(user?: SessionUser): string {
       checkDriveStatus();
       loadKBCounts();
 
-      // Default to workspace view, or handle hash navigation
-      if (window.location.hash === "#drive") {
-        switchView("drive");
-      } else if (window.location.hash) {
+      // Default to dashboard view, or handle hash navigation
+      if (window.location.hash) {
         switchView(window.location.hash.slice(1));
       } else {
-        switchView("workspace");
+        switchView("dashboard");
       }
 
       // Start auto-refresh with backoff
@@ -1727,10 +2040,7 @@ export function getDashboardHtml(user?: SessionUser): string {
     }
 
     function renderCategories() {
-      const cats = [...new Set(workflows.map(w => w.category || "Other"))];
-      const nav = document.getElementById("category-nav");
-      nav.innerHTML = '<div class="nav-label">Categories</div>' +
-        cats.map(c => \`<div class="nav-item" onclick="filterByCategory('\${c}')"><span>&#9656;</span> \${c} <span class="count">\${workflows.filter(w => (w.category||"Other") === c).length}</span></div>\`).join("");
+      // Categories removed from sidebar — now shown as filter pills in workflows view
     }
 
     function renderFilters() {
@@ -1923,6 +2233,7 @@ export function getDashboardHtml(user?: SessionUser): string {
       document.querySelector(\`.nav-item[data-view="\${view}"]\`)?.classList.add("active");
 
       // Load data for views
+      if (view === "dashboard") loadDashboardSummary();
       if (view === "workspace") initChat();
       if (view === "agents") loadAgents();
       if (view === "drive") { checkDriveStatus(); loadIndexedDocs(); }
@@ -1932,6 +2243,11 @@ export function getDashboardHtml(user?: SessionUser): string {
       if (view === "tasks") loadTasks();
       if (view === "memories") loadMemories();
       if (view === "content") loadContentClients();
+      if (view === "eos-rocks") loadRocks();
+      if (view === "eos-scorecard") loadScorecard();
+      if (view === "eos-issues") loadIssues();
+      if (view === "eos-meetings") loadMeetings();
+      if (view === "eos-people") loadPeople();
       if (view === "discord-logs") {
         loadDiscordLogs();
         if (discordRefreshTimer) clearInterval(discordRefreshTimer);
