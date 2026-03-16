@@ -315,6 +315,17 @@ export function clientManagementRouter(): Router {
     } catch (err) { console.error("Delete campaign error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
+  // Campaign deliverables by campaign (in addition to the by-client CRUD above)
+  router.get("/campaigns/:campaignId/deliverables", async (req, res) => {
+    try {
+      const { rows } = await query(
+        "SELECT * FROM cm_campaign_deliverables WHERE campaign_id = $1 ORDER BY sort_order, created_at",
+        [req.params.campaignId]
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { console.error("List campaign deliverables error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
   // ════════════════════════════════════════════════════════
   //  TRAFFIC LIGHT SYSTEM
   // ════════════════════════════════════════════════════════
@@ -380,7 +391,9 @@ export function clientManagementRouter(): Router {
         const { rows } = await query(
           `INSERT INTO cm_tl_health_entries (client_id, department_id, week_of, status, notes, metric_values, updated_by_name)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT ON CONSTRAINT cm_tl_health_entries_pkey DO NOTHING
+           ON CONFLICT ON CONSTRAINT cm_tl_health_unique_entry
+           DO UPDATE SET status = EXCLUDED.status, notes = EXCLUDED.notes, metric_values = EXCLUDED.metric_values,
+             updated_by_name = EXCLUDED.updated_by_name, updated_at = NOW()
            RETURNING *`,
           [b.clientId, b.departmentId, b.weekOf, b.status || "green", b.notes, b.metricValues ? JSON.stringify(b.metricValues) : null, b.updatedByName]
         );

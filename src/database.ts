@@ -1137,6 +1137,13 @@ Before saving, verify:
       );
     `,
   },
+  {
+    id: "025_tl_health_unique_constraint",
+    sql: `
+      ALTER TABLE cm_tl_health_entries
+        ADD CONSTRAINT cm_tl_health_unique_entry UNIQUE (client_id, department_id, week_of);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
