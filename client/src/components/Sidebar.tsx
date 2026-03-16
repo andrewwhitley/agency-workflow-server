@@ -5,6 +5,7 @@ import {
   HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
   Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
   Globe, TrendingUp, Radar, FileSearch, Search, Lightbulb,
+  Building2, Heart,
 } from "lucide-react";
 
 interface User {
@@ -18,8 +19,7 @@ const navSections = [
     label: "Overview",
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/workflows", label: "Workflows", icon: Workflow },
-      { to: "/history", label: "History", icon: Clock },
+      { to: "/clients", label: "Clients", icon: Building2 },
     ],
   },
   {
@@ -42,17 +42,13 @@ const navSections = [
     ],
   },
   {
-    label: "Knowledge",
-    items: [
-      { to: "/drive", label: "Google Drive", icon: HardDrive },
-      { to: "/clients", label: "Clients", icon: Users },
-      { to: "/sops", label: "SOPs", icon: FileText },
-    ],
-  },
-  {
-    label: "Management",
+    label: "Operations",
     items: [
       { to: "/tasks", label: "Tasks", icon: CheckSquare },
+      { to: "/workflows", label: "Workflows", icon: Workflow },
+      { to: "/history", label: "Run History", icon: Clock },
+      { to: "/drive", label: "Google Drive", icon: HardDrive },
+      { to: "/sops", label: "SOPs", icon: FileText },
       { to: "/memories", label: "Memories", icon: Brain },
     ],
   },

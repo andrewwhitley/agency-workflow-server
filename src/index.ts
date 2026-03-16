@@ -39,6 +39,7 @@ import { agentService } from "./agent-service.js";
 import { threadService } from "./thread-service.js";
 import { createScheduledJobSchema, updateScheduledJobSchema } from "./validation.js";
 import { apiRouter } from "./api-routes.js";
+import { clientManagementRouter } from "./client-management-routes.js";
 import { DataForSEOService } from "./dataforseo.js";
 import {
   rockService, scorecardService, issueService, meetingService, peopleAnalyzerService,
@@ -628,6 +629,7 @@ async function main(): Promise<void> {
     // Higher body limit for file/image uploads in chat
     app.use("/api/threads", express.json({ limit: "25mb" }));
     app.use("/api", apiRouter(engine, knowledgeBase, authService, seoService));
+    app.use("/api/cm", clientManagementRouter());
   }
 
   // ─── 13. Dashboard Summary (single endpoint) ──────

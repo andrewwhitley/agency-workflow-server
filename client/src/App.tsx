@@ -24,6 +24,8 @@ import { ContentGapsPage } from "./pages/seo/ContentGapsPage";
 import { TechnicalAuditPage } from "./pages/seo/TechnicalAuditPage";
 import { SerpAnalysisPage } from "./pages/seo/SerpAnalysisPage";
 import { KeywordResearchPage } from "./pages/seo/KeywordResearchPage";
+import { ClientsListPage } from "./pages/clients/ClientsListPage";
+import { ClientDetailPage } from "./pages/clients/ClientDetailPage";
 
 export default function App() {
   return (
@@ -37,7 +39,8 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/memories" element={<MemoriesPage />} />
         <Route path="/drive" element={<DrivePage />} />
-        <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/clients" element={<ClientsListPage />} />
+        <Route path="/clients/:slug" element={<ClientDetailPage />} />
         <Route path="/sops" element={<SOPsPage />} />
         <Route path="/content" element={<ContentPage />} />
         <Route path="/workbooks" element={<WorkbooksPage />} />

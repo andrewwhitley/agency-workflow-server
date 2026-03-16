@@ -660,6 +660,483 @@ Before saving, verify:
       CREATE INDEX IF NOT EXISTS idx_seo_audits_client ON seo_audits(client_slug, audited_at DESC);
     `,
   },
+  {
+    id: "024_client_management_tables",
+    sql: `
+      -- Core client profiles
+      CREATE TABLE IF NOT EXISTS cm_clients (
+        id SERIAL PRIMARY KEY,
+        slug VARCHAR(100) NOT NULL UNIQUE,
+        company_name VARCHAR(255) NOT NULL,
+        legal_name VARCHAR(255),
+        dba_name VARCHAR(255),
+        industry VARCHAR(100),
+        location VARCHAR(255),
+        domain VARCHAR(500),
+        is_local_service_area BOOLEAN DEFAULT FALSE,
+        display_address BOOLEAN DEFAULT TRUE,
+        company_phone VARCHAR(50),
+        main_phone VARCHAR(50),
+        sms_phone VARCHAR(50),
+        toll_free_phone VARCHAR(50),
+        fax_phone VARCHAR(50),
+        company_email VARCHAR(320),
+        primary_email VARCHAR(320),
+        inquiry_emails TEXT,
+        employment_email VARCHAR(320),
+        company_website VARCHAR(500),
+        date_founded VARCHAR(20),
+        year_founded INT,
+        ein VARCHAR(50),
+        business_type VARCHAR(100),
+        number_of_customers INT,
+        desired_new_clients INT,
+        avg_client_lifetime_value NUMERIC(15,2),
+        number_of_employees INT,
+        estimated_annual_revenue NUMERIC(15,2),
+        target_revenue NUMERIC(15,2),
+        current_marketing_spend NUMERIC(15,2),
+        current_ads_spend NUMERIC(15,2),
+        crm_system VARCHAR(100),
+        business_hours TEXT,
+        holiday_hours TEXT,
+        domain_registrar VARCHAR(100),
+        google_drive_link VARCHAR(1000),
+        color_scheme TEXT,
+        design_inspiration_urls TEXT,
+        ads_marketing_budget VARCHAR(255),
+        ads_recruiting_budget VARCHAR(255),
+        target_google_ads_conv_rate NUMERIC(5,2),
+        target_google_ads_cpa NUMERIC(10,2),
+        target_bing_ads_conv_rate NUMERIC(5,2),
+        target_bing_ads_cpa NUMERIC(10,2),
+        target_facebook_ads_cpa NUMERIC(10,2),
+        time_zone VARCHAR(100),
+        payment_types_accepted TEXT,
+        combined_years_experience INT,
+        business_facts TEXT,
+        affiliations_associations TEXT,
+        certifications_trainings TEXT,
+        community_involvement TEXT,
+        languages_spoken TEXT,
+        service_seasonality TEXT,
+        telemedicine_offered BOOLEAN DEFAULT FALSE,
+        status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive','pending')),
+        created_by INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Client contacts
+      CREATE TABLE IF NOT EXISTS cm_contacts (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(100),
+        email VARCHAR(320),
+        phone VARCHAR(50),
+        phone_type VARCHAR(50),
+        notes TEXT,
+        is_primary BOOLEAN DEFAULT FALSE,
+        should_attribute BOOLEAN DEFAULT FALSE,
+        linktree_url VARCHAR(500),
+        wordpress_email VARCHAR(320),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Client addresses
+      CREATE TABLE IF NOT EXISTS cm_addresses (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        label VARCHAR(100) NOT NULL,
+        street_address VARCHAR(500),
+        city VARCHAR(100),
+        state VARCHAR(50),
+        postal_code VARCHAR(20),
+        location_type VARCHAR(20) NOT NULL DEFAULT 'Main' CHECK (location_type IN ('Main','Satellite','Home','Other')),
+        notes TEXT,
+        is_primary BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Client services
+      CREATE TABLE IF NOT EXISTS cm_services (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        category VARCHAR(255) NOT NULL,
+        service_name VARCHAR(255) NOT NULL,
+        offered BOOLEAN DEFAULT TRUE,
+        price NUMERIC(10,2),
+        duration VARCHAR(100),
+        description TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Service areas
+      CREATE TABLE IF NOT EXISTS cm_service_areas (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        target_cities TEXT,
+        target_counties TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Team members (client's team, not agency team)
+      CREATE TABLE IF NOT EXISTS cm_team_members (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        full_name VARCHAR(255) NOT NULL,
+        role VARCHAR(255),
+        email VARCHAR(320),
+        phone VARCHAR(50),
+        photo_url VARCHAR(500),
+        linkedin_url VARCHAR(500),
+        facebook_url VARCHAR(500),
+        instagram_url VARCHAR(500),
+        other_profiles TEXT,
+        bio TEXT,
+        use_for_attribution BOOLEAN DEFAULT FALSE,
+        preferred_contact_method VARCHAR(100),
+        contact_notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Competitors
+      CREATE TABLE IF NOT EXISTS cm_competitors (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        rank INT,
+        company_name VARCHAR(255) NOT NULL,
+        url VARCHAR(500),
+        usps TEXT,
+        description TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Differentiators
+      CREATE TABLE IF NOT EXISTS cm_differentiators (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        category VARCHAR(100) NOT NULL,
+        title VARCHAR(255),
+        description TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Buyer personas
+      CREATE TABLE IF NOT EXISTS cm_buyer_personas (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        persona_name VARCHAR(255) NOT NULL,
+        age INT,
+        gender VARCHAR(50),
+        location VARCHAR(255),
+        family_status VARCHAR(100),
+        education_level VARCHAR(100),
+        occupation VARCHAR(255),
+        income_level VARCHAR(100),
+        communication_channels TEXT,
+        needs_description TEXT,
+        pain_points TEXT,
+        gains TEXT,
+        buying_factors TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Important links (GBP, social, review sites)
+      CREATE TABLE IF NOT EXISTS cm_important_links (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        link_type VARCHAR(100) NOT NULL,
+        url VARCHAR(1000) NOT NULL,
+        label VARCHAR(255),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Login/account credentials
+      CREATE TABLE IF NOT EXISTS cm_logins (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        platform VARCHAR(255) NOT NULL,
+        username VARCHAR(255),
+        login_url VARCHAR(1000),
+        notes TEXT,
+        access_level VARCHAR(100),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Content guidelines (brand voice, USPs, etc.)
+      CREATE TABLE IF NOT EXISTS cm_content_guidelines (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE UNIQUE,
+        brand_voice TEXT,
+        tone VARCHAR(255),
+        writing_style VARCHAR(100),
+        dos_and_donts TEXT,
+        approved_terminology TEXT,
+        restrictions TEXT,
+        unique_selling_points TEXT,
+        guarantees TEXT,
+        competitive_advantages TEXT,
+        brand_colors VARCHAR(500),
+        fonts VARCHAR(500),
+        logo_guidelines TEXT,
+        design_inspiration TEXT,
+        target_audience_summary TEXT,
+        demographics TEXT,
+        psychographics TEXT,
+        focus_topics TEXT,
+        seo_keywords TEXT,
+        content_themes TEXT,
+        messaging_priorities TEXT,
+        featured_testimonials TEXT,
+        success_stories TEXT,
+        social_proof_notes TEXT,
+        ad_copy_guidelines TEXT,
+        preferred_ctas TEXT,
+        targeting_preferences TEXT,
+        promotions TEXT,
+        observed_holidays TEXT,
+        holiday_content_notes TEXT,
+        brand_story TEXT,
+        content_purpose VARCHAR(100),
+        user_action_strategy TEXT,
+        existing_collateral TEXT,
+        use_stock_photography BOOLEAN DEFAULT TRUE,
+        image_source_notes TEXT,
+        marketing_guide TEXT,
+        writing_style_guide TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Brand story (StoryBrand 7-part framework)
+      CREATE TABLE IF NOT EXISTS cm_brand_story (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','generated','reviewed','approved')),
+        hero_section JSONB,
+        problem_section JSONB,
+        guide_section JSONB,
+        plan_section JSONB,
+        cta_section JSONB,
+        success_section JSONB,
+        failure_section JSONB,
+        brand_voice_section JSONB,
+        visual_identity_section JSONB,
+        content_strategy_section JSONB,
+        messaging_section JSONB,
+        implementation_section JSONB,
+        full_brand_story TEXT,
+        generated_at TIMESTAMPTZ,
+        last_edited_at TIMESTAMPTZ,
+        last_edited_by INT,
+        share_token VARCHAR(64),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Campaigns
+      CREATE TABLE IF NOT EXISTS cm_campaigns (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        campaign_name VARCHAR(255) NOT NULL,
+        campaign_type VARCHAR(100),
+        status VARCHAR(20) NOT NULL DEFAULT 'planning' CHECK (status IN ('planning','active','paused','completed','archived')),
+        platforms TEXT,
+        duration_type VARCHAR(20) DEFAULT 'ongoing' CHECK (duration_type IN ('ongoing','short_term')),
+        services_promoted TEXT,
+        usps TEXT,
+        demographics_gender TEXT,
+        demographics_age VARCHAR(100),
+        demographics_location TEXT,
+        demographics_interests TEXT,
+        demographics_languages VARCHAR(255),
+        audience_targeting TEXT,
+        target_demographics TEXT,
+        geo_targeting TEXT,
+        ad_types TEXT,
+        creative_style VARCHAR(100),
+        ctas TEXT,
+        budget NUMERIC(10,2),
+        daily_budget NUMERIC(10,2),
+        total_budget NUMERIC(10,2),
+        start_date TIMESTAMPTZ,
+        end_date TIMESTAMPTZ,
+        expected_outcomes TEXT,
+        ad_copy_variations TEXT,
+        landing_pages TEXT,
+        notes TEXT,
+        ad_accounts_setup VARCHAR(20) CHECK (ad_accounts_setup IN ('yes','no','partial')),
+        monthly_budget_per_network TEXT,
+        optimization_goals TEXT,
+        lead_close_rate NUMERIC(5,2),
+        cta_types TEXT,
+        lead_form_types TEXT,
+        qualifying_questions TEXT,
+        offers TEXT,
+        unique_differentiators TEXT,
+        created_by INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Campaign deliverables
+      CREATE TABLE IF NOT EXISTS cm_campaign_deliverables (
+        id SERIAL PRIMARY KEY,
+        campaign_id INT NOT NULL REFERENCES cm_campaigns(id) ON DELETE CASCADE,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        title VARCHAR(500) NOT NULL,
+        deliverable_type VARCHAR(50) NOT NULL DEFAULT 'other',
+        status VARCHAR(20) NOT NULL DEFAULT 'not_started',
+        priority VARCHAR(10) NOT NULL DEFAULT 'medium',
+        description TEXT,
+        assigned_to VARCHAR(255),
+        due_date TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        notes TEXT,
+        sort_order INT DEFAULT 0,
+        created_by INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_cd_campaign ON cm_campaign_deliverables(campaign_id);
+      CREATE INDEX IF NOT EXISTS idx_cm_cd_client ON cm_campaign_deliverables(client_id);
+
+      -- Marketing plan items
+      CREATE TABLE IF NOT EXISTS cm_marketing_plan (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        category VARCHAR(100) NOT NULL,
+        item VARCHAR(255) NOT NULL,
+        is_included BOOLEAN DEFAULT FALSE,
+        quantity INT,
+        notes TEXT,
+        completion_target TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Traffic light departments
+      CREATE TABLE IF NOT EXISTS cm_tl_departments (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        icon VARCHAR(100),
+        color VARCHAR(50),
+        sort_order INT DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Traffic light metrics
+      CREATE TABLE IF NOT EXISTS cm_tl_metrics (
+        id SERIAL PRIMARY KEY,
+        department_id INT NOT NULL REFERENCES cm_tl_departments(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        metric_type VARCHAR(20) DEFAULT 'core_performance',
+        unit VARCHAR(100),
+        green_label VARCHAR(500),
+        yellow_label VARCHAR(500),
+        red_label VARCHAR(500),
+        sort_order INT DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Traffic light health entries (weekly per-client per-department)
+      CREATE TABLE IF NOT EXISTS cm_tl_health_entries (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        department_id INT NOT NULL REFERENCES cm_tl_departments(id) ON DELETE CASCADE,
+        week_of VARCHAR(20) NOT NULL,
+        status VARCHAR(10) NOT NULL DEFAULT 'green' CHECK (status IN ('green','yellow','red','na')),
+        notes TEXT,
+        metric_values JSONB,
+        updated_by_name VARCHAR(255),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_tl_health ON cm_tl_health_entries(client_id, department_id, week_of);
+
+      -- Traffic light playbooks
+      CREATE TABLE IF NOT EXISTS cm_tl_playbooks (
+        id SERIAL PRIMARY KEY,
+        department_id INT NOT NULL REFERENCES cm_tl_departments(id) ON DELETE CASCADE,
+        yellow_actions TEXT,
+        yellow_timeframe VARCHAR(100),
+        red_actions TEXT,
+        red_timeframe VARCHAR(100),
+        escalation_contacts TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Traffic light action log
+      CREATE TABLE IF NOT EXISTS cm_tl_action_log (
+        id SERIAL PRIMARY KEY,
+        health_entry_id INT NOT NULL REFERENCES cm_tl_health_entries(id) ON DELETE CASCADE,
+        client_id INT NOT NULL,
+        department_id INT NOT NULL REFERENCES cm_tl_departments(id),
+        action TEXT NOT NULL,
+        action_type VARCHAR(30) DEFAULT 'other',
+        completed_by_name VARCHAR(255),
+        completed_at TIMESTAMPTZ,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_tl_action_client ON cm_tl_action_log(client_id);
+
+      -- Agency team (internal)
+      CREATE TABLE IF NOT EXISTS cm_agency_team (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        role VARCHAR(100) NOT NULL,
+        department VARCHAR(100),
+        primary_accountability TEXT,
+        core_responsibilities TEXT,
+        key_interfaces TEXT,
+        success_looks_like TEXT,
+        start_date TIMESTAMPTZ,
+        status VARCHAR(20) DEFAULT 'active',
+        avatar_url VARCHAR(500),
+        bio TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Activity log
+      CREATE TABLE IF NOT EXISTS cm_activity_log (
+        id SERIAL PRIMARY KEY,
+        user_name VARCHAR(255),
+        action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','delete')),
+        entity_type VARCHAR(100) NOT NULL,
+        entity_id INT NOT NULL,
+        entity_name VARCHAR(255),
+        changes JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
