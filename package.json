@@ -4,9 +4,12 @@
   "description": "MCP Workflow Server with dashboard — built for digital marketing agencies",
   "type": "module",
   "scripts": {
-    "build": "tsc && node scripts/validate-dashboard.mjs",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "tsc && node scripts/validate-dashboard.mjs",
+    "build:client": "cd client && npm install && npx vite build",
     "start": "node build/index.js",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "dev:client": "cd client && npx vite"
   },
   "engines": {
     "node": ">=20.0.0"

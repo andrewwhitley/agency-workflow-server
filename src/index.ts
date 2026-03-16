@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import "dotenv/config";
+import path from "path";
 /**
  * ═══════════════════════════════════════════════════════════════
  *  MCP Agency Workflow Server
@@ -708,6 +709,13 @@ async function main(): Promise<void> {
       workflowHistory: engine.getHistory().slice(0, 50),
       uptime: process.uptime(),
     });
+  });
+
+  // ─── React app at /app (new frontend) ─────────────
+  const clientDistPath = path.join(import.meta.dirname, "client-dist");
+  app.use("/app", express.static(clientDistPath));
+  app.get("/app/*", requireAuth, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
   });
 
   // ─── 14. Health Check (Railway uses this) ──────────
