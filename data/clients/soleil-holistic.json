@@ -50,6 +50,21 @@
           { "name": "Dermal Fillers", "slug": "dermal-fillers", "description": "Natural volume restoration and facial contouring" }
         ]
       }
-    ]
+    ],
+    "storybrand": {
+      "hero": "Women and families in Hamden who want to feel vibrant and balanced but are frustrated by symptoms that conventional medicine hasn't resolved — hormonal imbalances, chronic fatigue, digestive issues, and stubborn pain.",
+      "problem": "You've tried everything your doctor suggested, but the medications only mask the symptoms. You're tired of being told your labs are 'normal' when you know something is off. You deserve answers, not band-aids.",
+      "guide": "Dr. Lyndsey Maher is a naturopathic physician and licensed acupuncturist who blends the wisdom of Traditional Chinese Medicine with modern functional medicine. She listens deeply, digs into root causes, and builds personalized healing plans that honor your body's natural intelligence.",
+      "plan": "1. Schedule a comprehensive consultation with Dr. Maher. 2. Receive a personalized wellness assessment and treatment plan. 3. Experience real, lasting improvement — naturally.",
+      "callToAction": "Book Your Consultation",
+      "avoidFailure": "Without addressing the root cause, symptoms compound — hormonal imbalances worsen, energy continues to decline, and you spend years managing problems instead of healing them.",
+      "achieveSuccess": "Imagine waking up with energy, sleeping soundly, feeling like yourself again — balanced, clear, and fully alive. That's what holistic healing looks like."
+    },
+    "brandVoice": {
+      "tone": "warm, nurturing, knowledgeable, empowering",
+      "style": "gentle authority — like a wise practitioner who makes you feel heard and hopeful. Blend Eastern wisdom with modern evidence. Speak to the whole person, not just symptoms.",
+      "avoidWords": ["cheap", "discount", "quick fix", "aggressive", "attack", "fight disease", "anti-aging"],
+      "preferWords": ["balance", "harmony", "restore", "nourish", "holistic", "natural", "root cause", "vitality", "heal", "whole-body", "personalized", "gentle"]
+    }
   }
 }
