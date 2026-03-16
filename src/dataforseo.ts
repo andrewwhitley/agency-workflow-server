@@ -38,18 +38,17 @@ interface SearchVolumeResult {
   monthly_searches?: Array<{ search_volume: number }>;
 }
 
-interface KeywordSuggestionResult {
-  keyword_data?: {
-    keyword: string;
-    keyword_info?: {
-      search_volume?: number;
-      cpc?: number;
-      competition?: number;
-      competition_level?: string;
-    };
-    keyword_properties?: {
-      keyword_difficulty?: number;
-    };
+interface KeywordSuggestionItem {
+  keyword?: string;
+  keyword_info?: {
+    search_volume?: number;
+    cpc?: number;
+    competition?: number;
+    competition_level?: string;
+    monthly_searches?: Array<{ search_volume: number }>;
+  };
+  keyword_properties?: {
+    keyword_difficulty?: number;
   };
 }
 
@@ -81,8 +80,10 @@ export class DataForSEOService {
   }
 
   /**
-   * Bulk keyword metrics lookup via Google Ads Search Volume API.
-   * Costs ~$0.05 per 700 keywords.
+   * Bulk keyword metrics lookup. Two-step approach:
+   * 1. Bulk difficulty (cheap, 1000 keywords/call) for keyword_difficulty
+   * 2. Keyword suggestions with include_seed_keyword for vol/CPC/competition
+   *    (only for keywords where step 1 didn't return volume)
    */
   async getKeywordMetrics(
     keywords: string[],
@@ -91,46 +92,85 @@ export class DataForSEOService {
     if (!this.authHeader) throw new Error("DataForSEO not configured");
     if (!keywords.length) return [];
 
-    // API accepts max 700 keywords per request
+    // Step 1: Bulk difficulty for all keywords at once (cheap)
+    const difficultyMap = new Map<string, number>();
     const batches: string[][] = [];
-    for (let i = 0; i < keywords.length; i += 700) {
-      batches.push(keywords.slice(i, i + 700));
+    for (let i = 0; i < keywords.length; i += 1000) {
+      batches.push(keywords.slice(i, i + 1000));
     }
 
-    const allResults: KeywordMetrics[] = [];
-
     for (const batch of batches) {
-      const payload = [{
-        keywords: batch,
-        location_code: locationCode,
-        language_code: "en",
-      }];
-
       const startTime = Date.now();
       const response = await this.apiCall(
-        "/v3/keywords_data/google_ads/search_volume/live",
-        payload,
+        "/v3/dataforseo_labs/google/bulk_keyword_difficulty/live",
+        [{ keywords: batch, location_code: locationCode, language_code: "en" }],
       );
       const elapsed = Date.now() - startTime;
-
       const cost = response?.cost ?? 0;
-      console.log(`[dataforseo] Search volume: ${batch.length} keywords, $${cost.toFixed(4)}, ${elapsed}ms`);
+      console.log(`[dataforseo] Bulk difficulty: ${batch.length} keywords, $${cost.toFixed(4)}, ${elapsed}ms`);
 
-      const tasks = response?.tasks || [];
-      for (const task of tasks) {
-        const results: SearchVolumeResult[] = task?.result || [];
-        for (const r of results) {
-          allResults.push({
-            keyword: r.keyword,
-            searchVolume: r.search_volume ?? 0,
-            cpc: r.cpc ?? 0,
-            competition: r.competition ?? 0,
-            competitionLevel: normalizeCompetitionLevel(r.competition_level),
-            trend: r.monthly_searches?.map((m) => m.search_volume),
-          });
+      for (const task of response?.tasks || []) {
+        for (const item of task?.result?.[0]?.items || []) {
+          if (item.keyword && item.keyword_difficulty != null) {
+            difficultyMap.set(item.keyword.toLowerCase(), item.keyword_difficulty);
+          }
         }
       }
     }
+
+    // Step 2: Get volume/CPC via keyword suggestions (seed data)
+    // Process in parallel batches of 10 to avoid rate limits
+    const allResults: KeywordMetrics[] = [];
+    const parallelLimit = 10;
+
+    for (let i = 0; i < keywords.length; i += parallelLimit) {
+      const chunk = keywords.slice(i, i + parallelLimit);
+      const promises = chunk.map(async (kw) => {
+        try {
+          const response = await this.apiCall(
+            "/v3/dataforseo_labs/google/keyword_suggestions/live",
+            [{
+              keyword: kw,
+              location_code: locationCode,
+              language_code: "en",
+              limit: 1,
+              include_seed_keyword: true,
+              include_serp_info: false,
+            }],
+          );
+
+          const seed = response?.tasks?.[0]?.result?.[0]?.seed_keyword_data;
+          const ki = seed?.keyword_info;
+          const kp = seed?.keyword_properties;
+
+          return {
+            keyword: kw,
+            searchVolume: ki?.search_volume ?? 0,
+            cpc: ki?.cpc ?? 0,
+            competition: ki?.competition ?? 0,
+            competitionLevel: normalizeCompetitionLevel(ki?.competition_level),
+            keywordDifficulty: kp?.keyword_difficulty ?? difficultyMap.get(kw.toLowerCase()),
+            trend: ki?.monthly_searches?.map((m: any) => m.search_volume),
+          } as KeywordMetrics;
+        } catch {
+          // Fallback to difficulty-only data
+          return {
+            keyword: kw,
+            searchVolume: 0,
+            cpc: 0,
+            competition: 0,
+            competitionLevel: "LOW" as const,
+            keywordDifficulty: difficultyMap.get(kw.toLowerCase()),
+          } as KeywordMetrics;
+        }
+      });
+
+      const results = await Promise.all(promises);
+      allResults.push(...results);
+    }
+
+    const totalCostNote = keywords.length > 5 ? " (multiple API calls)" : "";
+    console.log(`[dataforseo] Enriched ${allResults.length} keywords${totalCostNote}`);
 
     return allResults;
   }
@@ -169,17 +209,16 @@ export class DataForSEOService {
     const tasks = response?.tasks || [];
 
     for (const task of tasks) {
-      const items: KeywordSuggestionResult[] = task?.result?.[0]?.items || [];
+      const items: KeywordSuggestionItem[] = task?.result?.[0]?.items || [];
       for (const item of items) {
-        const kd = item.keyword_data;
-        if (!kd?.keyword) continue;
+        if (!item.keyword) continue;
         results.push({
-          keyword: kd.keyword,
-          searchVolume: kd.keyword_info?.search_volume ?? 0,
-          cpc: kd.keyword_info?.cpc ?? 0,
-          competition: kd.keyword_info?.competition ?? 0,
-          competitionLevel: normalizeCompetitionLevel(kd.keyword_info?.competition_level),
-          keywordDifficulty: kd.keyword_properties?.keyword_difficulty,
+          keyword: item.keyword,
+          searchVolume: item.keyword_info?.search_volume ?? 0,
+          cpc: item.keyword_info?.cpc ?? 0,
+          competition: item.keyword_info?.competition ?? 0,
+          competitionLevel: normalizeCompetitionLevel(item.keyword_info?.competition_level),
+          keywordDifficulty: item.keyword_properties?.keyword_difficulty,
         });
       }
     }
