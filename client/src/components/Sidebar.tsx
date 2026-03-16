@@ -1,6 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Workflow } from "lucide-react";
+import {
+  LayoutDashboard, Workflow, Clock, Bot, CheckSquare, Brain,
+  HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
+  Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
+} from "lucide-react";
 
 interface User {
   name: string;
@@ -8,13 +12,60 @@ interface User {
   picture: string;
 }
 
-const navItems = [
-  { to: "/workflows", label: "Workflows", icon: Workflow },
+const navSections = [
+  {
+    label: "Overview",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/workflows", label: "Workflows", icon: Workflow },
+      { to: "/history", label: "History", icon: Clock },
+    ],
+  },
+  {
+    label: "AI & Content",
+    items: [
+      { to: "/agents", label: "AI Agents", icon: Bot },
+      { to: "/content", label: "Content", icon: PenTool },
+      { to: "/workbooks", label: "Workbooks", icon: BookOpen },
+    ],
+  },
+  {
+    label: "Knowledge",
+    items: [
+      { to: "/drive", label: "Google Drive", icon: HardDrive },
+      { to: "/clients", label: "Clients", icon: Users },
+      { to: "/sops", label: "SOPs", icon: FileText },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      { to: "/tasks", label: "Tasks", icon: CheckSquare },
+      { to: "/memories", label: "Memories", icon: Brain },
+    ],
+  },
+  {
+    label: "EOS",
+    items: [
+      { to: "/eos/rocks", label: "Rocks", icon: Target },
+      { to: "/eos/scorecard", label: "Scorecard", icon: BarChart3 },
+      { to: "/eos/issues", label: "Issues (IDS)", icon: AlertCircle },
+      { to: "/eos/meetings", label: "L10 Meetings", icon: Calendar },
+      { to: "/eos/people", label: "People", icon: UserCheck },
+      { to: "/eos/headlines", label: "Headlines", icon: Megaphone },
+    ],
+  },
+  {
+    label: "Integrations",
+    items: [
+      { to: "/discord", label: "Discord Logs", icon: MessageCircle },
+    ],
+  },
 ];
 
 export function Sidebar({ user }: { user: User | null }) {
   return (
-    <aside className="flex flex-col bg-surface border-r border-border h-screen sticky top-0">
+    <aside className="flex flex-col bg-surface border-r border-border h-screen sticky top-0 overflow-y-auto">
       {/* Logo */}
       <div className="p-5 border-b border-border">
         <h1 className="text-lg font-semibold text-foreground">
@@ -24,32 +75,43 @@ export function Sidebar({ user }: { user: User | null }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:bg-surface-2 hover:text-foreground"
-              )
-            }
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </NavLink>
+      <nav className="flex-1 p-3">
+        {navSections.map((section) => (
+          <div key={section.label} className="mb-4">
+            <div className="text-[10px] uppercase tracking-wider text-dim font-semibold px-3 mb-1">
+              {section.label}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-accent/10 text-accent"
+                        : "text-muted hover:bg-surface-2 hover:text-foreground"
+                    )
+                  }
+                >
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
 
         {/* Link back to legacy dashboard */}
-        <a
-          href="/"
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-dim hover:bg-surface-2 hover:text-foreground transition-colors mt-4"
-        >
-          &larr; Legacy Dashboard
-        </a>
+        <div className="mt-2 pt-2 border-t border-border">
+          <a
+            href="/"
+            className="flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium text-dim hover:bg-surface-2 hover:text-foreground transition-colors"
+          >
+            &larr; Legacy Dashboard
+          </a>
+        </div>
       </nav>
 
       {/* User */}
