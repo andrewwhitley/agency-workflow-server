@@ -1754,8 +1754,9 @@ export function getDashboardHtml(user?: SessionUser): string {
     }
 
     // ─── API ────────────────────────────────────────────
-    const api = (path) => fetch("/api" + path).then(r => {
+    const api = (path, opts) => fetch("/api" + path, opts).then(r => {
       if (r.status === 401) { window.location.href = "/auth/login"; throw new Error("Unauthorized"); }
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error || r.statusText); });
       return r.json();
     });
     const apiPost = (path, body) => fetch("/api" + path, {
