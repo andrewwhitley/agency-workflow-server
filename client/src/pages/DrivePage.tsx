@@ -27,7 +27,7 @@ export function DrivePage() {
 
   useEffect(() => {
     Promise.all([
-      api<{ authenticated: boolean }>("/auth/status").then((d) => setConnected(d.authenticated)),
+      api<{ connected: boolean }>("/auth/status").then((d) => setConnected(d.connected)),
       api<IndexedDoc[]>("/index/documents").then(setDocuments).catch(() => {}),
       api<DriveFile[]>("/drive/folders").then(setFiles).catch(() => {}),
     ]).finally(() => setLoading(false));
