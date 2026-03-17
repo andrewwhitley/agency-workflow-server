@@ -24,7 +24,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { WorkflowEngine } from "./workflow-engine.js";
 import { bridgeWorkflowsToMcp, bridgeKnowledgeToMcp, bridgeThreadsToMcp, bridgeTasksToMcp, bridgeMemoriesToMcp, bridgeContentFactoryToMcp, bridgeKeywordResearchToMcp } from "./mcp-bridge.js";
 import { registerAgencyWorkflows } from "./agency-workflows.js";
-import { getDashboardHtml, getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
+import { getLoginPageHtml, getAccessDeniedHtml } from "./dashboard.js";
 import { GoogleAuthService } from "./google-auth.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { DocumentIndexer } from "./document-indexer.js";
@@ -253,12 +253,9 @@ async function main(): Promise<void> {
     console.log("✓ MCP OAuth 2.1 endpoints enabled");
   }
 
-  // ─── 4. Dashboard (protected) ──────────────────────
-  app.get("/", requireAuth, (req, res) => {
-    const user = (req.session as any)?.user as SessionUser | undefined;
-    res.setHeader("Content-Type", "text/html");
-    res.send(getDashboardHtml(user));
-  });
+  // ─── 4. React app static assets (unprotected — JS/CSS/images) ──
+  const clientDistPath = path.join(import.meta.dirname, "client-dist");
+  app.use(express.static(clientDistPath));
 
   // ─── 5. REST API (for dashboard) ───────────────────
   // Protect all /api routes except /api/auth/me (already defined above)
@@ -713,13 +710,6 @@ async function main(): Promise<void> {
     });
   });
 
-  // ─── React app at /app (new frontend) ─────────────
-  const clientDistPath = path.join(import.meta.dirname, "client-dist");
-  app.use("/app", express.static(clientDistPath));
-  app.get("/app/*", requireAuth, (_req, res) => {
-    res.sendFile(path.join(clientDistPath, "index.html"));
-  });
-
   // ─── 14. Health Check (Railway uses this) ──────────
   app.get("/health", (_req, res) => {
     res.json({
@@ -989,6 +979,12 @@ async function main(): Promise<void> {
       }
     });
   }
+
+  // ─── React SPA catch-all (protected) ──────────────
+  // Must be AFTER all API routes, health check, and MCP endpoints
+  app.get("*", requireAuth, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
 
   // ─── 16. Start ────────────────────────────────────
   const server = app.listen(PORT, async () => {

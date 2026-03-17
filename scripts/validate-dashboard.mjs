@@ -1,35 +1,21 @@
 /**
- * Post-build validator: extracts inline JS from dashboard HTML
- * and checks it for syntax errors. Run after `tsc`.
+ * Post-build validator: checks that the login/access-denied pages
+ * exported from dashboard.ts are valid HTML strings.
  */
 
-import { getDashboardHtml } from "../build/dashboard.js";
+import { getLoginPageHtml, getAccessDeniedHtml } from "../build/dashboard.js";
 
-const html = getDashboardHtml();
-const scriptMatch = html.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+const login = getLoginPageHtml();
+const denied = getAccessDeniedHtml("test@example.com");
 
-if (!scriptMatch) {
-  console.error("✗ No <script> tag found in dashboard HTML");
+if (!login.includes("<!DOCTYPE html>")) {
+  console.error("✗ getLoginPageHtml() did not return valid HTML");
   process.exit(1);
 }
 
-try {
-  new Function(scriptMatch[1]);
-  console.log("✓ Dashboard JS syntax OK");
-} catch (e) {
-  console.error("✗ Dashboard JS syntax error:", e.message);
-
-  // Try to find the offending line
-  const lines = scriptMatch[1].split("\n");
-  for (let i = lines.length; i > 0; i--) {
-    try {
-      new Function(lines.slice(0, i).join("\n"));
-      console.error(`  Near JS line ${i + 1}:`);
-      for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j++) {
-        console.error(`  ${j + 1}: ${lines[j]}`);
-      }
-      break;
-    } catch {}
-  }
+if (!denied.includes("<!DOCTYPE html>")) {
+  console.error("✗ getAccessDeniedHtml() did not return valid HTML");
   process.exit(1);
 }
+
+console.log("✓ Dashboard pages OK");

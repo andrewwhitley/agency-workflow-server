@@ -116,15 +116,6 @@ export function Sidebar({ user }: { user: User | null }) {
           </div>
         ))}
 
-        {/* Link back to legacy dashboard */}
-        <div className="mt-2 pt-2 border-t border-border">
-          <a
-            href="/"
-            className="flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium text-dim hover:bg-surface-2 hover:text-foreground transition-colors"
-          >
-            &larr; Legacy Dashboard
-          </a>
-        </div>
       </nav>
 
       {/* User */}
