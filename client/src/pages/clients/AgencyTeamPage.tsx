@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/FormDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FormField } from "@/components/FormField";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 
 interface TeamMember {
   id: number;
@@ -13,52 +18,79 @@ interface TeamMember {
   avatarUrl: string | null;
 }
 
+const emptyForm = (): Partial<TeamMember> => ({
+  name: "", email: "", phone: "", role: "", department: "", bio: "", status: "active",
+});
+
 export function AgencyTeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "", department: "", bio: "" });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<Partial<TeamMember>>(emptyForm());
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [pending, setPending] = useState(false);
+  const [filter, setFilter] = useState<string | null>(null);
 
-  const fetch = () => {
+  const reload = () => {
     api<TeamMember[]>("/cm/agency-team").then(setMembers).catch(console.error).finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { reload(); }, []);
 
-  const save = async () => {
-    await api("/cm/agency-team", { method: "POST", body: JSON.stringify(form) });
-    setShowAdd(false);
-    setForm({ name: "", email: "", phone: "", role: "", department: "", bio: "" });
-    fetch();
+  const openAdd = () => { setForm(emptyForm()); setEditingId(null); setDialogOpen(true); };
+  const openEdit = (m: TeamMember) => { setForm({ ...m }); setEditingId(m.id); setDialogOpen(true); };
+  const submit = async () => {
+    setPending(true);
+    try {
+      // Agency team currently only has POST (no PUT endpoint), so always POST
+      await api("/cm/agency-team", { method: "POST", body: JSON.stringify(form) });
+      setDialogOpen(false);
+      reload();
+    } catch (e) { console.error(e); }
+    setPending(false);
   };
+
+  const upd = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   if (loading) return <div className="text-muted">Loading team...</div>;
 
   const departments = [...new Set(members.map((m) => m.department).filter(Boolean))] as string[];
+  const filtered = filter ? members.filter((m) => m.department === filter) : members;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold text-foreground">Agency Team</h2>
-        <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90">
-          Add Team Member
-        </button>
+        <Button onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Add Team Member</Button>
       </div>
 
-      {departments.length > 0 ? (
-        departments.map((dept) => (
-          <div key={dept} className="mb-6">
-            <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">{dept}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {members.filter((m) => m.department === dept).map((m) => (
-                <MemberCard key={m.id} member={m} />
-              ))}
+      {/* Department filter */}
+      {departments.length > 1 && (
+        <div className="flex gap-2 mb-6 flex-wrap">
+          <Button size="sm" variant={filter === null ? "default" : "outline"} onClick={() => setFilter(null)}>All</Button>
+          {departments.map((d) => (
+            <Button key={d} size="sm" variant={filter === d ? "default" : "outline"} onClick={() => setFilter(d)}>{d}</Button>
+          ))}
+        </div>
+      )}
+
+      {departments.length > 0 && !filter ? (
+        departments.map((dept) => {
+          const deptMembers = filtered.filter((m) => m.department === dept);
+          if (deptMembers.length === 0) return null;
+          return (
+            <div key={dept} className="mb-6">
+              <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">{dept}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {deptMembers.map((m) => <MemberCard key={m.id} member={m} onEdit={() => openEdit(m)} />)}
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {members.map((m) => <MemberCard key={m.id} member={m} />)}
+          {filtered.map((m) => <MemberCard key={m.id} member={m} onEdit={() => openEdit(m)} />)}
         </div>
       )}
 
@@ -68,54 +100,42 @@ export function AgencyTeamPage() {
         </div>
       )}
 
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-surface rounded-lg border border-border w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-foreground mb-4">Add Team Member</h3>
-            <div className="space-y-4">
-              <input placeholder="Full Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-              <div className="grid grid-cols-2 gap-4">
-                <input placeholder="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                <input placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-              </div>
-              <textarea placeholder="Bio" value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3}
-                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowAdd(false)} className="px-4 py-2 rounded-md text-sm font-medium bg-surface-2 text-muted hover:bg-surface-3">Cancel</button>
-              <button onClick={save} className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90">Add Member</button>
-            </div>
-          </div>
+      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
+        title={editingId ? "Edit Team Member" : "Add Team Member"} onSubmit={submit} isPending={pending}>
+        <FormField label="Full Name" value={form.name || ""} onChange={(v) => upd("name", v)} required />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Role" value={form.role || ""} onChange={(v) => upd("role", v)} required placeholder="e.g. SEO Specialist" />
+          <FormField label="Department" value={form.department || ""} onChange={(v) => upd("department", v)} placeholder="e.g. SEO, Content, Leadership" />
         </div>
-      )}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
+          <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
+        </div>
+        <FormField label="Bio" type="textarea" value={form.bio || ""} onChange={(v) => upd("bio", v)} rows={3} />
+      </FormDialog>
     </div>
   );
 }
 
-function MemberCard({ member }: { member: { name: string; role: string; email: string | null; phone: string | null; bio: string | null; status: string; avatarUrl: string | null } }) {
+function MemberCard({ member, onEdit }: { member: TeamMember; onEdit: () => void }) {
   return (
-    <div className="bg-surface border border-border rounded-md p-5">
-      <div className="flex items-center gap-3 mb-2">
-        {member.avatarUrl ? (
-          <img src={member.avatarUrl} alt="" className="w-10 h-10 rounded-full" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center text-sm font-bold">
-            {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+    <div className="bg-surface border border-border rounded-md p-5 group">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3 mb-2">
+          {member.avatarUrl ? (
+            <img src={member.avatarUrl} alt="" className="w-10 h-10 rounded-full" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center text-sm font-bold">
+              {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+            </div>
+          )}
+          <div>
+            <div className="text-sm font-semibold text-foreground">{member.name}</div>
+            <div className="text-xs text-muted">{member.role}</div>
           </div>
-        )}
-        <div>
-          <div className="text-sm font-semibold text-foreground">{member.name}</div>
-          <div className="text-xs text-muted">{member.role}</div>
         </div>
+        <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={onEdit}><Pencil className="h-3 w-3" /></Button>
       </div>
       {member.email && <div className="text-xs text-dim">{member.email}</div>}
       {member.phone && <div className="text-xs text-dim">{member.phone}</div>}

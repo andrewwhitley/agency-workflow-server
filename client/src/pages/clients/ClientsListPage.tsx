@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormDialog } from "@/components/FormDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FormField } from "@/components/FormField";
+import { Plus, Pencil, Trash2, Search } from "lucide-react";
 
 interface Client {
   id: number;
@@ -16,21 +22,20 @@ interface Client {
   status: string;
 }
 
-const INDUSTRIES = [
-  "Healthcare / Integrative Medicine", "Digital Marketing", "Technology", "Legal",
-  "Home Services", "Construction / Fabrication", "Real Estate", "Hospitality",
-  "Wellness / Aesthetics", "Chiropractic", "Inspection Services", "IT / Consulting", "Other",
-];
-
-const emptyForm = { companyName: "", industry: "", companyWebsite: "", companyPhone: "", companyEmail: "", location: "", domain: "" };
+const emptyForm = (): Partial<Client> => ({
+  companyName: "", industry: "", companyWebsite: "", companyPhone: "",
+  companyEmail: "", location: "", domain: "", status: "active",
+});
 
 export function ClientsListPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [creating, setCreating] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<Partial<Client>>(emptyForm());
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [pending, setPending] = useState(false);
 
   const fetchClients = () => {
     api<Client[]>("/cm/clients")
@@ -42,21 +47,52 @@ export function ClientsListPage() {
   useEffect(() => { fetchClients(); }, []);
 
   const filtered = search
-    ? clients.filter((c) => c.companyName.toLowerCase().includes(search.toLowerCase()) || c.industry?.toLowerCase().includes(search.toLowerCase()))
+    ? clients.filter((c) =>
+        c.companyName.toLowerCase().includes(search.toLowerCase()) ||
+        c.industry?.toLowerCase().includes(search.toLowerCase()) ||
+        c.domain?.toLowerCase().includes(search.toLowerCase()))
     : clients;
 
-  const create = async (e: React.FormEvent) => {
+  const openAdd = () => { setForm(emptyForm()); setEditingId(null); setDialogOpen(true); };
+  const openEdit = (c: Client, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!form.companyName.trim()) return;
-    setCreating(true);
-    try {
-      await api("/cm/clients", { method: "POST", body: JSON.stringify(form) });
-      setShowCreate(false);
-      setForm(emptyForm);
-      fetchClients();
-    } catch (err) { alert(err instanceof Error ? err.message : "Failed"); }
-    setCreating(false);
+    e.stopPropagation();
+    setForm({ ...c });
+    setEditingId(c.id);
+    setDialogOpen(true);
   };
+  const openDelete = (id: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleteId(id);
+  };
+
+  const submit = async () => {
+    setPending(true);
+    try {
+      if (editingId) {
+        await api(`/cm/clients/${editingId}`, { method: "PUT", body: JSON.stringify(form) });
+      } else {
+        await api("/cm/clients", { method: "POST", body: JSON.stringify(form) });
+      }
+      setDialogOpen(false);
+      fetchClients();
+    } catch (err) { console.error(err); }
+    setPending(false);
+  };
+
+  const doDelete = async () => {
+    if (!deleteId) return;
+    setPending(true);
+    try {
+      await api(`/cm/clients/${deleteId}`, { method: "DELETE" });
+      setDeleteId(null);
+      fetchClients();
+    } catch (err) { console.error(err); }
+    setPending(false);
+  };
+
+  const upd = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
   if (loading) return <div className="text-muted">Loading clients...</div>;
 
@@ -64,33 +100,37 @@ export function ClientsListPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold text-foreground">Clients</h2>
-        <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90">
-          Add Client
-        </button>
+        <Button onClick={openAdd}><Plus className="h-4 w-4 mr-1" /> Add Client</Button>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clients..."
-          className="w-full max-w-md px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" />
+      <div className="relative mb-6 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-dim" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search clients..." className="pl-9" />
       </div>
 
-      {/* Client grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((client) => (
           <Link key={client.id} to={`/clients/${client.slug}`}
-            className="bg-surface border border-border rounded-md p-5 hover:border-accent/50 transition-colors block">
+            className="bg-surface border border-border rounded-md p-5 hover:border-accent/50 transition-colors block group">
             <div className="flex items-start justify-between mb-2">
               <h3 className="text-sm font-semibold text-foreground">{client.companyName}</h3>
-              <span className={cn("text-xs px-2 py-0.5 rounded font-medium",
-                client.status === "active" ? "bg-success/10 text-success" :
-                client.status === "inactive" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
-              )}>{client.status}</span>
+              <div className="flex items-center gap-1">
+                <span className={cn("text-xs px-2 py-0.5 rounded font-medium",
+                  client.status === "active" ? "bg-success/10 text-success" :
+                  client.status === "inactive" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
+                )}>{client.status}</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => openEdit(client, e)}><Pencil className="h-3 w-3" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                  onClick={(e) => openDelete(client.id, e)}><Trash2 className="h-3 w-3" /></Button>
+              </div>
             </div>
             {client.industry && <p className="text-xs text-muted mb-2">{client.industry}</p>}
             <div className="flex flex-wrap gap-2 text-xs text-dim">
               {client.location && <span className="px-2 py-0.5 rounded bg-surface-2">{client.location}</span>}
               {client.domain && <span className="px-2 py-0.5 rounded bg-surface-2">{client.domain}</span>}
+              {client.companyPhone && <span className="px-2 py-0.5 rounded bg-surface-2">{client.companyPhone}</span>}
             </div>
           </Link>
         ))}
@@ -102,66 +142,27 @@ export function ClientsListPage() {
         </div>
       )}
 
-      {/* Create modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowCreate(false)}>
-          <form onSubmit={create} className="bg-surface rounded-lg border border-border w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-foreground mb-4">Add Client</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-muted mb-1">Company Name *</label>
-                <input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} required
-                  className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Industry</label>
-                  <select value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm">
-                    <option value="">Select...</option>
-                    {INDUSTRIES.map((i) => <option key={i} value={i}>{i}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Location</label>
-                  <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Website</label>
-                  <input value={form.companyWebsite} onChange={(e) => setForm({ ...form, companyWebsite: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Domain</label>
-                  <input value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} placeholder="example.com"
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Phone</label>
-                  <input value={form.companyPhone} onChange={(e) => setForm({ ...form, companyPhone: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Email</label>
-                  <input value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })}
-                    className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-md text-sm font-medium bg-surface-2 text-muted hover:bg-surface-3">Cancel</button>
-              <button type="submit" disabled={creating} className="px-4 py-2 rounded-md text-sm font-medium bg-accent text-white hover:bg-accent/90">
-                {creating ? "Creating..." : "Add Client"}
-              </button>
-            </div>
-          </form>
+      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
+        title={editingId ? "Edit Client" : "Add Client"} onSubmit={submit} isPending={pending} wide>
+        <FormField label="Company Name" value={form.companyName || ""} onChange={(v) => upd("companyName", v)} required />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Industry" value={form.industry || ""} onChange={(v) => upd("industry", v)} placeholder="e.g. Healthcare, Legal" />
+          <FormField label="Location" value={form.location || ""} onChange={(v) => upd("location", v)} placeholder="e.g. Austin, TX" />
         </div>
-      )}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Website" value={form.companyWebsite || ""} onChange={(v) => upd("companyWebsite", v)} />
+          <FormField label="Domain" value={form.domain || ""} onChange={(v) => upd("domain", v)} placeholder="example.com" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Phone" value={form.companyPhone || ""} onChange={(v) => upd("companyPhone", v)} />
+          <FormField label="Email" value={form.companyEmail || ""} onChange={(v) => upd("companyEmail", v)} />
+        </div>
+        <FormField label="Status" value={form.status || "active"} onChange={(v) => upd("status", v)} placeholder="active, inactive, pending" />
+      </FormDialog>
+
+      <ConfirmDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}
+        title="Delete Client" description="This will permanently delete this client and ALL associated data (contacts, services, campaigns, etc.). This cannot be undone."
+        onConfirm={doDelete} isPending={pending} />
     </div>
   );
 }
