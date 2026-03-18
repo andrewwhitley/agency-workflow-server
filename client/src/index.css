@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Match existing dashboard design tokens */
+  /* Existing dashboard design tokens */
   --color-bg: #f5f7fa;
   --color-surface: #ffffff;
   --color-surface-2: #eef1f6;
@@ -22,6 +22,20 @@
 
   --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* shadcn/ui required variables */
+  --color-background: #ffffff;
+  --color-primary-foreground: #ffffff;
+  --color-secondary-foreground: #1a1f2e;
+  --color-muted-foreground: #5a6478;
+  --color-accent-foreground: #1a1f2e;
+  --color-destructive-foreground: #ffffff;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1f2e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a1f2e;
+  --color-input: #d1d5de;
+  --color-ring: #3964b2;
 }
 
 body {
