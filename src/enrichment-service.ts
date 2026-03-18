@@ -812,7 +812,10 @@ export class EnrichmentService {
       const { rows: batch } = await pool.query(`
         SELECT * FROM enrichment_prospects
         WHERE enrichment_status = 'pending'
-        ORDER BY id
+        ORDER BY
+          CASE WHEN revenue_range != '' AND revenue_range != '0' THEN CAST(REGEXP_REPLACE(revenue_range, '[^0-9]', '', 'g') AS BIGINT) ELSE 0 END DESC,
+          CASE WHEN employee_count != '' AND employee_count != '0' THEN CAST(REGEXP_REPLACE(employee_count, '[^0-9]', '', 'g') AS INTEGER) ELSE 0 END DESC,
+          id
         LIMIT $1
       `, [batchLimit]);
 
@@ -1003,9 +1006,9 @@ export class EnrichmentService {
           try {
             // Single call: domain overview (traffic, keywords, rank)
             const overview = await this.seoService.getDomainOverview(domain);
-            seoData.organic_traffic = overview.organicTraffic;
-            seoData.organic_keywords = overview.organicKeywords;
-            seoData.domain_rank = overview.rank;
+            seoData.organic_traffic = Math.round(overview.organicTraffic || 0);
+            seoData.organic_keywords = Math.round(overview.organicKeywords || 0);
+            seoData.domain_rank = Math.round(overview.rank || 0);
             cost += 0.01;
 
             Object.assign(updates, seoData);
@@ -1018,53 +1021,9 @@ export class EnrichmentService {
         }
       }
 
-      // ── Stage 4: Claude Analysis ──────────────────────
-      if (html && !dryRun) {
-        try {
-          const bodyText = html
-            .replace(/<script[\s\S]*?<\/script>/gi, "")
-            .replace(/<style[\s\S]*?<\/style>/gi, "")
-            .replace(/<[^>]+>/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 8000);
-
-          if (bodyText.length > 100) {
-            const anthropic = new Anthropic();
-            const response = await anthropic.messages.create({
-              model: "claude-haiku-4-5-20251001",
-              max_tokens: 500,
-              messages: [{
-                role: "user",
-                content: `Analyze this medical practice website. Return ONLY valid JSON with these fields:
-{
-  "top_services": ["service1", "service2", ...],
-  "provider_count": number or null,
-  "location_count": number or null,
-  "quality_notes": "brief assessment"
-}
-
-Practice: ${prospect.company_name} in ${prospect.city}, ${prospect.state}
-Website text (truncated):
-${bodyText}`,
-              }],
-            });
-
-            const text = response.content[0].type === "text" ? response.content[0].text : "";
-            try {
-              const parsed = JSON.parse(text.replace(/```json?\n?/g, "").replace(/```/g, "").trim());
-              if (parsed.top_services) updates.top_services = JSON.stringify(parsed.top_services);
-              if (parsed.provider_count) updates.provider_count = parsed.provider_count;
-              if (parsed.location_count) updates.location_count = parsed.location_count;
-            } catch {
-              // Claude response wasn't valid JSON — that's OK
-            }
-            cost += 0.01;
-          }
-        } catch (err) {
-          console.error(`Claude analysis error for ${prospect.company_name}:`, err);
-        }
-      }
+      // ── Stage 4: Claude Analysis — SKIPPED for cost savings ──
+      // Can be re-enabled later for deeper analysis (provider count, services)
+      // Cost: ~$0.01/prospect via Haiku
 
       // ── Stage 5: GBP Enrichment ────────────────────────
       if (prospect.gmb_link && this.seoService.isAuthenticated() && !dryRun) {
