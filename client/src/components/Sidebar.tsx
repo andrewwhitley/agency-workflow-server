@@ -21,8 +21,6 @@ const navSections = [
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/clients", label: "Clients", icon: Building2 },
-      { to: "/campaigns", label: "Campaigns", icon: Target },
-      { to: "/deliverables", label: "Deliverables", icon: CheckSquare },
       { to: "/weekly-check-in", label: "Weekly Check-In", icon: Heart },
     ],
   },
