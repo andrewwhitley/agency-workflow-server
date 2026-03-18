@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/FormDialog";
+import { Pencil } from "lucide-react";
 import { CompanyInfoEdit } from "@/components/client/CompanyInfoEdit";
 import { ServicesSection } from "@/components/client/ServicesSection";
 import { CampaignsSection } from "@/components/client/CampaignsSection";
@@ -414,60 +417,127 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
 
 function HealthTab({ clientId }: { clientId: number }) {
   const [entries, setEntries] = useState<HealthEntry[]>([]);
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editEntry, setEditEntry] = useState<HealthEntry | null>(null);
+  const [editNotes, setEditNotes] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    api<HealthEntry[]>(`/cm/traffic-light/health?clientId=${clientId}`).then(setEntries).catch(console.error).finally(() => setLoading(false));
+  const reload = useCallback(() => {
+    Promise.all([
+      api<HealthEntry[]>(`/cm/traffic-light/health?clientId=${clientId}`).catch(() => []),
+      api<{ id: number; name: string }[]>(`/cm/traffic-light/departments`).catch(() => []),
+    ]).then(([e, d]) => { setEntries(e); setDepartments(d); }).finally(() => setLoading(false));
   }, [clientId]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const openEdit = (e: HealthEntry) => { setEditEntry(e); setEditStatus(e.status); setEditNotes(e.notes || ""); };
+  const submitEdit = async () => {
+    if (!editEntry) return;
+    setPending(true);
+    try {
+      await api(`/cm/traffic-light/health`, { method: "POST", body: JSON.stringify({
+        clientId, departmentId: editEntry.id, weekOf: editEntry.weekOf, status: editStatus, notes: editNotes,
+      })});
+      setEditEntry(null);
+      reload();
+    } catch (e) { console.error(e); }
+    setPending(false);
+  };
 
   if (loading) return <div className="text-sm text-muted">Loading health status...</div>;
 
   const latestWeek = entries.length > 0 ? entries[0].weekOf : null;
   const latest = entries.filter((e) => e.weekOf === latestWeek);
 
+  const statusColors: Record<string, string> = {
+    green: "bg-success", yellow: "bg-warning", red: "bg-destructive", na: "bg-dim",
+  };
+
   return (
     <div>
       {latest.length === 0 ? (
-        <div className="text-muted">No health entries yet. Use the Weekly Check-in to add status.</div>
+        <div className="text-muted">No health entries yet. Use the Weekly Check-in page to add status.</div>
       ) : (
         <>
           <div className="text-sm text-muted mb-4">Week of {latestWeek}</div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {latest.map((e) => (
-              <div key={e.id} className="bg-surface border border-border rounded-md p-4">
+              <button key={e.id} onClick={() => openEdit(e)}
+                className="bg-surface border border-border rounded-md p-4 text-left hover:border-accent/50 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={cn("w-3 h-3 rounded-full",
-                    e.status === "green" && "bg-success",
-                    e.status === "yellow" && "bg-warning",
-                    e.status === "red" && "bg-destructive",
-                    e.status === "na" && "bg-dim"
-                  )} />
+                  <span className={cn("w-3 h-3 rounded-full", statusColors[e.status] || "bg-dim")} />
                   <span className="text-sm font-medium text-foreground">{e.departmentName}</span>
                 </div>
                 {e.notes && <p className="text-xs text-muted">{e.notes}</p>}
-              </div>
+              </button>
             ))}
           </div>
         </>
+      )}
+
+      {editEntry && (
+        <FormDialog open={true} onOpenChange={() => setEditEntry(null)}
+          title={`Edit ${editEntry.departmentName} — ${editEntry.weekOf}`}
+          onSubmit={submitEdit} isPending={pending}>
+          <div className="flex gap-3">
+            {["green", "yellow", "red", "na"].map((s) => (
+              <button key={s} type="button" onClick={() => setEditStatus(s)}
+                className={cn("flex items-center gap-2 px-3 py-2 rounded-md border text-sm capitalize transition-colors",
+                  editStatus === s ? "border-accent bg-accent/10 font-medium" : "border-border hover:bg-surface-2")}>
+                <span className={cn("w-3 h-3 rounded-full", statusColors[s])} />
+                {s === "na" ? "N/A" : s}
+              </button>
+            ))}
+          </div>
+          <FormField label="Notes" type="textarea" value={editNotes} onChange={setEditNotes} rows={3} />
+        </FormDialog>
       )}
     </div>
   );
 }
 
-// ── Brand Story Tab ──────────────────────────
+// ── Brand Story Tab (editable) ───────────────
 
 function BrandStoryTab({ clientId }: { clientId: number }) {
   const [story, setStory] = useState<BrandStory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editFullStory, setEditFullStory] = useState("");
+  const [editStatus, setEditStatus] = useState("draft");
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    api<BrandStory>(`/cm/clients/${clientId}/brand-story`).then(setStory).catch(() => {}).finally(() => setLoading(false));
+  const reload = useCallback(() => {
+    api<BrandStory>(`/cm/clients/${clientId}/brand-story`).then(setStory).catch(() => setStory(null)).finally(() => setLoading(false));
   }, [clientId]);
 
-  if (loading) return <div className="text-sm text-muted">Loading brand story...</div>;
-  if (!story) return <div className="text-muted">No brand story generated yet.</div>;
+  useEffect(() => { reload(); }, [reload]);
 
-  const jsonSections = [
+  const openEdit = () => {
+    setEditFullStory(story?.fullBrandStory || "");
+    setEditStatus(story?.status || "draft");
+    setEditOpen(true);
+  };
+
+  const submit = async () => {
+    setPending(true);
+    try {
+      if (story) {
+        await api(`/cm/brand-story/${story.id}`, { method: "PUT", body: JSON.stringify({ fullBrandStory: editFullStory, status: editStatus }) });
+      } else {
+        await api(`/cm/clients/${clientId}/brand-story`, { method: "POST", body: JSON.stringify({ fullBrandStory: editFullStory, status: editStatus }) });
+      }
+      setEditOpen(false);
+      reload();
+    } catch (e) { console.error(e); }
+    setPending(false);
+  };
+
+  if (loading) return <div className="text-sm text-muted">Loading brand story...</div>;
+
+  const jsonSections = story ? [
     { label: "Hero", data: story.heroSection },
     { label: "Problem", data: story.problemSection },
     { label: "Guide", data: story.guideSection },
@@ -480,29 +550,36 @@ function BrandStoryTab({ clientId }: { clientId: number }) {
     { label: "Content Strategy", data: story.contentStrategySection },
     { label: "Messaging", data: story.messagingSection },
     { label: "Implementation", data: story.implementationSection },
-  ];
-
-  const filledSections = jsonSections.filter((s) => s.data && Object.keys(s.data as object).length > 0);
+  ].filter((s) => s.data && Object.keys(s.data as object).length > 0) : [];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 mb-2">
-        <span className={cn("text-xs px-2 py-0.5 rounded font-medium capitalize",
-          story.status === "approved" ? "bg-success/10 text-success" :
-          story.status === "reviewed" ? "bg-accent/10 text-accent" : "bg-surface-2 text-dim"
-        )}>{story.status}</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {story && (
+            <span className={cn("text-xs px-2 py-0.5 rounded font-medium capitalize",
+              story.status === "approved" ? "bg-success/10 text-success" :
+              story.status === "reviewed" ? "bg-accent/10 text-accent" : "bg-surface-2 text-dim"
+            )}>{story.status}</span>
+          )}
+        </div>
+        <Button size="sm" variant="outline" onClick={openEdit}>
+          <Pencil className="h-3 w-3 mr-1" /> {story ? "Edit" : "Create"} Brand Story
+        </Button>
       </div>
 
-      {story.fullBrandStory && (
-        <Section title="Full Brand Story">
+      {story?.fullBrandStory && (
+        <div>
+          <h3 className="text-sm font-semibold text-foreground mb-3 pb-2 border-b border-border">Full Brand Story</h3>
           <div className="bg-surface border border-border rounded-md p-6">
             <div className="text-sm text-foreground whitespace-pre-wrap">{story.fullBrandStory}</div>
           </div>
-        </Section>
+        </div>
       )}
 
-      {filledSections.map((s) => (
-        <Section key={s.label} title={s.label}>
+      {jsonSections.map((s) => (
+        <div key={s.label}>
+          <h3 className="text-sm font-semibold text-foreground mb-3 pb-2 border-b border-border">{s.label}</h3>
           <div className="bg-surface-2 rounded-md p-4 space-y-2">
             {Object.entries(s.data as Record<string, unknown>).map(([key, val]) => (
               val ? (
@@ -513,12 +590,17 @@ function BrandStoryTab({ clientId }: { clientId: number }) {
               ) : null
             ))}
           </div>
-        </Section>
+        </div>
       ))}
 
-      {!story.fullBrandStory && filledSections.length === 0 && (
-        <div className="text-muted">Brand story content is empty. Generate one to get started.</div>
-      )}
+      {!story && <div className="text-muted">No brand story yet. Click "Create Brand Story" to start.</div>}
+
+      <FormDialog open={editOpen} onOpenChange={setEditOpen}
+        title={story ? "Edit Brand Story" : "Create Brand Story"}
+        onSubmit={submit} isPending={pending} wide>
+        <FormField label="Status" value={editStatus} onChange={setEditStatus} placeholder="draft, generated, reviewed, approved" />
+        <FormField label="Full Brand Story" type="textarea" value={editFullStory} onChange={setEditFullStory} rows={20} />
+      </FormDialog>
     </div>
   );
 }
