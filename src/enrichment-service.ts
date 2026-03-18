@@ -405,9 +405,50 @@ export class EnrichmentService {
       throw new Error("Google Drive not connected");
     }
 
-    const drive = new GoogleDriveService(this.authService.getClient());
-    const sheetData = await drive.readGoogleSheet(sheetId, tab);
-    const rows = sheetData.values;
+    const { extractGoogleId } = await import("./google-drive.js");
+    const id = extractGoogleId(sheetId);
+
+    // Use Drive API to export as CSV (avoids Sheets API scope issues)
+    const { google } = await import("googleapis");
+    const drive = google.drive({ version: "v3", auth: this.authService.getClient() });
+
+    // If a tab is specified, we need to find its gid from spreadsheet metadata
+    // Drive export URL supports gid parameter: exportFormat=csv&gid=XXXX
+    let csvText: string;
+    if (tab) {
+      // Use the export link with gid — first get sheet list via Drive API
+      // The Drive files.export only exports the first sheet, so we use a direct URL
+      const client = this.authService.getClient();
+      await client.authorize();
+      const token = client.credentials.access_token;
+
+      // Get spreadsheet metadata to find the gid for the requested tab
+      // Use the Drive API files.get which works with Drive scope
+      const fileMeta = await drive.files.get({
+        fileId: id,
+        fields: "id,name",
+      });
+
+      // Try to export with tab name encoded in URL
+      // Google Sheets export URL format: /spreadsheets/d/{id}/export?format=csv&gid={gid}
+      // Since we can't easily get gid without Sheets API, export via URL with sheet name
+      const exportUrl = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+      const resp = await fetch(exportUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) throw new Error(`Failed to export sheet tab "${tab}": ${resp.status} ${resp.statusText}`);
+      csvText = await resp.text();
+    } else {
+      // Default: export first sheet via Drive API
+      const res = await drive.files.export(
+        { fileId: id, mimeType: "text/csv" },
+        { responseType: "text" }
+      );
+      csvText = String(res.data);
+    }
+
+    // Parse CSV into rows
+    const rows = this.parseCsv(csvText);
     if (!rows || rows.length < 2) throw new Error("Sheet is empty or has no data rows");
 
     const headers = rows[0];
@@ -437,7 +478,7 @@ export class EnrichmentService {
     const pool = getPool();
     let imported = 0;
     let skipped = 0;
-    const tabName = tab || sheetData.sheets?.[0]?.title || "Sheet1";
+    const tabName = tab || "Sheet1";
 
     for (let rowIdx = 1; rowIdx < rows.length; rowIdx++) {
       const row = rows[rowIdx];
@@ -1174,5 +1215,51 @@ ${bodyText}`,
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /** Parse CSV text into a 2D array of strings, handling quoted fields */
+  private parseCsv(text: string): string[][] {
+    const rows: string[][] = [];
+    let current: string[] = [];
+    let field = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+
+      if (inQuotes) {
+        if (ch === '"' && next === '"') {
+          field += '"';
+          i++; // skip escaped quote
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          field += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          current.push(field);
+          field = "";
+        } else if (ch === "\n" || (ch === "\r" && next === "\n")) {
+          current.push(field);
+          field = "";
+          if (current.some((c) => c.trim())) rows.push(current);
+          current = [];
+          if (ch === "\r") i++; // skip \n after \r
+        } else {
+          field += ch;
+        }
+      }
+    }
+    // Last field/row
+    if (field || current.length > 0) {
+      current.push(field);
+      if (current.some((c) => c.trim())) rows.push(current);
+    }
+
+    return rows;
   }
 }

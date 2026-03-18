@@ -290,7 +290,7 @@ export function EnrichmentPage() {
 
       {/* Import Panel */}
       <div className="bg-surface border border-border rounded-lg p-4">
-        <h2 className="text-sm font-semibold text-foreground mb-3">Import from Coldlytics Sheet</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-3">Import from Sheet</h2>
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[300px]">
             <label className="text-xs text-dim block mb-1">Google Sheet ID or URL</label>
