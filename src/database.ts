@@ -4,7 +4,12 @@
 
 import pg from "pg";
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// Return timestamps as ISO strings instead of Date objects.
+// Without this, dates serialize as {} through JSON.stringify in some contexts.
+types.setTypeParser(1114, (val: string) => val); // TIMESTAMP
+types.setTypeParser(1184, (val: string) => val); // TIMESTAMPTZ
 
 let pool: pg.Pool | null = null;
 
@@ -1142,6 +1147,114 @@ Before saving, verify:
     sql: `
       ALTER TABLE cm_tl_health_entries
         ADD CONSTRAINT cm_tl_health_unique_entry UNIQUE (client_id, department_id, week_of);
+    `,
+  },
+  {
+    id: "026_enrichment",
+    sql: `
+      CREATE TABLE IF NOT EXISTS enrichment_prospects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_sheet_id TEXT NOT NULL,
+        source_tab TEXT NOT NULL DEFAULT 'Sheet1',
+        source_row INTEGER NOT NULL,
+        -- Coldlytics original data
+        company_name TEXT NOT NULL DEFAULT '',
+        website TEXT NOT NULL DEFAULT '',
+        phone TEXT DEFAULT '',
+        email TEXT DEFAULT '',
+        address TEXT DEFAULT '',
+        city TEXT DEFAULT '',
+        state TEXT DEFAULT '',
+        zip TEXT DEFAULT '',
+        country TEXT DEFAULT '',
+        industry TEXT DEFAULT '',
+        sub_industry TEXT DEFAULT '',
+        employee_count TEXT DEFAULT '',
+        revenue_range TEXT DEFAULT '',
+        contact_name TEXT DEFAULT '',
+        contact_title TEXT DEFAULT '',
+        contact_email TEXT DEFAULT '',
+        contact_phone TEXT DEFAULT '',
+        contact_linkedin TEXT DEFAULT '',
+        gmb_link TEXT DEFAULT '',
+        facebook_url TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        -- Derived
+        domain TEXT,
+        specialty TEXT,
+        enrichment_status TEXT NOT NULL DEFAULT 'pending',
+        enrichment_error TEXT,
+        -- Size qualifiers
+        provider_count INTEGER,
+        location_count INTEGER,
+        estimated_revenue TEXT,
+        total_staff INTEGER,
+        -- Pillar 1: Website
+        website_platform TEXT,
+        website_quality_score REAL,
+        website_load_time REAL,
+        website_mobile_friendly BOOLEAN,
+        website_status TEXT,
+        onpage_score REAL,
+        -- Pillar 2: SEO
+        top_services JSONB,
+        organic_traffic INTEGER,
+        organic_keywords INTEGER,
+        domain_rank INTEGER,
+        page1_rankings JSONB,
+        ranked_keywords_sample JSONB,
+        -- Pillar 3: Ads
+        has_fb_pixel BOOLEAN,
+        has_google_pixel BOOLEAN,
+        has_other_ad_networks JSONB,
+        -- Pillar 4: AI/Automation
+        has_chatbot BOOLEAN,
+        chatbot_provider TEXT,
+        crm_platform TEXT,
+        has_booking_widget BOOLEAN,
+        booking_provider TEXT,
+        has_lead_capture BOOLEAN,
+        lead_capture_types JSONB,
+        -- Additional signals
+        gbp_rating REAL,
+        gbp_review_count INTEGER,
+        social_active JSONB,
+        competitor_count INTEGER,
+        contact_quality TEXT,
+        -- Scoring
+        pillar_scores JSONB,
+        total_score INTEGER,
+        qualification_tier TEXT,
+        sales_angles JSONB,
+        -- Timestamps
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (source_sheet_id, source_tab, source_row)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_prospects (enrichment_status);
+      CREATE INDEX IF NOT EXISTS idx_enrichment_tier ON enrichment_prospects (qualification_tier);
+      CREATE INDEX IF NOT EXISTS idx_enrichment_domain ON enrichment_prospects (domain);
+      CREATE INDEX IF NOT EXISTS idx_enrichment_score ON enrichment_prospects (total_score DESC);
+
+      CREATE TABLE IF NOT EXISTS enrichment_runs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        status TEXT NOT NULL DEFAULT 'running',
+        total_prospects INTEGER NOT NULL DEFAULT 0,
+        processed INTEGER NOT NULL DEFAULT 0,
+        succeeded INTEGER NOT NULL DEFAULT 0,
+        failed INTEGER NOT NULL DEFAULT 0,
+        skipped INTEGER NOT NULL DEFAULT 0,
+        estimated_cost REAL NOT NULL DEFAULT 0,
+        actual_cost REAL NOT NULL DEFAULT 0,
+        batch_size INTEGER NOT NULL DEFAULT 10,
+        concurrency INTEGER NOT NULL DEFAULT 2,
+        cost_cap REAL NOT NULL DEFAULT 50,
+        dry_run BOOLEAN NOT NULL DEFAULT false,
+        error TEXT,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      );
     `,
   },
 ];
