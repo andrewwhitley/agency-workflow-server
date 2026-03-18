@@ -283,91 +283,125 @@ function calculateScores(p: Partial<Prospect>): {
   const scores: Record<string, number> = {};
   const angles: string[] = [];
 
-  // ── Size score (max 40) — "Can they afford us?" ────────
-  // This is the primary qualifier. A big practice = dream prospect.
+  // ── Size score (max 40) — "Can they afford $5k/mo marketing?" ──
+  // 3 tiers: Startup/solo (low), Small clinic 2-4 providers (mid), Established $1M+/5+ providers (full)
+  // Either revenue OR provider count can qualify — whichever is higher.
   let sizeScore = 0;
-  const providerCount = p.provider_count || 0;
-  if (providerCount >= 5) sizeScore += 15;
-  else if (providerCount >= 3) sizeScore += 10;
-  else if (providerCount >= 2) sizeScore += 6;
-  else if (providerCount >= 1) sizeScore += 3;
 
-  const revenue = (p.estimated_revenue || p.revenue_range || "").toLowerCase();
-  if (/\$?\d+m|\$?[1-9],?\d{3},?\d{3}/i.test(revenue) || /1m|2m|5m|10m/i.test(revenue)) sizeScore += 15;
-  else if (/500k|750k/i.test(revenue)) sizeScore += 10;
-  else if (/250k|300k|400k/i.test(revenue)) sizeScore += 6;
-  else {
-    const emp = parseInt(p.employee_count || "0");
-    if (emp >= 20) sizeScore += 12;
-    else if (emp >= 10) sizeScore += 8;
-    else if (emp >= 5) sizeScore += 4;
+  // Parse revenue to a number
+  const revRaw = (p.estimated_revenue || p.revenue_range || "").replace(/[^0-9.]/g, "");
+  const revNum = revRaw ? parseFloat(revRaw) : 0;
+  // Handle formatted values like "$3,000,000" → 3000000, "3M" already stripped to "3"
+  const revNormalized = revNum < 1000 ? revNum * 1000000 : revNum; // if someone wrote "3" meaning $3M
+
+  // Revenue score
+  let revScore = 0;
+  if (revNormalized >= 1000000) revScore = 40;        // $1M+ → full points, established clinic
+  else if (revNormalized >= 500000) revScore = 30;     // $500k-$1M → strong small clinic
+  else if (revNormalized >= 250000) revScore = 20;     // $250k-$500k → small clinic
+  else if (revNormalized > 0) revScore = 10;           // Under $250k → startup
+
+  // Provider count score
+  let provScore = 0;
+  const providerCount = p.provider_count || 0;
+  if (providerCount >= 5) provScore = 40;              // 5+ providers → full points
+  else if (providerCount >= 3) provScore = 30;         // 3-4 → strong small clinic
+  else if (providerCount >= 2) provScore = 20;         // 2 → small clinic
+  else if (providerCount >= 1) provScore = 10;         // Solo
+
+  // Employee count as fallback proxy when revenue and providers unknown
+  let empScore = 0;
+  const empRaw = (p.employee_count || "").replace(/[^0-9]/g, "");
+  const empNum = empRaw ? parseInt(empRaw) : 0;
+  if (empNum >= 20) empScore = 35;       // 20+ employees → likely $1M+ practice
+  else if (empNum >= 10) empScore = 25;  // 10-19 → mid-size
+  else if (empNum >= 5) empScore = 15;   // 5-9 → small clinic
+  else if (empNum >= 2) empScore = 8;    // 2-4 → very small
+
+  // Take the best signal
+  sizeScore = Math.max(revScore, provScore, empScore);
+
+  // Multi-location bonus (additive, but don't exceed max)
+  const locationCount = p.location_count || 1;
+  if (locationCount >= 2) {
+    angles.push(`Multi-location practice (${locationCount} locations)`);
   }
 
-  const locationCount = p.location_count || 1;
-  if (locationCount >= 3) sizeScore += 10;
-  else if (locationCount >= 2) sizeScore += 5;
   scores.size = Math.min(40, sizeScore);
 
-  // ── Website opportunity (max 20) — "Can we help their web presence?" ────
+  // ── Website opportunity (max 15) — "Can we help their web presence?" ────
   let websiteScore = 0;
   const platform = (p.website_platform || "").toLowerCase();
   if (!platform || platform === "wix" || platform === "squarespace" || platform === "google sites" || platform === "godaddy" || platform === "weebly") {
-    websiteScore += 8;
+    websiteScore += 7;
     angles.push("Website redesign opportunity — weak or outdated platform");
   } else if (platform === "wordpress") {
-    websiteScore += 3; // WP is fine but can always be improved
+    websiteScore += 2;
   }
 
   const qualityScore = p.website_quality_score ?? p.onpage_score ?? null;
   if (qualityScore !== null) {
-    if (qualityScore < 40) { websiteScore += 8; angles.push("Low website quality score — technical improvements needed"); }
-    else if (qualityScore < 60) websiteScore += 5;
-    else if (qualityScore < 80) websiteScore += 2;
+    if (qualityScore < 40) { websiteScore += 5; angles.push("Low website quality score"); }
+    else if (qualityScore < 60) websiteScore += 3;
+    else if (qualityScore < 80) websiteScore += 1;
   }
 
   const loadTime = p.website_load_time ?? null;
-  if (loadTime !== null && loadTime > 4) { websiteScore += 4; }
-  scores.website = Math.min(20, websiteScore);
+  if (loadTime !== null && loadTime > 4) { websiteScore += 3; }
+  scores.website = Math.min(15, websiteScore);
 
-  // ── SEO opportunity (max 25) — "Can we grow their search traffic?" ────
+  // ── SEO opportunity (max 20) — "Can we grow their search traffic?" ────
   let seoScore = 0;
   const traffic = p.organic_traffic ?? null;
   if (traffic !== null) {
-    if (traffic < 100) { seoScore += 10; angles.push("Virtually invisible in search — massive SEO upside"); }
-    else if (traffic < 500) { seoScore += 7; angles.push("Low organic traffic — room to grow significantly"); }
-    else if (traffic < 2000) seoScore += 4;
+    if (traffic < 100) { seoScore += 8; angles.push("Virtually invisible in search — massive SEO upside"); }
+    else if (traffic < 500) { seoScore += 5; angles.push("Low organic traffic — room to grow significantly"); }
+    else if (traffic < 2000) seoScore += 3;
   } else {
-    seoScore += 5; // Unknown traffic — assume moderate opportunity
+    seoScore += 4; // Unknown traffic — assume moderate opportunity
   }
 
   const rankings = p.page1_rankings;
   const rankingCount = Array.isArray(rankings) ? rankings.length : (typeof rankings === "string" ? JSON.parse(rankings || "[]").length : 0);
-  if (rankingCount === 0) { seoScore += 10; }
-  else if (rankingCount < 5) seoScore += 7;
-  else if (rankingCount < 15) seoScore += 3;
+  if (rankingCount === 0) { seoScore += 8; }
+  else if (rankingCount < 5) seoScore += 5;
+  else if (rankingCount < 15) seoScore += 2;
 
   const domainRank = p.domain_rank || 0;
-  if (domainRank < 10) seoScore += 5;
-  else if (domainRank < 30) seoScore += 3;
-  scores.seo = Math.min(25, seoScore);
+  if (domainRank < 10) seoScore += 4;
+  else if (domainRank < 30) seoScore += 2;
+  scores.seo = Math.min(20, seoScore);
 
-  // ── Ads opportunity (max 15) — "Are they running paid?" ────
+  // ── Active ad investment (max 10) — "Are they already spending on growth?" ────
   let adsScore = 0;
-  if (!p.has_fb_pixel && !p.has_google_pixel) {
-    adsScore += 15;
-    angles.push("No paid ads — untapped patient acquisition channel");
-  } else if (!p.has_fb_pixel || !p.has_google_pixel) {
-    adsScore += 8; // Running one channel but not both
+  if (p.has_fb_pixel && p.has_google_pixel) {
+    adsScore += 10;
+    angles.push("Running both FB + Google ads — active growth investment");
+  } else if (p.has_fb_pixel || p.has_google_pixel) {
+    adsScore += 6;
+    angles.push("Running paid ads on one channel");
   }
-  scores.ads = Math.min(15, adsScore);
+  // No pixels = 0 — neutral, not negative. It's an opportunity but doesn't increase score.
+  scores.ads = Math.min(10, adsScore);
 
-  // ── AI/Automation — informational only, NOT scored ────
-  // What they have/don't have is useful context for sales conversations,
-  // but doesn't affect qualification. A clinic with GHL is still a prospect
-  // if they're not getting results from it.
-  scores.ai_automation = 0; // tracked for data, not scored
+  // ── Established & reputable (max 10) — reviews + rating combined ────
+  let establishedScore = 0;
+  const reviewCount = p.gbp_review_count || 0;
+  const rating = p.gbp_rating || 0;
+  if (reviewCount >= 100 && rating >= 4.5) { establishedScore = 10; }
+  else if (reviewCount >= 50 && rating >= 4.0) { establishedScore = 7; }
+  else if (reviewCount >= 20) { establishedScore = 5; }
+  else if (reviewCount >= 5) { establishedScore = 2; }
+  scores.established = establishedScore;
 
-  const total = scores.size + scores.website + scores.seo + scores.ads;
+  // ── Contact quality (max 5) — "Can we actually reach them?" ────
+  let contactScore = 0;
+  if (p.contact_email) contactScore += 2;
+  if (p.contact_phone) contactScore += 2;
+  if (p.contact_linkedin) contactScore += 1;
+  scores.contact = Math.min(5, contactScore);
+
+  const total = scores.size + scores.website + scores.seo + scores.ads + scores.established + scores.contact;
 
   let tier: string;
   if (total >= 70) tier = "dream";
@@ -1078,7 +1112,7 @@ export class EnrichmentService {
 
   // ── Export to Google Sheet ─────────────────────────────────
 
-  async exportToSheet(sheetId: string, filters?: { tier?: string }): Promise<{ exported: number }> {
+  async exportToSheet(sheetId: string, filters?: { tier?: string }): Promise<{ exported: number; file?: string }> {
     if (!this.authService.isAuthenticated()) {
       throw new Error("Google Drive not connected");
     }
@@ -1125,22 +1159,25 @@ export class EnrichmentService {
       ];
     });
 
-    const { google: googleapis } = await import("googleapis");
-    const sheets = googleapis.sheets({ version: "v4", auth: this.authService.getClient() });
-    const { extractGoogleId } = await import("./google-drive.js");
-    const spreadsheetId = extractGoogleId(sheetId);
+    // Build CSV content
+    const csvRows = [headers, ...dataRows];
+    const csvContent = csvRows.map((row) =>
+      row.map((cell) => {
+        const str = String(cell ?? "");
+        if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(",")
+    ).join("\n");
 
-    // Write headers + data
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: "Sheet1!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [headers, ...dataRows],
-      },
-    });
+    // Write to local file for upload
+    const fs = await import("fs");
+    const path = await import("path");
+    const exportPath = path.join(process.cwd(), "data", `enrichment-export-${Date.now()}.csv`);
+    fs.writeFileSync(exportPath, csvContent, "utf-8");
 
-    return { exported: rows.length };
+    return { exported: rows.length, file: exportPath };
   }
 
   // ── Helpers ───────────────────────────────────────────────
