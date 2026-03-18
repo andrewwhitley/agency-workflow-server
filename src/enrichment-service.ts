@@ -283,94 +283,96 @@ function calculateScores(p: Partial<Prospect>): {
   const scores: Record<string, number> = {};
   const angles: string[] = [];
 
-  // Size score (max 25)
+  // ── Size score (max 40) — "Can they afford us?" ────────
+  // This is the primary qualifier. A big practice = dream prospect.
   let sizeScore = 0;
   const providerCount = p.provider_count || 0;
-  if (providerCount >= 5) sizeScore += 10;
-  else if (providerCount >= 3) sizeScore += 7;
-  else if (providerCount >= 1) sizeScore += 4;
+  if (providerCount >= 5) sizeScore += 15;
+  else if (providerCount >= 3) sizeScore += 10;
+  else if (providerCount >= 2) sizeScore += 6;
+  else if (providerCount >= 1) sizeScore += 3;
 
   const revenue = (p.estimated_revenue || p.revenue_range || "").toLowerCase();
-  if (/\$?\d+m|\$?[1-9],?\d{3},?\d{3}/i.test(revenue) || /1m|2m|5m|10m/i.test(revenue)) sizeScore += 10;
-  else if (/500k|750k/i.test(revenue)) sizeScore += 7;
-  else if (/250k|300k|400k/i.test(revenue)) sizeScore += 4;
+  if (/\$?\d+m|\$?[1-9],?\d{3},?\d{3}/i.test(revenue) || /1m|2m|5m|10m/i.test(revenue)) sizeScore += 15;
+  else if (/500k|750k/i.test(revenue)) sizeScore += 10;
+  else if (/250k|300k|400k/i.test(revenue)) sizeScore += 6;
   else {
-    // Try employee count as proxy
     const emp = parseInt(p.employee_count || "0");
-    if (emp >= 20) sizeScore += 8;
-    else if (emp >= 10) sizeScore += 5;
-    else if (emp >= 5) sizeScore += 3;
+    if (emp >= 20) sizeScore += 12;
+    else if (emp >= 10) sizeScore += 8;
+    else if (emp >= 5) sizeScore += 4;
   }
 
   const locationCount = p.location_count || 1;
-  if (locationCount >= 3) sizeScore += 5;
-  else if (locationCount >= 2) sizeScore += 3;
-  else sizeScore += 1;
-  scores.size = Math.min(25, sizeScore);
+  if (locationCount >= 3) sizeScore += 10;
+  else if (locationCount >= 2) sizeScore += 5;
+  scores.size = Math.min(40, sizeScore);
 
-  // Website pillar (max 20) — more opportunity = higher score
+  // ── Website opportunity (max 20) — "Can we help their web presence?" ────
   let websiteScore = 0;
   const platform = (p.website_platform || "").toLowerCase();
-  // Non-WordPress or poor platforms = opportunity
   if (!platform || platform === "wix" || platform === "squarespace" || platform === "google sites" || platform === "godaddy" || platform === "weebly") {
-    websiteScore += 5;
-    angles.push("Website redesign — current platform limits growth");
+    websiteScore += 8;
+    angles.push("Website redesign opportunity — weak or outdated platform");
   } else if (platform === "wordpress") {
-    websiteScore += 2; // Some opportunity for improvement
+    websiteScore += 3; // WP is fine but can always be improved
   }
 
-  const qualityScore = p.website_quality_score ?? p.onpage_score ?? 50;
-  if (qualityScore < 40) { websiteScore += 10; angles.push("Website quality issues need attention"); }
-  else if (qualityScore < 60) websiteScore += 7;
-  else if (qualityScore < 80) websiteScore += 4;
+  const qualityScore = p.website_quality_score ?? p.onpage_score ?? null;
+  if (qualityScore !== null) {
+    if (qualityScore < 40) { websiteScore += 8; angles.push("Low website quality score — technical improvements needed"); }
+    else if (qualityScore < 60) websiteScore += 5;
+    else if (qualityScore < 80) websiteScore += 2;
+  }
 
-  const loadTime = p.website_load_time ?? 3;
-  if (loadTime > 5) { websiteScore += 5; angles.push("Slow website hurting patient experience"); }
-  else if (loadTime > 3) websiteScore += 3;
+  const loadTime = p.website_load_time ?? null;
+  if (loadTime !== null && loadTime > 4) { websiteScore += 4; }
   scores.website = Math.min(20, websiteScore);
 
-  // SEO pillar (max 25) — low traffic = high opportunity
+  // ── SEO opportunity (max 25) — "Can we grow their search traffic?" ────
   let seoScore = 0;
-  const traffic = p.organic_traffic || 0;
-  if (traffic < 100) { seoScore += 10; angles.push("Virtually invisible in search — massive SEO opportunity"); }
-  else if (traffic < 500) { seoScore += 7; angles.push("Low organic visibility — SEO can 5x their traffic"); }
-  else if (traffic < 2000) seoScore += 4;
+  const traffic = p.organic_traffic ?? null;
+  if (traffic !== null) {
+    if (traffic < 100) { seoScore += 10; angles.push("Virtually invisible in search — massive SEO upside"); }
+    else if (traffic < 500) { seoScore += 7; angles.push("Low organic traffic — room to grow significantly"); }
+    else if (traffic < 2000) seoScore += 4;
+  } else {
+    seoScore += 5; // Unknown traffic — assume moderate opportunity
+  }
 
   const rankings = p.page1_rankings;
-  const rankingCount = Array.isArray(rankings) ? rankings.length : 0;
-  if (rankingCount === 0) { seoScore += 10; angles.push("No page 1 rankings for core services"); }
+  const rankingCount = Array.isArray(rankings) ? rankings.length : (typeof rankings === "string" ? JSON.parse(rankings || "[]").length : 0);
+  if (rankingCount === 0) { seoScore += 10; }
   else if (rankingCount < 5) seoScore += 7;
-  else if (rankingCount < 15) seoScore += 4;
+  else if (rankingCount < 15) seoScore += 3;
 
   const domainRank = p.domain_rank || 0;
   if (domainRank < 10) seoScore += 5;
   else if (domainRank < 30) seoScore += 3;
   scores.seo = Math.min(25, seoScore);
 
-  // Ads pillar (max 10) — no pixels = opportunity
+  // ── Ads opportunity (max 15) — "Are they running paid?" ────
   let adsScore = 0;
-  if (!p.has_fb_pixel) { adsScore += 4; }
-  if (!p.has_google_pixel) { adsScore += 4; }
   if (!p.has_fb_pixel && !p.has_google_pixel) {
-    adsScore += 2;
-    angles.push("No paid advertising — untapped patient acquisition channel");
+    adsScore += 15;
+    angles.push("No paid ads — untapped patient acquisition channel");
+  } else if (!p.has_fb_pixel || !p.has_google_pixel) {
+    adsScore += 8; // Running one channel but not both
   }
-  scores.ads = Math.min(10, adsScore);
+  scores.ads = Math.min(15, adsScore);
 
-  // AI/Automation pillar (max 20) — missing tech = opportunity
-  let aiScore = 0;
-  if (!p.has_chatbot) { aiScore += 5; angles.push("No chatbot — missing after-hours lead capture"); }
-  if (!p.crm_platform) { aiScore += 5; angles.push("No CRM detected — manual patient follow-up"); }
-  if (!p.has_booking_widget) { aiScore += 5; angles.push("No online booking — friction for new patients"); }
-  if (!p.has_lead_capture) { aiScore += 5; }
-  scores.ai_automation = Math.min(20, aiScore);
+  // ── AI/Automation — informational only, NOT scored ────
+  // What they have/don't have is useful context for sales conversations,
+  // but doesn't affect qualification. A clinic with GHL is still a prospect
+  // if they're not getting results from it.
+  scores.ai_automation = 0; // tracked for data, not scored
 
-  const total = scores.size + scores.website + scores.seo + scores.ads + scores.ai_automation;
+  const total = scores.size + scores.website + scores.seo + scores.ads;
 
   let tier: string;
-  if (total >= 80) tier = "dream";
-  else if (total >= 60) tier = "good";
-  else if (total >= 40) tier = "maybe";
+  if (total >= 70) tier = "dream";
+  else if (total >= 50) tier = "good";
+  else if (total >= 30) tier = "maybe";
   else tier = "unqualified";
 
   // Keep only top 3-4 sales angles
@@ -988,7 +990,7 @@ export class EnrichmentService {
         updates.lead_capture_types = JSON.stringify(captureTypes);
       }
 
-      // ── Stage 3: DataForSEO Calls ──────────────────────
+      // ── Stage 3: DataForSEO — quick domain overview only ──
       if (domain && websiteStatus !== "dead" && this.seoService.isAuthenticated() && !dryRun) {
         // Check domain cache (30-day TTL)
         const cached = this.domainCache.get(domain);
@@ -999,38 +1001,17 @@ export class EnrichmentService {
         } else {
           const seoData: Record<string, any> = {};
           try {
-            // Domain overview
+            // Single call: domain overview (traffic, keywords, rank)
             const overview = await this.seoService.getDomainOverview(domain);
             seoData.organic_traffic = overview.organicTraffic;
             seoData.organic_keywords = overview.organicKeywords;
             seoData.domain_rank = overview.rank;
             cost += 0.01;
 
-            // Rate limiting delay
-            await this.delay(200);
-
-            // Ranked keywords
-            const ranked = await this.seoService.getDomainRankedKeywords(domain, undefined, 20);
-            const page1 = ranked.filter((k) => k.position <= 10);
-            seoData.page1_rankings = JSON.stringify(page1);
-            seoData.ranked_keywords_sample = JSON.stringify(ranked.slice(0, 10));
-            cost += 0.01;
-
-            await this.delay(200);
-
-            // On-page analysis
-            try {
-              const onpage = await this.seoService.analyzePageInstant(websiteUrl);
-              seoData.onpage_score = onpage.onpageScore;
-              seoData.website_load_time = onpage.loadTime || null;
-              seoData.website_quality_score = onpage.onpageScore;
-              cost += 0.01;
-            } catch {
-              // On-page may fail for some sites
-            }
-
             Object.assign(updates, seoData);
             this.domainCache.set(domain, { data: seoData, timestamp: Date.now() });
+
+            await this.delay(200);
           } catch (err) {
             console.error(`DataForSEO error for ${domain}:`, err);
           }
