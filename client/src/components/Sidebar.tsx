@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   LayoutDashboard, Workflow, Clock, Bot, CheckSquare, Brain,
   HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
   Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
   Globe, TrendingUp, Radar, FileSearch, Search, Lightbulb,
-  Building2, Heart,
+  Building2, Heart, Crosshair,
 } from "lucide-react";
 
 interface User {
@@ -76,7 +77,17 @@ const navSections = [
   },
 ];
 
+const salesSection = {
+  label: "Sales",
+  items: [
+    { to: "/sales/enrichment", label: "Prospect Enrichment", icon: Crosshair },
+  ],
+};
+
 export function Sidebar({ user }: { user: User | null }) {
+  const { isAdmin } = useIsAdmin();
+  const sections = isAdmin ? [...navSections, salesSection] : navSections;
+
   return (
     <aside className="flex flex-col bg-surface border-r border-border h-screen sticky top-0 overflow-y-auto">
       {/* Logo */}
@@ -89,7 +100,7 @@ export function Sidebar({ user }: { user: User | null }) {
 
       {/* Navigation */}
       <nav className="flex-1 p-3">
-        {navSections.map((section) => (
+        {sections.map((section) => (
           <div key={section.label} className="mb-4">
             <div className="text-[10px] uppercase tracking-wider text-dim font-semibold px-3 mb-1">
               {section.label}

@@ -30,6 +30,7 @@ import { DeliverablesPage } from "./pages/clients/DeliverablesPage";
 import { AgencyTeamPage } from "./pages/clients/AgencyTeamPage";
 import { WeeklyCheckInPage } from "./pages/clients/WeeklyCheckInPage";
 import { TrafficLightSettingsPage } from "./pages/clients/TrafficLightSettingsPage";
+import { EnrichmentPage } from "./pages/sales/EnrichmentPage";
 
 export default function App() {
   return (
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/eos/meetings" element={<MeetingsPage />} />
         <Route path="/eos/people" element={<PeoplePage />} />
         <Route path="/eos/headlines" element={<HeadlinesPage />} />
+        <Route path="/sales/enrichment" element={<EnrichmentPage />} />
       </Route>
     </Routes>
   );

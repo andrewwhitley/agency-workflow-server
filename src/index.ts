@@ -53,6 +53,7 @@ import {
   requireAuth,
   type SessionUser,
 } from "./oauth.js";
+import { EnrichmentService } from "./enrichment-service.js";
 import {
   isMcpOAuthConfigured,
   getProtectedResourceMetadata,
@@ -618,6 +619,105 @@ async function main(): Promise<void> {
     app.delete("/api/eos/people/:id", requireEosAdmin as any, async (req, res) => {
       try { await peopleAnalyzerService.delete(req.params.id); res.json({ success: true }); }
       catch { res.status(500).json({ error: "Failed to delete entry" }); }
+    });
+  }
+
+  // ─── 12d. Sales / Enrichment Routes (admin-only) ───
+  if (process.env.DATABASE_URL) {
+    const enrichmentService = new EnrichmentService(seoService, authService);
+
+    const requireSalesAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const email = (req.session as any)?.user?.email;
+      if (!isEosAdmin(email)) { res.status(403).json({ error: "Admin access required" }); return; }
+      next();
+    };
+
+    app.post("/api/sales/import", requireSalesAdmin as any, async (req, res) => {
+      try {
+        const { sheetId, tab } = req.body;
+        if (!sheetId) { res.status(400).json({ error: "sheetId is required" }); return; }
+        res.json(await enrichmentService.importFromSheet(sheetId, tab));
+      } catch (err: any) { res.status(500).json({ error: err.message || "Import failed" }); }
+    });
+
+    app.get("/api/sales/prospects", requireSalesAdmin as any, async (req, res) => {
+      try {
+        res.json(await enrichmentService.listProspects({
+          tier: req.query.tier as string,
+          status: req.query.status as string,
+          state: req.query.state as string,
+          specialty: req.query.specialty as string,
+          search: req.query.search as string,
+          sort: req.query.sort as string,
+          order: req.query.order as "asc" | "desc",
+          limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+          offset: req.query.offset ? parseInt(req.query.offset as string) : undefined,
+        }));
+      } catch (err: any) { res.status(500).json({ error: err.message || "Failed to list prospects" }); }
+    });
+
+    app.get("/api/sales/prospects/:id", requireSalesAdmin as any, async (req, res) => {
+      try {
+        const prospect = await enrichmentService.getProspect(req.params.id);
+        if (!prospect) { res.status(404).json({ error: "Prospect not found" }); return; }
+        res.json(prospect);
+      } catch (err: any) { res.status(500).json({ error: err.message || "Failed to get prospect" }); }
+    });
+
+    app.get("/api/sales/stats", requireSalesAdmin as any, async (_req, res) => {
+      try { res.json(await enrichmentService.getStats()); }
+      catch (err: any) { res.status(500).json({ error: err.message || "Failed to get stats" }); }
+    });
+
+    app.post("/api/sales/enrich/start", requireSalesAdmin as any, async (req, res) => {
+      try {
+        res.json(await enrichmentService.startEnrichment(req.body));
+      } catch (err: any) { res.status(500).json({ error: err.message || "Failed to start enrichment" }); }
+    });
+
+    app.post("/api/sales/enrich/pause", requireSalesAdmin as any, async (_req, res) => {
+      try { await enrichmentService.pauseEnrichment(); res.json({ success: true }); }
+      catch (err: any) { res.status(500).json({ error: err.message || "Failed to pause" }); }
+    });
+
+    app.post("/api/sales/enrich/resume", requireSalesAdmin as any, async (_req, res) => {
+      try { await enrichmentService.resumeEnrichment(); res.json({ success: true }); }
+      catch (err: any) { res.status(500).json({ error: err.message || "Failed to resume" }); }
+    });
+
+    app.post("/api/sales/enrich/cancel", requireSalesAdmin as any, async (_req, res) => {
+      try { await enrichmentService.cancelEnrichment(); res.json({ success: true }); }
+      catch (err: any) { res.status(500).json({ error: err.message || "Failed to cancel" }); }
+    });
+
+    // SSE progress stream
+    app.get("/api/sales/enrich/status", requireSalesAdmin as any, (req, res) => {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      const onProgress = (data: any) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      enrichmentService.getProgressEmitter().on("progress", onProgress);
+      req.on("close", () => {
+        enrichmentService.getProgressEmitter().off("progress", onProgress);
+      });
+    });
+
+    app.get("/api/sales/enrich/runs", requireSalesAdmin as any, async (_req, res) => {
+      try { res.json(await enrichmentService.getEnrichmentRuns()); }
+      catch (err: any) { res.status(500).json({ error: err.message || "Failed to get runs" }); }
+    });
+
+    app.post("/api/sales/export", requireSalesAdmin as any, async (req, res) => {
+      try {
+        const { sheetId, tier } = req.body;
+        if (!sheetId) { res.status(400).json({ error: "sheetId is required" }); return; }
+        res.json(await enrichmentService.exportToSheet(sheetId, { tier }));
+      } catch (err: any) { res.status(500).json({ error: err.message || "Export failed" }); }
     });
   }
 
