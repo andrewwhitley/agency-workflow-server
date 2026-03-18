@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { CompanyInfoEdit } from "@/components/client/CompanyInfoEdit";
+import { ServicesSection } from "@/components/client/ServicesSection";
+import { CrudSection, CrudItem } from "@/components/client/CrudSection";
+import { FormField } from "@/components/FormField";
 
 // ── Types ────────────────────────────────────
 
@@ -133,8 +137,8 @@ export function ClientDetailPage() {
         ))}
       </div>
 
-      {tab === "info" && <InfoTab client={client} />}
-      {tab === "services" && <ServicesTab clientId={client.id} />}
+      {tab === "info" && <InfoTab client={client} onClientUpdate={setClient} />}
+      {tab === "services" && <ServicesSection clientId={client.id} />}
       {tab === "campaigns" && <CampaignsTab clientId={client.id} />}
       {tab === "marketing-plan" && <MarketingPlanTab clientId={client.id} />}
       {tab === "content-guide" && <ContentGuideTab clientId={client.id} />}
@@ -180,468 +184,225 @@ function pct(val: number | null) {
   return `${val}%`;
 }
 
-// ── Info Tab ─────────────────────────────────
+// ── Info Tab (editable) ──────────────────────
 
-function InfoTab({ client }: { client: Client }) {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [differentiators, setDifferentiators] = useState<Differentiator[]>([]);
-  const [links, setLinks] = useState<ImportantLink[]>([]);
-  const [logins, setLogins] = useState<Login[]>([]);
-  const [personas, setPersonas] = useState<BuyerPersona[]>([]);
-
-  useEffect(() => {
-    Promise.all([
-      api<Contact[]>(`/cm/clients/${client.id}/contacts`).catch(() => []),
-      api<Address[]>(`/cm/clients/${client.id}/addresses`).catch(() => []),
-      api<TeamMember[]>(`/cm/clients/${client.id}/team-members`).catch(() => []),
-      api<Competitor[]>(`/cm/clients/${client.id}/competitors`).catch(() => []),
-      api<Differentiator[]>(`/cm/clients/${client.id}/differentiators`).catch(() => []),
-      api<ImportantLink[]>(`/cm/clients/${client.id}/important-links`).catch(() => []),
-      api<Login[]>(`/cm/clients/${client.id}/logins`).catch(() => []),
-      api<BuyerPersona[]>(`/cm/clients/${client.id}/buyer-personas`).catch(() => []),
-    ]).then(([c, a, tm, comp, diff, lnk, log, bp]) => {
-      setContacts(c); setAddresses(a); setTeamMembers(tm);
-      setCompetitors(comp); setDifferentiators(diff); setLinks(lnk); setLogins(log); setPersonas(bp);
-    });
-  }, [client.id]);
-
+function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (c: Client) => void }) {
   return (
     <div className="space-y-8">
-      {/* Company Information */}
-      <Section title="Company Information">
-        <FieldGrid fields={[
-          { label: "Company Name", value: client.companyName },
-          { label: "Legal Name", value: client.legalName },
-          { label: "DBA / Trade Name", value: client.dbaName },
-          { label: "Industry", value: client.industry },
-          { label: "Business Type", value: client.businessType },
-          { label: "Location", value: client.location },
-          { label: "Time Zone", value: client.timeZone },
-          { label: "Website", value: client.companyWebsite },
-          { label: "Domain", value: client.domain },
-          { label: "Domain Registrar", value: client.domainRegistrar },
-          { label: "Date Founded", value: client.dateFounded },
-          { label: "Year Founded", value: client.yearFounded },
-          { label: "EIN", value: client.ein },
-          { label: "CRM System", value: client.crmSystem },
-          { label: "Local Service Area", value: client.isLocalServiceArea ? "Yes" : null },
-          { label: "Display Address", value: client.displayAddress ? "Yes" : null },
-          { label: "Telemedicine Offered", value: client.telemedicineOffered ? "Yes" : null },
-        ]} />
-      </Section>
-
-      {/* Phone Numbers */}
-      <Section title="Phone Numbers">
-        <FieldGrid fields={[
-          { label: "Company Phone", value: client.companyPhone },
-          { label: "Main Phone", value: client.mainPhone },
-          { label: "SMS Phone", value: client.smsPhone },
-          { label: "Toll-Free", value: client.tollFreePhone },
-          { label: "Fax", value: client.faxPhone },
-        ]} />
-      </Section>
-
-      {/* Email Addresses */}
-      <Section title="Email Addresses">
-        <FieldGrid fields={[
-          { label: "Company Email", value: client.companyEmail },
-          { label: "Primary Email", value: client.primaryEmail },
-          { label: "Inquiry Emails", value: client.inquiryEmails },
-          { label: "Employment Email", value: client.employmentEmail },
-        ]} />
-      </Section>
-
-      {/* Addresses */}
-      {addresses.length > 0 && (
-        <Section title="Addresses">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {addresses.map((a) => (
-              <div key={a.id} className="bg-surface-2 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-foreground">{a.label}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim">{a.locationType}</span>
-                  {a.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
-                </div>
-                <div className="text-sm text-muted">
-                  {[a.streetAddress, a.city, a.state, a.postalCode].filter(Boolean).join(", ")}
-                </div>
-                {a.notes && <div className="text-xs text-dim mt-1">{a.notes}</div>}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* Editable company info sections */}
+      <CompanyInfoEdit client={client} onUpdate={onClientUpdate} />
 
       {/* Contacts */}
-      {contacts.length > 0 && (
-        <Section title="Contacts">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {contacts.map((c) => (
-              <div key={c.id} className="bg-surface-2 rounded-md p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-foreground">{c.name}</span>
-                  {c.role && <span className="text-xs text-muted">({c.role})</span>}
-                  {c.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-dim">
-                  {c.email && <span>{c.email}</span>}
-                  {c.phone && <span>{c.phone}{c.phoneType ? ` (${c.phoneType})` : ""}</span>}
-                  {c.wordpressEmail && <span>WP: {c.wordpressEmail}</span>}
-                  {c.linktreeUrl && <a href={c.linktreeUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Linktree</a>}
-                </div>
-                {c.notes && <div className="text-xs text-dim mt-1">{c.notes}</div>}
-              </div>
-            ))}
+      <CrudSection<Contact> title="Contacts" clientId={client.id} entityPath="contacts"
+        emptyForm={() => ({ name: "", role: "", email: "", phone: "", phoneType: "", notes: "", isPrimary: false, shouldAttribute: false, linktreeUrl: "", wordpressEmail: "" } as Partial<Contact>)}
+        renderItem={(c, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-medium text-foreground">{c.name}</span>
+              {c.role && <span className="text-xs text-muted">({c.role})</span>}
+              {c.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-dim">
+              {c.email && <span>{c.email}</span>}
+              {c.phone && <span>{c.phone}{c.phoneType ? ` (${c.phoneType})` : ""}</span>}
+            </div>
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Name" value={form.name || ""} onChange={(v) => upd("name", v)} required />
+          <FormField label="Role" value={form.role || ""} onChange={(v) => upd("role", v)} />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
+            <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
           </div>
-        </Section>
-      )}
+          <FormField label="Phone Type" value={form.phoneType || ""} onChange={(v) => upd("phoneType", v)} placeholder="e.g. Mobile, Office" />
+          <FormField label="WordPress Email" value={form.wordpressEmail || ""} onChange={(v) => upd("wordpressEmail", v)} />
+          <FormField label="Linktree URL" value={form.linktreeUrl || ""} onChange={(v) => upd("linktreeUrl", v)} />
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+          <div className="flex gap-4">
+            <FormField label="Primary Contact" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
+            <FormField label="Use for Attribution" type="checkbox" checked={!!form.shouldAttribute} onChange={(v) => upd("shouldAttribute", v)} />
+          </div>
+        </>)}
+      />
 
-      {/* Financial & Business Metrics */}
-      <Section title="Financial & Business Metrics">
-        <FieldGrid fields={[
-          { label: "Number of Employees", value: client.numberOfEmployees },
-          { label: "Number of Customers", value: client.numberOfCustomers },
-          { label: "Desired New Clients", value: client.desiredNewClients },
-          { label: "Avg Client Lifetime Value", value: currency(client.avgClientLifetimeValue) },
-          { label: "Estimated Annual Revenue", value: currency(client.estimatedAnnualRevenue) },
-          { label: "Target Revenue", value: currency(client.targetRevenue) },
-          { label: "Current Marketing Spend", value: currency(client.currentMarketingSpend) },
-          { label: "Current Ads Spend", value: currency(client.currentAdsSpend) },
-          { label: "Payment Types", value: client.paymentTypesAccepted },
-        ]} />
-      </Section>
-
-      {/* Ads & Targeting */}
-      <Section title="Ads & Targeting">
-        <FieldGrid fields={[
-          { label: "Ads Marketing Budget", value: client.adsMarketingBudget },
-          { label: "Ads Recruiting Budget", value: client.adsRecruitingBudget },
-          { label: "Google Ads Conv Rate Target", value: pct(client.targetGoogleAdsConvRate) },
-          { label: "Google Ads CPA Target", value: currency(client.targetGoogleAdsCpa) },
-          { label: "Bing Ads Conv Rate Target", value: pct(client.targetBingAdsConvRate) },
-          { label: "Bing Ads CPA Target", value: currency(client.targetBingAdsCpa) },
-          { label: "Facebook Ads CPA Target", value: currency(client.targetFacebookAdsCpa) },
-        ]} />
-      </Section>
-
-      {/* Operations */}
-      <Section title="Operations">
-        <FieldGrid fields={[
-          { label: "Business Hours", value: client.businessHours },
-          { label: "Holiday Hours", value: client.holidayHours },
-          { label: "Service Seasonality", value: client.serviceSeasonality },
-          { label: "Languages Spoken", value: client.languagesSpoken },
-        ]} />
-      </Section>
-
-      {/* Background & Credentials */}
-      <Section title="Background & Credentials">
-        <FieldGrid fields={[
-          { label: "Combined Years Experience", value: client.combinedYearsExperience },
-          { label: "Business Facts", value: client.businessFacts },
-          { label: "Affiliations & Associations", value: client.affiliationsAssociations },
-          { label: "Certifications & Trainings", value: client.certificationsTrainings },
-          { label: "Community Involvement", value: client.communityInvolvement },
-        ]} />
-      </Section>
-
-      {/* Design & Branding */}
-      <Section title="Design & Branding">
-        <FieldGrid fields={[
-          { label: "Color Scheme", value: client.colorScheme },
-          { label: "Design Inspiration URLs", value: client.designInspirationUrls },
-          { label: "Google Drive Link", value: client.googleDriveLink },
-        ]} />
-      </Section>
+      {/* Addresses */}
+      <CrudSection<Address> title="Addresses" clientId={client.id} entityPath="addresses"
+        emptyForm={() => ({ label: "", streetAddress: "", city: "", state: "", postalCode: "", locationType: "Main", notes: "", isPrimary: false } as Partial<Address>)}
+        renderItem={(a, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-medium text-foreground">{a.label}</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim">{a.locationType}</span>
+              {a.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
+            </div>
+            <div className="text-sm text-muted">{[a.streetAddress, a.city, a.state, a.postalCode].filter(Boolean).join(", ")}</div>
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Label" value={form.label || ""} onChange={(v) => upd("label", v)} required placeholder="e.g. Main Office" />
+            <FormField label="Location Type" value={form.locationType || "Main"} onChange={(v) => upd("locationType", v)} placeholder="Main, Satellite, Home, Other" />
+          </div>
+          <FormField label="Street Address" value={form.streetAddress || ""} onChange={(v) => upd("streetAddress", v)} />
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="City" value={form.city || ""} onChange={(v) => upd("city", v)} />
+            <FormField label="State" value={form.state || ""} onChange={(v) => upd("state", v)} />
+            <FormField label="Postal Code" value={form.postalCode || ""} onChange={(v) => upd("postalCode", v)} />
+          </div>
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+          <FormField label="Primary Address" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
+        </>)}
+      />
 
       {/* Team Members */}
-      {teamMembers.length > 0 && (
-        <Section title="Team Members">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {teamMembers.map((m) => (
-              <div key={m.id} className="bg-surface-2 rounded-md p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium text-foreground">{m.fullName}</span>
-                  {m.role && <span className="text-xs text-muted">({m.role})</span>}
-                  {m.useForAttribution && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Attribution</span>}
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-dim">
-                  {m.email && <span>{m.email}</span>}
-                  {m.phone && <span>{m.phone}</span>}
-                  {m.preferredContactMethod && <span>Prefers: {m.preferredContactMethod}</span>}
-                </div>
-                {m.bio && <div className="text-xs text-muted mt-1">{m.bio}</div>}
-                <div className="flex gap-2 mt-1">
-                  {m.linkedinUrl && <a href={m.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">LinkedIn</a>}
-                  {m.facebookUrl && <a href={m.facebookUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">Facebook</a>}
-                  {m.instagramUrl && <a href={m.instagramUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">Instagram</a>}
-                </div>
-              </div>
-            ))}
+      <CrudSection<TeamMember> title="Team Members" clientId={client.id} entityPath="team-members" wide
+        emptyForm={() => ({ fullName: "", role: "", email: "", phone: "", bio: "", linkedinUrl: "", facebookUrl: "", instagramUrl: "", useForAttribution: false, preferredContactMethod: "" } as Partial<TeamMember>)}
+        renderItem={(m, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-medium text-foreground">{m.fullName}</span>
+              {m.role && <span className="text-xs text-muted">({m.role})</span>}
+              {m.useForAttribution && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Attribution</span>}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-dim">
+              {m.email && <span>{m.email}</span>}
+              {m.phone && <span>{m.phone}</span>}
+            </div>
+            {m.bio && <div className="text-xs text-muted mt-1">{m.bio}</div>}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Full Name" value={form.fullName || ""} onChange={(v) => upd("fullName", v)} required />
+            <FormField label="Role" value={form.role || ""} onChange={(v) => upd("role", v)} />
           </div>
-        </Section>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
+            <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
+          </div>
+          <FormField label="Bio" type="textarea" value={form.bio || ""} onChange={(v) => upd("bio", v)} />
+          <FormField label="Preferred Contact Method" value={form.preferredContactMethod || ""} onChange={(v) => upd("preferredContactMethod", v)} />
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="LinkedIn URL" value={form.linkedinUrl || ""} onChange={(v) => upd("linkedinUrl", v)} />
+            <FormField label="Facebook URL" value={form.facebookUrl || ""} onChange={(v) => upd("facebookUrl", v)} />
+            <FormField label="Instagram URL" value={form.instagramUrl || ""} onChange={(v) => upd("instagramUrl", v)} />
+          </div>
+          <FormField label="Use for Attribution" type="checkbox" checked={!!form.useForAttribution} onChange={(v) => upd("useForAttribution", v)} />
+        </>)}
+      />
 
       {/* Competitors */}
-      {competitors.length > 0 && (
-        <Section title="Competitors">
-          <div className="space-y-2">
-            {competitors.map((c) => (
-              <div key={c.id} className="flex items-start gap-3 text-sm">
-                {c.rank && <span className="text-xs font-bold text-dim w-6 pt-0.5">#{c.rank}</span>}
-                <div>
-                  <span className="font-medium text-foreground">{c.companyName}</span>
-                  {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent ml-2 hover:underline">{c.url}</a>}
-                  {c.usps && <div className="text-xs text-muted mt-0.5">USPs: {c.usps}</div>}
-                  {c.description && <div className="text-xs text-dim mt-0.5">{c.description}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      <CrudSection<Competitor> title="Competitors" clientId={client.id} entityPath="competitors"
+        emptyForm={() => ({ companyName: "", url: "", usps: "", description: "", rank: null } as Partial<Competitor>)}
+        renderItem={(c, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2">
+              {c.rank && <span className="text-xs font-bold text-dim">#{c.rank}</span>}
+              <span className="text-sm font-medium text-foreground">{c.companyName}</span>
+              {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{c.url}</a>}
+            </div>
+            {c.usps && <div className="text-xs text-muted mt-0.5">USPs: {c.usps}</div>}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Company Name" value={form.companyName || ""} onChange={(v) => upd("companyName", v)} required />
+          <FormField label="Website URL" value={form.url || ""} onChange={(v) => upd("url", v)} />
+          <FormField label="Rank" type="number" value={form.rank?.toString() || ""} onChange={(v) => upd("rank", v ? parseInt(v) : null)} />
+          <FormField label="USPs" type="textarea" value={form.usps || ""} onChange={(v) => upd("usps", v)} />
+          <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} />
+        </>)}
+      />
 
       {/* Differentiators */}
-      {differentiators.length > 0 && (
-        <Section title="Differentiators">
-          <div className="space-y-2">
-            {differentiators.map((d) => (
-              <div key={d.id}>
-                <span className="text-xs px-2 py-0.5 rounded bg-surface-2 text-dim mr-2">{d.category}</span>
-                {d.title && <span className="text-sm font-medium text-foreground">{d.title}: </span>}
-                <span className="text-sm text-muted">{d.description}</span>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      <CrudSection<Differentiator> title="Differentiators" clientId={client.id} entityPath="differentiators"
+        emptyForm={() => ({ category: "", title: "", description: "" } as Partial<Differentiator>)}
+        renderItem={(d, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim mr-2">{d.category}</span>
+            {d.title && <span className="text-sm font-medium text-foreground">{d.title}: </span>}
+            <span className="text-sm text-muted">{d.description}</span>
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Category" value={form.category || ""} onChange={(v) => upd("category", v)} required />
+          <FormField label="Title" value={form.title || ""} onChange={(v) => upd("title", v)} />
+          <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} required />
+        </>)}
+      />
 
       {/* Buyer Personas */}
-      {personas.length > 0 && (
-        <Section title="Buyer Personas">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {personas.map((p) => (
-              <div key={p.id} className="bg-surface-2 rounded-md p-4">
-                <div className="text-sm font-medium text-foreground mb-2">{p.personaName}</div>
-                <FieldGrid fields={[
-                  { label: "Age", value: p.age },
-                  { label: "Gender", value: p.gender },
-                  { label: "Location", value: p.location },
-                  { label: "Family Status", value: p.familyStatus },
-                  { label: "Education", value: p.educationLevel },
-                  { label: "Occupation", value: p.occupation },
-                  { label: "Income Level", value: p.incomeLevel },
-                  { label: "Channels", value: p.communicationChannels },
-                ]} />
-                {p.needsDescription && <div className="mt-2"><span className="text-xs text-dim">Needs:</span> <span className="text-xs text-muted">{p.needsDescription}</span></div>}
-                {p.painPoints && <div><span className="text-xs text-dim">Pain Points:</span> <span className="text-xs text-muted">{p.painPoints}</span></div>}
-                {p.gains && <div><span className="text-xs text-dim">Gains:</span> <span className="text-xs text-muted">{p.gains}</span></div>}
-                {p.buyingFactors && <div><span className="text-xs text-dim">Buying Factors:</span> <span className="text-xs text-muted">{p.buyingFactors}</span></div>}
-              </div>
-            ))}
+      <CrudSection<BuyerPersona> title="Buyer Personas" clientId={client.id} entityPath="buyer-personas" wide
+        emptyForm={() => ({ personaName: "", age: null, gender: "", location: "", familyStatus: "", educationLevel: "", occupation: "", incomeLevel: "", communicationChannels: "", needsDescription: "", painPoints: "", gains: "", buyingFactors: "" } as Partial<BuyerPersona>)}
+        renderItem={(p, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="text-sm font-medium text-foreground">{p.personaName}</div>
+            <div className="text-xs text-muted">{[p.age && `Age: ${p.age}`, p.gender, p.occupation].filter(Boolean).join(" | ")}</div>
+            {p.painPoints && <div className="text-xs text-dim mt-1">Pain Points: {p.painPoints}</div>}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Persona Name" value={form.personaName || ""} onChange={(v) => upd("personaName", v)} required />
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="Age" type="number" value={form.age?.toString() || ""} onChange={(v) => upd("age", v ? parseInt(v) : null)} />
+            <FormField label="Gender" value={form.gender || ""} onChange={(v) => upd("gender", v)} />
+            <FormField label="Location" value={form.location || ""} onChange={(v) => upd("location", v)} />
           </div>
-        </Section>
-      )}
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="Family Status" value={form.familyStatus || ""} onChange={(v) => upd("familyStatus", v)} />
+            <FormField label="Education Level" value={form.educationLevel || ""} onChange={(v) => upd("educationLevel", v)} />
+            <FormField label="Income Level" value={form.incomeLevel || ""} onChange={(v) => upd("incomeLevel", v)} />
+          </div>
+          <FormField label="Occupation" value={form.occupation || ""} onChange={(v) => upd("occupation", v)} />
+          <FormField label="Communication Channels" value={form.communicationChannels || ""} onChange={(v) => upd("communicationChannels", v)} />
+          <FormField label="Needs" type="textarea" value={form.needsDescription || ""} onChange={(v) => upd("needsDescription", v)} />
+          <FormField label="Pain Points" type="textarea" value={form.painPoints || ""} onChange={(v) => upd("painPoints", v)} />
+          <FormField label="Gains" type="textarea" value={form.gains || ""} onChange={(v) => upd("gains", v)} />
+          <FormField label="Buying Factors" type="textarea" value={form.buyingFactors || ""} onChange={(v) => upd("buyingFactors", v)} />
+        </>)}
+      />
 
       {/* Important Links */}
-      {links.length > 0 && (
-        <Section title="Important Links">
-          <div className="space-y-1">
-            {links.map((l) => (
-              <div key={l.id} className="flex items-center gap-3 text-sm">
-                <span className="text-xs px-2 py-0.5 rounded bg-surface-2 text-dim min-w-[80px] text-center">{l.linkType}</span>
-                <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline truncate">{l.label || l.url}</a>
-                {l.notes && <span className="text-xs text-dim">({l.notes})</span>}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Logins / Accounts */}
-      {logins.length > 0 && (
-        <Section title="Logins & Accounts">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {logins.map((l) => (
-              <div key={l.id} className="bg-surface-2 rounded-md p-3">
-                <div className="text-sm font-medium text-foreground">{l.platform}</div>
-                <div className="flex flex-wrap gap-3 text-xs text-dim mt-1">
-                  {l.username && <span>User: {l.username}</span>}
-                  {l.accessLevel && <span>Access: {l.accessLevel}</span>}
-                  {l.loginUrl && <a href={l.loginUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Login URL</a>}
-                </div>
-                {l.notes && <div className="text-xs text-dim mt-1">{l.notes}</div>}
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-    </div>
-  );
-}
-
-// ── Services Tab ─────────────────────────────
-
-function ServicesTab({ clientId }: { clientId: number }) {
-  const [services, setServices] = useState<Service[]>([]);
-  const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      api<Service[]>(`/cm/clients/${clientId}/services`).catch(() => []),
-      api<ServiceArea[]>(`/cm/clients/${clientId}/service-areas`).catch(() => []),
-    ]).then(([svc, sa]) => {
-      setServices(svc); setServiceAreas(sa);
-    }).finally(() => setLoading(false));
-  }, [clientId]);
-
-  if (loading) return <div className="text-sm text-muted">Loading services...</div>;
-
-  const parentServices = services.filter((s) => !s.parentServiceId).sort((a, b) => a.sortOrder - b.sortOrder);
-  const categories = [...new Set(parentServices.map((s) => s.category))];
-
-  return (
-    <div className="space-y-6">
-      {categories.map((cat) => (
-        <Section key={cat} title={cat}>
-          <div className="space-y-4">
-            {parentServices.filter((s) => s.category === cat).map((s) => {
-              const subs = services.filter((sub) => sub.parentServiceId === s.id).sort((a, b) => a.sortOrder - b.sortOrder);
-              return (
-                <div key={s.id} className={cn("border border-border rounded-md p-4", !s.offered && "opacity-50")}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <span className={cn("text-sm font-semibold", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
-                      {s.duration && <span className="text-xs text-muted ml-2">({s.duration})</span>}
-                      {!s.offered && <span className="text-xs px-2 py-0.5 ml-2 rounded bg-surface-2 text-dim">Not offered</span>}
-                    </div>
-                    {s.price && <span className="text-sm font-medium text-foreground">${s.price}</span>}
-                  </div>
-
-                  {(s.descriptionLong || s.description) && (
-                    <p className="text-sm text-muted mb-3">{s.descriptionLong || s.description}</p>
-                  )}
-
-                  <div className="space-y-3">
-                    {s.idealPatientProfile && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Ideal Patient Profile</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{s.idealPatientProfile}</div>
-                      </div>
-                    )}
-
-                    {(s.goodFitCriteria || s.notGoodFitCriteria) && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {s.goodFitCriteria && (
-                          <div className="bg-success/5 rounded-md p-3">
-                            <div className="text-xs font-medium text-success mb-1">Good Fit</div>
-                            <div className="text-sm text-foreground whitespace-pre-wrap">{s.goodFitCriteria}</div>
-                          </div>
-                        )}
-                        {s.notGoodFitCriteria && (
-                          <div className="bg-destructive/5 rounded-md p-3">
-                            <div className="text-xs font-medium text-destructive mb-1">Not a Good Fit</div>
-                            <div className="text-sm text-foreground whitespace-pre-wrap">{s.notGoodFitCriteria}</div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {(s.targetAgeRange || s.targetGender || s.targetConditions || s.targetInterests) && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-1">Target Demographics</div>
-                        <div className="flex flex-wrap gap-2">
-                          {s.targetAgeRange && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Age: {s.targetAgeRange}</span>}
-                          {s.targetGender && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">{s.targetGender}</span>}
-                          {s.targetConditions && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Conditions: {s.targetConditions}</span>}
-                          {s.targetInterests && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Interests: {s.targetInterests}</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {s.differentiators && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Differentiators</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{s.differentiators}</div>
-                      </div>
-                    )}
-
-                    {s.expectedOutcomes && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Expected Outcomes</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{s.expectedOutcomes}</div>
-                      </div>
-                    )}
-
-                    {s.commonConcerns && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Common Concerns / FAQs</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{s.commonConcerns}</div>
-                      </div>
-                    )}
-
-                    {s.serviceAreaCities && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Service Areas</div>
-                        <div className="text-sm text-muted">{s.serviceAreaCities}</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {subs.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-border">
-                      <div className="text-xs font-medium text-dim mb-2">Sub-Services</div>
-                      <div className="space-y-3 pl-3 border-l-2 border-border">
-                        {subs.map((sub) => (
-                          <div key={sub.id}>
-                            <div className="flex items-center justify-between">
-                              <span className={cn("text-sm font-medium", sub.offered ? "text-foreground" : "text-dim line-through")}>{sub.serviceName}</span>
-                              <div className="flex items-center gap-2">
-                                {sub.duration && <span className="text-xs text-muted">{sub.duration}</span>}
-                                {sub.price && <span className="text-sm text-muted">${sub.price}</span>}
-                              </div>
-                            </div>
-                            {(sub.descriptionLong || sub.description) && (
-                              <p className="text-xs text-muted mt-0.5">{sub.descriptionLong || sub.description}</p>
-                            )}
-                            {sub.idealPatientProfile && (
-                              <p className="text-xs text-dim mt-0.5">Ideal for: {sub.idealPatientProfile}</p>
-                            )}
-                            {(sub.targetConditions || sub.targetAgeRange) && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {sub.targetAgeRange && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim">Age: {sub.targetAgeRange}</span>}
-                                {sub.targetConditions && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim">{sub.targetConditions}</span>}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-      ))}
-
-      {serviceAreas.length > 0 && (
-        <Section title="Service Areas">
-          {serviceAreas.map((sa) => (
-            <div key={sa.id} className="space-y-1 mb-3">
-              {sa.targetCities && <div><span className="text-xs text-dim">Cities:</span> <span className="text-sm text-foreground">{sa.targetCities}</span></div>}
-              {sa.targetCounties && <div><span className="text-xs text-dim">Counties:</span> <span className="text-sm text-foreground">{sa.targetCounties}</span></div>}
-              {sa.notes && <div className="text-xs text-dim">{sa.notes}</div>}
+      <CrudSection<ImportantLink> title="Important Links" clientId={client.id} entityPath="important-links"
+        emptyForm={() => ({ linkType: "", url: "", label: "", notes: "" } as Partial<ImportantLink>)}
+        renderItem={(l, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim min-w-[80px] text-center">{l.linkType}</span>
+              <a href={l.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline truncate">{l.label || l.url}</a>
             </div>
-          ))}
-        </Section>
-      )}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Link Type" value={form.linkType || ""} onChange={(v) => upd("linkType", v)} required placeholder="e.g. GBP, Facebook, Yelp" />
+          <FormField label="URL" value={form.url || ""} onChange={(v) => upd("url", v)} required />
+          <FormField label="Label" value={form.label || ""} onChange={(v) => upd("label", v)} placeholder="Display label (optional)" />
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+        </>)}
+      />
 
-      {services.length === 0 && serviceAreas.length === 0 && <div className="text-muted">No services or service areas added yet.</div>}
+      {/* Logins & Accounts */}
+      <CrudSection<Login> title="Logins & Accounts" clientId={client.id} entityPath="logins"
+        emptyForm={() => ({ platform: "", username: "", loginUrl: "", notes: "", accessLevel: "" } as Partial<Login>)}
+        deleteWarning="This will permanently delete this login record."
+        renderItem={(l, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="text-sm font-medium text-foreground">{l.platform}</div>
+            <div className="flex flex-wrap gap-3 text-xs text-dim mt-1">
+              {l.username && <span>User: {l.username}</span>}
+              {l.accessLevel && <span>Access: {l.accessLevel}</span>}
+              {l.loginUrl && <a href={l.loginUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Login URL</a>}
+            </div>
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Platform" value={form.platform || ""} onChange={(v) => upd("platform", v)} required placeholder="e.g. WordPress, Google Ads" />
+          <FormField label="Username" value={form.username || ""} onChange={(v) => upd("username", v)} />
+          <FormField label="Login URL" value={form.loginUrl || ""} onChange={(v) => upd("loginUrl", v)} />
+          <FormField label="Access Level" value={form.accessLevel || ""} onChange={(v) => upd("accessLevel", v)} placeholder="e.g. Admin, Editor" />
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+        </>)}
+      />
     </div>
   );
 }
