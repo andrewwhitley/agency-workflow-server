@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Building2, Target, Heart, Users, Globe, PenTool } from "lucide-react";
 
 interface SummaryData {
   workflows: { name: string; description: string; category: string }[];
@@ -58,9 +60,33 @@ export function DashboardPage() {
     { label: "Uptime", value: formatUptime(data.uptime), color: "text-foreground" },
   ];
 
+  const quickLinks = [
+    { to: "/clients", label: "Clients", icon: Building2, color: "text-blue-600", desc: "Manage client accounts" },
+    { to: "/weekly-check-in", label: "Weekly Check-In", icon: Heart, color: "text-pink-600", desc: "Traffic light health" },
+    { to: "/seo", label: "SEO Dashboard", icon: Globe, color: "text-green-600", desc: "Keyword tracking & audits" },
+    { to: "/content", label: "Content", icon: PenTool, color: "text-purple-600", desc: "Content management" },
+    { to: "/team", label: "Agency Team", icon: Users, color: "text-orange-600", desc: "Team directory" },
+    { to: "/workflows", label: "Workflows", icon: Target, color: "text-cyan-600", desc: "Automation workflows" },
+  ];
+
   return (
     <div>
       <h2 className="text-2xl font-semibold text-foreground mb-6">Dashboard</h2>
+
+      {/* Quick links */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        {quickLinks.map((link) => {
+          const Icon = link.icon;
+          return (
+            <Link key={link.to} to={link.to}
+              className="bg-surface border border-border rounded-md p-4 hover:border-accent/50 hover:shadow-sm transition-all">
+              <Icon className={cn("h-6 w-6 mb-2", link.color)} />
+              <div className="text-sm font-medium text-foreground">{link.label}</div>
+              <div className="text-xs text-dim">{link.desc}</div>
+            </Link>
+          );
+        })}
+      </div>
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
