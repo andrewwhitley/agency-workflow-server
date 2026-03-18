@@ -85,7 +85,7 @@ interface HealthEntry { id: number; departmentName: string; status: string; note
 
 // ── Tabs ─────────────────────────────────────
 
-const TABS = ["info", "services", "campaigns", "marketing-plan", "content-guide", "health", "brand-story"] as const;
+const TABS = ["info", "campaigns", "marketing-plan", "content-guide", "health", "brand-story"] as const;
 type Tab = typeof TABS[number];
 
 export function ClientDetailPage() {
@@ -134,7 +134,6 @@ export function ClientDetailPage() {
       </div>
 
       {tab === "info" && <InfoTab client={client} />}
-      {tab === "services" && <ServicesTab clientId={client.id} />}
       {tab === "campaigns" && <CampaignsTab clientId={client.id} />}
       {tab === "marketing-plan" && <MarketingPlanTab clientId={client.id} />}
       {tab === "content-guide" && <ContentGuideTab clientId={client.id} />}
@@ -185,6 +184,7 @@ function pct(val: number | null) {
 function InfoTab({ client }: { client: Client }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
@@ -197,6 +197,7 @@ function InfoTab({ client }: { client: Client }) {
     Promise.all([
       api<Contact[]>(`/cm/clients/${client.id}/contacts`).catch(() => []),
       api<Address[]>(`/cm/clients/${client.id}/addresses`).catch(() => []),
+      api<Service[]>(`/cm/clients/${client.id}/services`).catch(() => []),
       api<ServiceArea[]>(`/cm/clients/${client.id}/service-areas`).catch(() => []),
       api<TeamMember[]>(`/cm/clients/${client.id}/team-members`).catch(() => []),
       api<Competitor[]>(`/cm/clients/${client.id}/competitors`).catch(() => []),
@@ -204,8 +205,8 @@ function InfoTab({ client }: { client: Client }) {
       api<ImportantLink[]>(`/cm/clients/${client.id}/important-links`).catch(() => []),
       api<Login[]>(`/cm/clients/${client.id}/logins`).catch(() => []),
       api<BuyerPersona[]>(`/cm/clients/${client.id}/buyer-personas`).catch(() => []),
-    ]).then(([c, a, sa, tm, comp, diff, lnk, log, bp]) => {
-      setContacts(c); setAddresses(a); setServiceAreas(sa); setTeamMembers(tm);
+    ]).then(([c, a, svc, sa, tm, comp, diff, lnk, log, bp]) => {
+      setContacts(c); setAddresses(a); setServices(svc); setServiceAreas(sa); setTeamMembers(tm);
       setCompetitors(comp); setDifferentiators(diff); setLinks(lnk); setLogins(log); setPersonas(bp);
     });
   }, [client.id]);
@@ -277,16 +278,45 @@ function InfoTab({ client }: { client: Client }) {
         </Section>
       )}
 
-      {/* Service Areas */}
-      {serviceAreas.length > 0 && (
-        <Section title="Service Areas">
-          {serviceAreas.map((sa) => (
-            <div key={sa.id} className="space-y-1 mb-3">
-              {sa.targetCities && <div><span className="text-xs text-dim">Cities:</span> <span className="text-sm text-foreground">{sa.targetCities}</span></div>}
-              {sa.targetCounties && <div><span className="text-xs text-dim">Counties:</span> <span className="text-sm text-foreground">{sa.targetCounties}</span></div>}
-              {sa.notes && <div className="text-xs text-dim">{sa.notes}</div>}
+      {/* Services & Service Areas */}
+      {(services.length > 0 || serviceAreas.length > 0) && (
+        <Section title="Services & Service Areas">
+          {(() => {
+            const categories = [...new Set(services.map((s) => s.category))];
+            return categories.length > 0 ? (
+              <div className="space-y-4 mb-4">
+                {categories.map((cat) => (
+                  <div key={cat}>
+                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{cat}</h4>
+                    <div className="space-y-1">
+                      {services.filter((s) => s.category === cat).map((s) => (
+                        <div key={s.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded-md bg-surface-2">
+                          <div>
+                            <span className={cn("font-medium", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
+                            {s.duration && <span className="text-muted ml-2 text-xs">({s.duration})</span>}
+                            {s.description && <span className="text-muted ml-2 text-xs">{s.description}</span>}
+                          </div>
+                          {s.price && <span className="text-muted">${s.price}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
+          {serviceAreas.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Service Areas</h4>
+              {serviceAreas.map((sa) => (
+                <div key={sa.id} className="space-y-1 mb-3">
+                  {sa.targetCities && <div><span className="text-xs text-dim">Cities:</span> <span className="text-sm text-foreground">{sa.targetCities}</span></div>}
+                  {sa.targetCounties && <div><span className="text-xs text-dim">Counties:</span> <span className="text-sm text-foreground">{sa.targetCounties}</span></div>}
+                  {sa.notes && <div className="text-xs text-dim">{sa.notes}</div>}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </Section>
       )}
 
@@ -494,43 +524,6 @@ function InfoTab({ client }: { client: Client }) {
           </div>
         </Section>
       )}
-    </div>
-  );
-}
-
-// ── Services Tab ─────────────────────────────
-
-function ServicesTab({ clientId }: { clientId: number }) {
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api<Service[]>(`/cm/clients/${clientId}/services`).then(setServices).catch(console.error).finally(() => setLoading(false));
-  }, [clientId]);
-
-  if (loading) return <div className="text-sm text-muted">Loading services...</div>;
-
-  const categories = [...new Set(services.map((s) => s.category))];
-
-  return (
-    <div className="space-y-6">
-      {categories.map((cat) => (
-        <Section key={cat} title={cat}>
-          <div className="space-y-2">
-            {services.filter((s) => s.category === cat).map((s) => (
-              <div key={s.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <span className={cn("font-medium", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
-                  {s.duration && <span className="text-muted ml-2 text-xs">({s.duration})</span>}
-                  {s.description && <span className="text-muted ml-2 text-xs">{s.description}</span>}
-                </div>
-                {s.price && <span className="text-muted">${s.price}</span>}
-              </div>
-            ))}
-          </div>
-        </Section>
-      ))}
-      {services.length === 0 && <div className="text-muted">No services added yet.</div>}
     </div>
   );
 }
