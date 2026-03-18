@@ -1257,6 +1257,28 @@ Before saving, verify:
       );
     `,
   },
+  {
+    id: "027_expand_services",
+    sql: `
+      ALTER TABLE cm_services
+        ADD COLUMN IF NOT EXISTS description_long TEXT,
+        ADD COLUMN IF NOT EXISTS ideal_patient_profile TEXT,
+        ADD COLUMN IF NOT EXISTS good_fit_criteria TEXT,
+        ADD COLUMN IF NOT EXISTS not_good_fit_criteria TEXT,
+        ADD COLUMN IF NOT EXISTS target_age_range VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS target_gender VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS target_conditions TEXT,
+        ADD COLUMN IF NOT EXISTS target_interests TEXT,
+        ADD COLUMN IF NOT EXISTS service_area_cities TEXT,
+        ADD COLUMN IF NOT EXISTS differentiators TEXT,
+        ADD COLUMN IF NOT EXISTS expected_outcomes TEXT,
+        ADD COLUMN IF NOT EXISTS common_concerns TEXT,
+        ADD COLUMN IF NOT EXISTS parent_service_id INT REFERENCES cm_services(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;
+
+      CREATE INDEX IF NOT EXISTS idx_cm_services_parent ON cm_services(parent_service_id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

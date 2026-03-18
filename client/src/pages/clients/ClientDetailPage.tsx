@@ -68,7 +68,7 @@ interface Client {
 
 interface Contact { id: number; name: string; role: string | null; email: string | null; phone: string | null; phoneType: string | null; notes: string | null; isPrimary: boolean; shouldAttribute: boolean; linktreeUrl: string | null; wordpressEmail: string | null; }
 interface Address { id: number; label: string; streetAddress: string | null; city: string | null; state: string | null; postalCode: string | null; locationType: string; notes: string | null; isPrimary: boolean; }
-interface Service { id: number; category: string; serviceName: string; offered: boolean; price: number | null; duration: string | null; description: string | null; }
+interface Service { id: number; category: string; serviceName: string; offered: boolean; price: number | null; duration: string | null; description: string | null; descriptionLong: string | null; idealPatientProfile: string | null; goodFitCriteria: string | null; notGoodFitCriteria: string | null; targetAgeRange: string | null; targetGender: string | null; targetConditions: string | null; targetInterests: string | null; serviceAreaCities: string | null; differentiators: string | null; expectedOutcomes: string | null; commonConcerns: string | null; parentServiceId: number | null; sortOrder: number; }
 interface ServiceArea { id: number; targetCities: string | null; targetCounties: string | null; notes: string | null; }
 interface TeamMember { id: number; fullName: string; role: string | null; email: string | null; phone: string | null; photoUrl: string | null; linkedinUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; bio: string | null; useForAttribution: boolean; preferredContactMethod: string | null; }
 interface Competitor { id: number; companyName: string; url: string | null; usps: string | null; description: string | null; rank: number | null; }
@@ -282,32 +282,146 @@ function InfoTab({ client }: { client: Client }) {
       {(services.length > 0 || serviceAreas.length > 0) && (
         <Section title="Services & Service Areas">
           {(() => {
-            const categories = [...new Set(services.map((s) => s.category))];
+            const parentServices = services.filter((s) => !s.parentServiceId).sort((a, b) => a.sortOrder - b.sortOrder);
+            const categories = [...new Set(parentServices.map((s) => s.category))];
             return categories.length > 0 ? (
-              <div className="space-y-4 mb-4">
+              <div className="space-y-6 mb-6">
                 {categories.map((cat) => (
                   <div key={cat}>
-                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">{cat}</h4>
-                    <div className="space-y-1">
-                      {services.filter((s) => s.category === cat).map((s) => (
-                        <div key={s.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded-md bg-surface-2">
-                          <div>
-                            <span className={cn("font-medium", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
-                            {s.duration && <span className="text-muted ml-2 text-xs">({s.duration})</span>}
-                            {s.description && <span className="text-muted ml-2 text-xs">{s.description}</span>}
+                    <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{cat}</h4>
+                    <div className="space-y-4">
+                      {parentServices.filter((s) => s.category === cat).map((s) => {
+                        const subs = services.filter((sub) => sub.parentServiceId === s.id).sort((a, b) => a.sortOrder - b.sortOrder);
+                        return (
+                          <div key={s.id} className={cn("border border-border rounded-md p-4", !s.offered && "opacity-50")}>
+                            {/* Service header */}
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <span className={cn("text-sm font-semibold", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
+                                {s.duration && <span className="text-xs text-muted ml-2">({s.duration})</span>}
+                                {!s.offered && <span className="text-xs px-2 py-0.5 ml-2 rounded bg-surface-2 text-dim">Not offered</span>}
+                              </div>
+                              {s.price && <span className="text-sm font-medium text-foreground">${s.price}</span>}
+                            </div>
+
+                            {/* Description */}
+                            {(s.descriptionLong || s.description) && (
+                              <p className="text-sm text-muted mb-3">{s.descriptionLong || s.description}</p>
+                            )}
+
+                            {/* Service detail fields */}
+                            <div className="space-y-3">
+                              {s.idealPatientProfile && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-0.5">Ideal Patient Profile</div>
+                                  <div className="text-sm text-foreground whitespace-pre-wrap">{s.idealPatientProfile}</div>
+                                </div>
+                              )}
+
+                              {(s.goodFitCriteria || s.notGoodFitCriteria) && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {s.goodFitCriteria && (
+                                    <div className="bg-success/5 rounded-md p-3">
+                                      <div className="text-xs font-medium text-success mb-1">Good Fit</div>
+                                      <div className="text-sm text-foreground whitespace-pre-wrap">{s.goodFitCriteria}</div>
+                                    </div>
+                                  )}
+                                  {s.notGoodFitCriteria && (
+                                    <div className="bg-destructive/5 rounded-md p-3">
+                                      <div className="text-xs font-medium text-destructive mb-1">Not a Good Fit</div>
+                                      <div className="text-sm text-foreground whitespace-pre-wrap">{s.notGoodFitCriteria}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Demographics */}
+                              {(s.targetAgeRange || s.targetGender || s.targetConditions || s.targetInterests) && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-1">Target Demographics</div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {s.targetAgeRange && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Age: {s.targetAgeRange}</span>}
+                                    {s.targetGender && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">{s.targetGender}</span>}
+                                    {s.targetConditions && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Conditions: {s.targetConditions}</span>}
+                                    {s.targetInterests && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Interests: {s.targetInterests}</span>}
+                                  </div>
+                                </div>
+                              )}
+
+                              {s.differentiators && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-0.5">Differentiators</div>
+                                  <div className="text-sm text-foreground whitespace-pre-wrap">{s.differentiators}</div>
+                                </div>
+                              )}
+
+                              {s.expectedOutcomes && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-0.5">Expected Outcomes</div>
+                                  <div className="text-sm text-foreground whitespace-pre-wrap">{s.expectedOutcomes}</div>
+                                </div>
+                              )}
+
+                              {s.commonConcerns && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-0.5">Common Concerns / FAQs</div>
+                                  <div className="text-sm text-foreground whitespace-pre-wrap">{s.commonConcerns}</div>
+                                </div>
+                              )}
+
+                              {s.serviceAreaCities && (
+                                <div>
+                                  <div className="text-xs font-medium text-dim mb-0.5">Service Areas</div>
+                                  <div className="text-sm text-muted">{s.serviceAreaCities}</div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Sub-services */}
+                            {subs.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-border">
+                                <div className="text-xs font-medium text-dim mb-2">Sub-Services</div>
+                                <div className="space-y-3 pl-3 border-l-2 border-border">
+                                  {subs.map((sub) => (
+                                    <div key={sub.id}>
+                                      <div className="flex items-center justify-between">
+                                        <span className={cn("text-sm font-medium", sub.offered ? "text-foreground" : "text-dim line-through")}>{sub.serviceName}</span>
+                                        <div className="flex items-center gap-2">
+                                          {sub.duration && <span className="text-xs text-muted">{sub.duration}</span>}
+                                          {sub.price && <span className="text-sm text-muted">${sub.price}</span>}
+                                        </div>
+                                      </div>
+                                      {(sub.descriptionLong || sub.description) && (
+                                        <p className="text-xs text-muted mt-0.5">{sub.descriptionLong || sub.description}</p>
+                                      )}
+                                      {sub.idealPatientProfile && (
+                                        <p className="text-xs text-dim mt-0.5">Ideal for: {sub.idealPatientProfile}</p>
+                                      )}
+                                      {(sub.targetConditions || sub.targetAgeRange) && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {sub.targetAgeRange && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim">Age: {sub.targetAgeRange}</span>}
+                                          {sub.targetConditions && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim">{sub.targetConditions}</span>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          {s.price && <span className="text-muted">${s.price}</span>}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
             ) : null;
           })()}
+
+          {/* Client-level service areas */}
           {serviceAreas.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Service Areas</h4>
+              <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">General Service Areas</h4>
               {serviceAreas.map((sa) => (
                 <div key={sa.id} className="space-y-1 mb-3">
                   {sa.targetCities && <div><span className="text-xs text-dim">Cities:</span> <span className="text-sm text-foreground">{sa.targetCities}</span></div>}
@@ -316,6 +430,10 @@ function InfoTab({ client }: { client: Client }) {
                 </div>
               ))}
             </div>
+          )}
+
+          {services.length === 0 && serviceAreas.length === 0 && (
+            <div className="text-muted text-sm">No services or service areas added yet.</div>
           )}
         </Section>
       )}
