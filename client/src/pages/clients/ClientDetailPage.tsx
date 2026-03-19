@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
-import { Pencil } from "lucide-react";
+import { Pencil, Share2, Link2, Unlink } from "lucide-react";
 import { CompanyInfoEdit } from "@/components/client/CompanyInfoEdit";
 import { ServicesSection } from "@/components/client/ServicesSection";
 import { CampaignsSection } from "@/components/client/CampaignsSection";
@@ -90,7 +90,7 @@ interface Campaign { id: number; campaignName: string; campaignType: string | nu
 interface Deliverable { id: number; campaignId: number; title: string; deliverableType: string; status: string; priority: string; description: string | null; assignedTo: string | null; dueDate: string | null; completedAt: string | null; notes: string | null; }
 interface MarketingPlanItem { id: number; category: string; item: string; isIncluded: boolean; quantity: number | null; notes: string | null; completionTarget: string | null; }
 interface ContentGuidelines { brandVoice: string | null; tone: string | null; writingStyle: string | null; dosAndDonts: string | null; approvedTerminology: string | null; restrictions: string | null; uniqueSellingPoints: string | null; guarantees: string | null; competitiveAdvantages: string | null; brandColors: string | null; fonts: string | null; logoGuidelines: string | null; designInspiration: string | null; targetAudienceSummary: string | null; demographics: string | null; psychographics: string | null; focusTopics: string | null; seoKeywords: string | null; contentThemes: string | null; messagingPriorities: string | null; featuredTestimonials: string | null; successStories: string | null; socialProofNotes: string | null; adCopyGuidelines: string | null; preferredCtas: string | null; targetingPreferences: string | null; promotions: string | null; observedHolidays: string | null; holidayContentNotes: string | null; brandStory: string | null; contentPurpose: string | null; userActionStrategy: string | null; existingCollateral: string | null; useStockPhotography: boolean; imageSourceNotes: string | null; marketingGuide: string | null; writingStyleGuide: string | null; [key: string]: unknown; }
-interface BrandStory { id: number; status: string; heroSection: unknown; problemSection: unknown; guideSection: unknown; planSection: unknown; ctaSection: unknown; successSection: unknown; failureSection: unknown; brandVoiceSection: unknown; visualIdentitySection: unknown; contentStrategySection: unknown; messagingSection: unknown; implementationSection: unknown; fullBrandStory: string | null; }
+interface BrandStory { id: number; status: string; heroSection: unknown; problemSection: unknown; guideSection: unknown; planSection: unknown; ctaSection: unknown; successSection: unknown; failureSection: unknown; brandVoiceSection: unknown; visualIdentitySection: unknown; contentStrategySection: unknown; messagingSection: unknown; implementationSection: unknown; fullBrandStory: string | null; shareToken: string | null; }
 interface HealthEntry { id: number; departmentName: string; status: string; notes: string | null; weekOf: string; icon: string | null; color: string | null; }
 
 // ── Tabs ─────────────────────────────────────
@@ -563,9 +563,35 @@ function BrandStoryTab({ clientId }: { clientId: number }) {
             )}>{story.status}</span>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={openEdit}>
-          <Pencil className="h-3 w-3 mr-1" /> {story ? "Edit" : "Create"} Brand Story
-        </Button>
+        <div className="flex items-center gap-2">
+          {story && (
+            story.shareToken ? (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
+                }}>
+                  <Link2 className="h-3 w-3 mr-1" /> Copy Link
+                </Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
+                  await api(`/cm/brand-story/${story.id}/share`, { method: "DELETE" });
+                  reload();
+                }}>
+                  <Unlink className="h-3 w-3 mr-1" /> Revoke
+                </Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={async () => {
+                await api(`/cm/brand-story/${story.id}/share`, { method: "POST" });
+                reload();
+              }}>
+                <Share2 className="h-3 w-3 mr-1" /> Share
+              </Button>
+            )
+          )}
+          <Button size="sm" variant="outline" onClick={openEdit}>
+            <Pencil className="h-3 w-3 mr-1" /> {story ? "Edit" : "Create"} Brand Story
+          </Button>
+        </div>
       </div>
 
       {story?.fullBrandStory && (

@@ -261,6 +261,22 @@ export function clientManagementRouter(): Router {
     } catch (err) { console.error("Update brand story error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
+  // Brand story share link
+  router.post("/brand-story/:id/share", async (req, res) => {
+    try {
+      const { randomBytes } = await import("crypto");
+      const token = randomBytes(32).toString("hex");
+      const { rows } = await query("UPDATE cm_brand_story SET share_token = $1, updated_at = NOW() WHERE id = $2 RETURNING *", [token, req.params.id]);
+      res.json(rows[0] ? toCamel(rows[0]) : null);
+    } catch (err) { console.error("Generate share link error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+  router.delete("/brand-story/:id/share", async (req, res) => {
+    try {
+      const { rows } = await query("UPDATE cm_brand_story SET share_token = NULL, updated_at = NOW() WHERE id = $1 RETURNING *", [req.params.id]);
+      res.json(rows[0] ? toCamel(rows[0]) : null);
+    } catch (err) { console.error("Revoke share link error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
   // ════════════════════════════════════════════════════════
   //  CAMPAIGNS
   // ════════════════════════════════════════════════════════
