@@ -1416,6 +1416,19 @@ Before saving, verify:
       WHERE contact_email = '' AND email != '';
     `,
   },
+  {
+    id: "033_enrichment_provider_details",
+    sql: `
+      ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS provider_details JSONB;
+    `,
+  },
+  {
+    id: "034_intake_data",
+    sql: `
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS intake_data JSONB;
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS intake_submitted_at TIMESTAMPTZ;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

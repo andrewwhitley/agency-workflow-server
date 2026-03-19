@@ -79,6 +79,7 @@ export interface Prospect {
   booking_provider: string | null;
   has_lead_capture: boolean | null;
   lead_capture_types: any | null;
+  provider_details: any | null;
   // Additional signals
   gbp_rating: number | null;
   gbp_review_count: number | null;
@@ -1055,9 +1056,51 @@ export class EnrichmentService {
         }
       }
 
-      // ── Stage 4: Claude Analysis — SKIPPED for cost savings ──
-      // Can be re-enabled later for deeper analysis (provider count, services)
-      // Cost: ~$0.01/prospect via Haiku
+      // ── Stage 4: Claude Analysis — provider count, services, staff ──
+      if (html && !dryRun) {
+        try {
+          // Trim HTML to ~12k chars to keep Haiku cost low
+          const trimmedHtml = html.length > 12000 ? html.slice(0, 12000) : html;
+          const claude = new Anthropic();
+          const msg = await claude.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 512,
+            messages: [{
+              role: "user",
+              content: `Analyze this medical practice website HTML. Return ONLY valid JSON with these fields:
+- provider_count: number of doctors/providers/practitioners (NPs, PAs, DOs, MDs, DCs count). 0 if unknown.
+- provider_names: array of provider names found (empty array if none)
+- total_staff: estimated total staff if determinable, 0 if unknown
+- top_services: array of up to 8 main services offered (e.g. "Hormone Therapy", "IV Therapy", "Functional Medicine")
+
+Practice: ${prospect.company_name}, ${prospect.city}, ${prospect.state}
+HTML:\n${trimmedHtml}`,
+            }],
+          });
+
+          const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.provider_count && parsed.provider_count > 0) {
+              updates.provider_count = parsed.provider_count;
+            }
+            if (parsed.total_staff && parsed.total_staff > 0) {
+              updates.total_staff = parsed.total_staff;
+            }
+            if (Array.isArray(parsed.top_services) && parsed.top_services.length > 0) {
+              updates.top_services = JSON.stringify(parsed.top_services);
+            }
+            if (Array.isArray(parsed.provider_names) && parsed.provider_names.length > 0) {
+              updates.provider_details = JSON.stringify(parsed.provider_names);
+            }
+          }
+          cost += 0.01;
+          await this.delay(100);
+        } catch (err) {
+          console.error(`Claude analysis error for ${prospect.company_name}:`, err);
+        }
+      }
 
       // ── Stage 5: GBP Enrichment ────────────────────────
       if (prospect.gmb_link && this.seoService.isAuthenticated() && !dryRun) {
@@ -1136,6 +1179,7 @@ export class EnrichmentService {
       "Has FB Pixel", "Has Google Pixel", "Has Chatbot", "Chatbot Provider",
       "CRM Platform", "Has Booking", "Booking Provider", "Has Lead Capture",
       "GBP Rating", "GBP Reviews", "Provider Count", "Employee Count",
+      "Top Services", "Provider Details",
       "Sales Angles", "Contact Name", "Contact Email", "Contact Phone", "Contact LinkedIn",
       "Website", "GMB Link",
     ];
@@ -1153,6 +1197,8 @@ export class EnrichmentService {
         r.crm_platform, r.has_booking_widget ? "Yes" : "No", r.booking_provider,
         r.has_lead_capture ? "Yes" : "No",
         r.gbp_rating, r.gbp_review_count, r.provider_count, r.employee_count,
+        Array.isArray(r.top_services) ? r.top_services.join("; ") : (r.top_services || ""),
+        Array.isArray(r.provider_details) ? r.provider_details.join("; ") : (r.provider_details || ""),
         salesAngles.join("; "),
         r.contact_name, r.contact_email, r.contact_phone, r.contact_linkedin,
         r.website, r.gmb_link,
