@@ -1408,6 +1408,14 @@ Before saving, verify:
       UPDATE cm_phone_numbers SET label = 'Main' WHERE label = 'SMS';
     `,
   },
+  {
+    id: "032_fix_enrichment_email_mapping",
+    sql: `
+      UPDATE enrichment_prospects
+      SET contact_email = email, email = ''
+      WHERE contact_email = '' AND email != '';
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
