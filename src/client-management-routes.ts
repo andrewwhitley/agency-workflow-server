@@ -64,11 +64,25 @@ export function clientManagementRouter(): Router {
       const fields: string[] = [];
       const values: unknown[] = [];
       let i = 1;
-      const allowed = ["company_name", "legal_name", "dba_name", "industry", "location", "domain",
-        "company_phone", "main_phone", "sms_phone", "company_email", "primary_email", "company_website",
-        "business_type", "status", "year_founded", "crm_system", "business_hours", "time_zone",
-        "number_of_employees", "estimated_annual_revenue", "target_revenue", "current_marketing_spend",
-        "current_ads_spend", "color_scheme", "google_drive_link", "domain_registrar"];
+      const allowed = [
+        "company_name", "legal_name", "dba_name", "industry", "location", "domain",
+        "is_local_service_area", "display_address",
+        "company_phone", "main_phone", "sms_phone", "toll_free_phone", "fax_phone",
+        "company_email", "primary_email", "inquiry_emails", "employment_email",
+        "company_website", "date_founded", "year_founded", "ein", "business_type",
+        "number_of_customers", "desired_new_clients", "avg_client_lifetime_value",
+        "number_of_employees", "estimated_annual_revenue", "target_revenue",
+        "current_marketing_spend", "current_ads_spend",
+        "crm_system", "business_hours", "holiday_hours", "domain_registrar",
+        "google_drive_link", "color_scheme", "design_inspiration_urls",
+        "ads_marketing_budget", "ads_recruiting_budget",
+        "target_google_ads_conv_rate", "target_google_ads_cpa",
+        "target_bing_ads_conv_rate", "target_bing_ads_cpa", "target_facebook_ads_cpa",
+        "time_zone", "payment_types_accepted", "combined_years_experience",
+        "business_facts", "affiliations_associations", "certifications_trainings",
+        "community_involvement", "languages_spoken", "service_seasonality",
+        "telemedicine_offered", "status",
+      ];
       for (const [key, val] of Object.entries(b)) {
         const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
         if (allowed.includes(snakeKey) && val !== undefined) {

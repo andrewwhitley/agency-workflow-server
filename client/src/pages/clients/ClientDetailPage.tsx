@@ -128,7 +128,7 @@ export function ClientDetailPage() {
         <div className="flex gap-3 mt-1 text-sm text-muted">
           {client.industry && <span>{client.industry}</span>}
           {client.location && <span>| {client.location}</span>}
-          {client.domain && <span>| {client.domain}</span>}
+          {(client.companyWebsite || client.domain) && <span>| {client.companyWebsite || client.domain}</span>}
           {client.timeZone && <span>| {client.timeZone}</span>}
         </div>
       </div>
