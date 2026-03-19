@@ -293,6 +293,97 @@ async function main(): Promise<void> {
         });
       } catch (err) { console.error("Public brand story error:", err); res.status(500).json({ error: "Failed" }); }
     });
+
+    // Public onboarding: verify client
+    app.get("/api/public/onboarding/verify/:clientId", async (req, res) => {
+      try {
+        const param = req.params.clientId;
+        const isNumeric = /^\d+$/.test(param);
+        const { rows } = await dbQuery(
+          isNumeric
+            ? "SELECT id, slug, company_name FROM cm_clients WHERE id = $1"
+            : "SELECT id, slug, company_name FROM cm_clients WHERE slug = $1",
+          [isNumeric ? parseInt(param) : param]
+        );
+        if (!rows[0]) { res.json({ found: false }); return; }
+        res.json({ found: true, companyName: rows[0].company_name, numericId: rows[0].id });
+      } catch (err) { console.error("Public verify client error:", err); res.status(500).json({ error: "Failed" }); }
+    });
+
+    // Public onboarding: submit intake
+    app.post("/api/public/onboarding/submit", async (req, res) => {
+      try {
+        const { intakeData, clientId, clientSlug } = req.body;
+        if (!intakeData) { res.status(400).json({ error: "intakeData is required" }); return; }
+
+        let resolvedClientId: number;
+
+        if (clientId || clientSlug) {
+          // Find existing client
+          const lookup = clientId
+            ? await dbQuery("SELECT id FROM cm_clients WHERE id = $1", [clientId])
+            : await dbQuery("SELECT id FROM cm_clients WHERE slug = $1", [clientSlug]);
+          if (!lookup.rows[0]) { res.status(404).json({ error: "Client not found" }); return; }
+          resolvedClientId = lookup.rows[0].id;
+
+          // Update client fields from intake data
+          const updates: string[] = [];
+          const vals: unknown[] = [];
+          let idx = 1;
+          const fieldMap: Record<string, string> = {
+            companyName: "company_name",
+            industry: "industry",
+            location: "location",
+            domain: "domain",
+            companyWebsite: "company_website",
+            companyPhone: "company_phone",
+            companyEmail: "company_email",
+            yearFounded: "year_founded",
+            numberOfEmployees: "number_of_employees",
+          };
+          for (const [jsKey, dbKey] of Object.entries(fieldMap)) {
+            const val = intakeData[jsKey];
+            if (val !== undefined && val !== null && val !== "") {
+              updates.push(`${dbKey} = $${idx++}`);
+              vals.push(val);
+            }
+          }
+          if (updates.length > 0) {
+            vals.push(resolvedClientId);
+            await dbQuery(`UPDATE cm_clients SET ${updates.join(", ")} WHERE id = $${idx}`, vals);
+          }
+        } else {
+          // Create new client
+          const name = intakeData.companyName || "New Client";
+          const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          const { rows: newClient } = await dbQuery(
+            `INSERT INTO cm_clients (slug, company_name, industry, location, domain, company_website, status)
+             VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id`,
+            [slug, name, intakeData.industry || null, intakeData.location || null, intakeData.domain || null, intakeData.companyWebsite || null]
+          );
+          resolvedClientId = newClient[0].id;
+        }
+
+        // Upsert brand_story with intake_data
+        const { rows: existing } = await dbQuery(
+          "SELECT id FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
+          [resolvedClientId]
+        );
+        if (existing[0]) {
+          await dbQuery(
+            "UPDATE cm_brand_story SET intake_data = $1, intake_submitted_at = NOW(), updated_at = NOW() WHERE id = $2",
+            [JSON.stringify(intakeData), existing[0].id]
+          );
+        } else {
+          await dbQuery(
+            "INSERT INTO cm_brand_story (client_id, status, intake_data, intake_submitted_at) VALUES ($1, 'draft', $2, NOW())",
+            [resolvedClientId, JSON.stringify(intakeData)]
+          );
+        }
+
+        res.json({ success: true, clientId: resolvedClientId });
+      } catch (err) { console.error("Public onboarding submit error:", err); res.status(500).json({ error: "Failed to submit onboarding" }); }
+    });
   }
 
   // Protect all /api routes except /api/auth/me and /api/public/*
@@ -1204,6 +1295,9 @@ async function main(): Promise<void> {
   // Must be AFTER all API routes, health check, and MCP endpoints
   // Public pages (brand-story) skip auth; all others require it
   app.get("/brand-story/*", (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+  app.get("/onboarding/*", (_req, res) => {
     res.sendFile(path.join(clientDistPath, "index.html"));
   });
   app.get("*", requireAuth, (_req, res) => {

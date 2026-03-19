@@ -12,6 +12,7 @@ import { MarketingPlanSection } from "@/components/client/MarketingPlanSection";
 import { ContentGuideSection } from "@/components/client/ContentGuideSection";
 import { CrudSection, CrudItem } from "@/components/client/CrudSection";
 import { FormField } from "@/components/FormField";
+import { IntakeResponsesSection } from "@/components/client/IntakeResponsesSection";
 
 // ── Types ────────────────────────────────────
 
@@ -160,7 +161,12 @@ export function ClientDetailPage() {
       {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
       {tab === "content-guide" && <ContentGuideSection clientId={client.id} />}
       {tab === "health" && <HealthTab clientId={client.id} />}
-      {tab === "brand-story" && <BrandStoryTab clientId={client.id} />}
+      {tab === "brand-story" && (
+        <div className="space-y-8">
+          <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
+          <BrandStoryTab clientId={client.id} />
+        </div>
+      )}
     </div>
   );
 }

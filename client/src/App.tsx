@@ -33,12 +33,14 @@ import { SharedBrandStoryPage } from "./pages/SharedBrandStoryPage";
 import { MarketingGuidesPage } from "./pages/MarketingGuidesPage";
 import { MarketingGuideEditorPage } from "./pages/MarketingGuideEditorPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
+import { PublicOnboardingPage } from "./pages/PublicOnboardingPage";
 
 export default function App() {
   return (
     <Routes>
       {/* Public pages (no auth, no sidebar) */}
       <Route path="/brand-story/:token" element={<SharedBrandStoryPage />} />
+      <Route path="/onboarding/intake" element={<PublicOnboardingPage />} />
 
       <Route element={<DashboardLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />

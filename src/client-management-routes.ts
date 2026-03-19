@@ -469,5 +469,28 @@ export function clientManagementRouter(): Router {
     } catch (err) { res.status(500).json({ error: "Failed" }); }
   });
 
+  // ════════════════════════════════════════════════════════
+  //  INTAKE DATA (onboarding responses)
+  // ════════════════════════════════════════════════════════
+
+  router.get("/clients/:clientId/intake", async (req, res) => {
+    try {
+      const { rows } = await query(
+        "SELECT intake_data, intake_submitted_at, status FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
+        [req.params.clientId]
+      );
+      if (!rows[0]) {
+        res.json({ hasIntakeData: false, rawIntake: null, submittedAt: null, storyStatus: null });
+        return;
+      }
+      res.json({
+        hasIntakeData: !!rows[0].intake_data,
+        rawIntake: rows[0].intake_data,
+        submittedAt: rows[0].intake_submitted_at,
+        storyStatus: rows[0].status,
+      });
+    } catch (err) { console.error("Get intake data error:", err); res.status(500).json({ error: "Failed to get intake data" }); }
+  });
+
   return router;
 }
