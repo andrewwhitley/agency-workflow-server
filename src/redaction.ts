@@ -11,7 +11,7 @@ const BASE64_OR_LONG_RANDOM =
 
 /** Keys whose values should never be redacted (e.g. sheet data, content) */
 const SAFE_KEYS =
-  /^(headers|rows|values|title|sheetTitle|name|slug|description|body|content|text|outline|summary|page|url|type|status)$/i;
+  /^(headers|rows|values|title|sheetTitle|name|slug|description|body|content|text|outline|summary|page|url|type|status|share_token|shareToken)$/i;
 
 const REDACTED = "[REDACTED]";
 

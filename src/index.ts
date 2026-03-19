@@ -765,10 +765,15 @@ async function main(): Promise<void> {
     app.use("/api/cm", clientManagementRouter());
 
     // Marketing Guides CRUD
+    const guideToCamel = (row: Record<string, unknown>) => {
+      const o: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(row)) o[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())] = v;
+      return o;
+    };
     app.get("/api/guides/categories", async (_req, res) => {
       try {
         const { rows } = await dbQuery("SELECT * FROM guide_categories ORDER BY sort_order, name");
-        res.json(rows);
+        res.json(rows.map(guideToCamel));
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
     app.post("/api/guides/categories", async (req, res) => {
@@ -778,7 +783,7 @@ async function main(): Promise<void> {
           "INSERT INTO guide_categories (name, description, icon, parent_id) VALUES ($1, $2, $3, $4) RETURNING *",
           [name, description, icon, parentId || null]
         );
-        res.json(rows[0]);
+        res.json(guideToCamel(rows[0]));
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
 
@@ -793,7 +798,7 @@ async function main(): Promise<void> {
         if (search) { sql += ` AND (g.title ILIKE $${i} OR g.description ILIKE $${i} OR g.tags ILIKE $${i})`; params.push(`%${search}%`); i++; }
         sql += " ORDER BY g.updated_at DESC";
         const { rows } = await dbQuery(sql, params);
-        res.json(rows);
+        res.json(rows.map(guideToCamel));
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
     app.get("/api/guides/:id", async (req, res) => {
@@ -803,7 +808,7 @@ async function main(): Promise<void> {
           [req.params.id]
         );
         if (!rows[0]) { res.status(404).json({ error: "Not found" }); return; }
-        res.json(rows[0]);
+        res.json(guideToCamel(rows[0]));
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
     app.post("/api/guides", async (req, res) => {
@@ -813,7 +818,7 @@ async function main(): Promise<void> {
           "INSERT INTO marketing_guides (title, category_id, content, description, tags, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
           [title, categoryId || null, content || "", description, tags, status || "draft"]
         );
-        res.json(rows[0]);
+        res.json(guideToCamel(rows[0]));
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
     app.put("/api/guides/:id", async (req, res) => {
@@ -833,7 +838,7 @@ async function main(): Promise<void> {
       values.push(req.params.id);
       try {
         const { rows } = await dbQuery(`UPDATE marketing_guides SET ${fields.join(", ")} WHERE id = $${pi} RETURNING *`, values);
-        res.json(rows[0]);
+        res.json(rows[0] ? guideToCamel(rows[0]) : null);
       } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
     });
     app.delete("/api/guides/:id", async (req, res) => {

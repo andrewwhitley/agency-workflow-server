@@ -9,10 +9,10 @@ import { FormField } from "@/components/FormField";
 import { Plus, Search, FileText, Folder } from "lucide-react";
 
 interface Guide {
-  id: number; title: string; category_id: number | null; content: string;
+  id: number; title: string; categoryId: number | null; content: string;
   description: string | null; tags: string | null; status: string;
-  category_name: string | null; category_icon: string | null;
-  created_at: string; updated_at: string;
+  categoryName: string | null; categoryIcon: string | null;
+  createdAt: string; updatedAt: string;
 }
 
 interface Category {
@@ -162,7 +162,7 @@ export function MarketingGuidesPage() {
                   className="bg-surface border border-border rounded-md p-5 hover:border-accent/50 transition-colors block">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      {guide.category_icon && <span className="text-xl">{guide.category_icon}</span>}
+                      {guide.categoryIcon && <span className="text-xl">{guide.categoryIcon}</span>}
                       <h3 className="text-sm font-semibold text-foreground">{guide.title}</h3>
                     </div>
                     <span className={cn("text-xs px-2 py-0.5 rounded font-medium",
@@ -171,7 +171,7 @@ export function MarketingGuidesPage() {
                     )}>{guide.status}</span>
                   </div>
                   {guide.description && <p className="text-xs text-muted mb-2 line-clamp-2">{guide.description}</p>}
-                  {guide.category_name && <div className="text-xs text-dim mb-2">{guide.category_name}</div>}
+                  {guide.categoryName && <div className="text-xs text-dim mb-2">{guide.categoryName}</div>}
                   {guide.tags && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {guide.tags.split(",").slice(0, 3).map((tag, i) => (
@@ -180,7 +180,7 @@ export function MarketingGuidesPage() {
                     </div>
                   )}
                   <div className="text-xs text-dim mt-3 pt-3 border-t border-border">
-                    Updated {new Date(guide.updated_at).toLocaleDateString()}
+                    Updated {new Date(guide.updatedAt).toLocaleDateString()}
                   </div>
                 </Link>
               ))}

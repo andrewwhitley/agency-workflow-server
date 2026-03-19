@@ -9,10 +9,10 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ArrowLeft, Save, Trash2, Eye, Pencil } from "lucide-react";
 
 interface Guide {
-  id: number; title: string; category_id: number | null; content: string;
+  id: number; title: string; categoryId: number | null; content: string;
   description: string | null; tags: string | null; status: string;
-  category_name: string | null; category_icon: string | null;
-  created_at: string; updated_at: string;
+  categoryName: string | null; categoryIcon: string | null;
+  createdAt: string; updatedAt: string;
 }
 
 export function MarketingGuideEditorPage() {
@@ -91,7 +91,7 @@ export function MarketingGuideEditorPage() {
           <div>
             <h2 className="text-lg font-semibold text-foreground">{guide.title}</h2>
             <div className="flex items-center gap-2 text-xs text-dim">
-              {guide.category_name && <span>{guide.category_icon} {guide.category_name}</span>}
+              {guide.categoryName && <span>{guide.categoryIcon} {guide.categoryName}</span>}
               <span className={cn("px-2 py-0.5 rounded font-medium",
                 status === "published" ? "bg-success/10 text-success" : "bg-surface-2 text-dim"
               )}>{status}</span>
