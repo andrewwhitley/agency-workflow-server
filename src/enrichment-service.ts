@@ -762,6 +762,224 @@ export class EnrichmentService {
     return { runId: run.id };
   }
 
+  // ── Backfill: run Claude analysis on already-enriched prospects ──
+
+  async startBackfill(options: {
+    batchSize?: number;
+    concurrency?: number;
+    max?: number;
+    costCap?: number;
+  } = {}): Promise<{ runId: string }> {
+    if (this.activeRun && this.activeRun.status === "running") {
+      throw new Error("An enrichment run is already in progress");
+    }
+
+    const pool = getPool();
+    const batchSize = options.batchSize || 10;
+    const concurrency = options.concurrency || 2;
+    const costCap = options.costCap || 20;
+    const max = options.max || 0;
+
+    // Count completed prospects missing provider data
+    const { rows: [{ count: totalBackfill }] } = await pool.query(
+      "SELECT COUNT(*)::int as count FROM enrichment_prospects WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live'"
+    );
+    const totalToProcess = max > 0 ? Math.min(max, totalBackfill) : totalBackfill;
+    const estimatedCost = totalToProcess * 0.01;
+
+    const { rows: [run] } = await pool.query(`
+      INSERT INTO enrichment_runs (status, total_prospects, batch_size, concurrency, cost_cap, dry_run, estimated_cost)
+      VALUES ('running', $1, $2, $3, $4, false, $5)
+      RETURNING id
+    `, [totalToProcess, batchSize, concurrency, costCap, estimatedCost]);
+
+    this.activeRun = { id: run.id, status: "running", cancel: false, pause: false };
+
+    this.runBackfillLoop(run.id, { batchSize, concurrency, max: totalToProcess, costCap }).catch((err) => {
+      console.error("Backfill loop error:", err);
+      this.updateRunStatus(run.id, "failed", err.message).catch(console.error);
+    });
+
+    return { runId: run.id };
+  }
+
+  private async runBackfillLoop(
+    runId: string,
+    options: { batchSize: number; concurrency: number; max: number; costCap: number }
+  ): Promise<void> {
+    const pool = getPool();
+    let processed = 0, succeeded = 0, failed = 0, skipped = 0, actualCost = 0;
+
+    while (processed < options.max) {
+      if (this.activeRun?.cancel) {
+        await this.updateRunStatus(runId, "cancelled");
+        this.activeRun = null;
+        return;
+      }
+
+      if (this.activeRun?.pause) {
+        await this.updateRunStatus(runId, "paused");
+        this.activeRun.status = "paused";
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            if (!this.activeRun?.pause || this.activeRun?.cancel) resolve();
+            else setTimeout(check, 500);
+          };
+          setTimeout(check, 500);
+        });
+        if (this.activeRun?.cancel) {
+          await this.updateRunStatus(runId, "cancelled");
+          this.activeRun = null;
+          return;
+        }
+      }
+
+      if (actualCost >= options.costCap) {
+        await this.updateRunStatus(runId, "paused", `Cost cap reached ($${actualCost.toFixed(2)}/$${options.costCap})`);
+        this.activeRun = null;
+        return;
+      }
+
+      const remaining = options.max - processed;
+      const batchLimit = Math.min(options.batchSize, remaining);
+      const { rows: batch } = await pool.query(`
+        SELECT * FROM enrichment_prospects
+        WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live'
+        ORDER BY total_score DESC
+        LIMIT $1
+      `, [batchLimit]);
+
+      if (batch.length === 0) break;
+
+      for (let i = 0; i < batch.length; i += options.concurrency) {
+        const chunk = batch.slice(i, i + options.concurrency);
+        const results = await Promise.allSettled(
+          chunk.map((p) => this.backfillProspect(p))
+        );
+
+        for (let j = 0; j < results.length; j++) {
+          processed++;
+          if (results[j].status === "fulfilled") {
+            const val = (results[j] as PromiseFulfilledResult<{ skipped: boolean; cost: number }>).value;
+            if (val.skipped) skipped++;
+            else { succeeded++; actualCost += val.cost; }
+          } else {
+            failed++;
+          }
+
+          await pool.query(`
+            UPDATE enrichment_runs SET processed = $2, succeeded = $3, failed = $4, skipped = $5, actual_cost = $6 WHERE id = $1
+          `, [runId, processed, succeeded, failed, skipped, actualCost]);
+
+          this.emitter.emit("progress", {
+            runId, status: "running", processed, total: options.max,
+            succeeded, failed, skipped, cost: actualCost,
+            currentProspect: chunk[j]?.company_name,
+          } as EnrichmentProgress);
+        }
+      }
+    }
+
+    await pool.query(`
+      UPDATE enrichment_runs SET status = 'completed', completed_at = NOW(), processed = $2, succeeded = $3, failed = $4, skipped = $5, actual_cost = $6 WHERE id = $1
+    `, [runId, processed, succeeded, failed, skipped, actualCost]);
+
+    this.emitter.emit("progress", {
+      runId, status: "completed", processed, total: options.max,
+      succeeded, failed, skipped, cost: actualCost,
+    });
+    this.activeRun = null;
+  }
+
+  private async backfillProspect(prospect: Prospect): Promise<{ skipped: boolean; cost: number }> {
+    const pool = getPool();
+    const websiteUrl = prospect.website?.startsWith("http") ? prospect.website : `https://${prospect.website}`;
+
+    // Fetch website HTML
+    let html = "";
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const resp = await fetch(websiteUrl, {
+        signal: controller.signal,
+        redirect: "follow",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; AgencyBot/1.0)" },
+      });
+      clearTimeout(timeout);
+      if (resp.ok) html = await resp.text();
+    } catch {
+      // Site unreachable — skip
+    }
+
+    if (!html) return { skipped: true, cost: 0 };
+
+    // Run Claude analysis
+    const trimmedHtml = html.length > 12000 ? html.slice(0, 12000) : html;
+    const claude = new Anthropic();
+    const msg = await claude.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      messages: [{
+        role: "user",
+        content: `Analyze this medical practice website HTML. Return ONLY valid JSON with these fields:
+- provider_count: number of doctors/providers/practitioners (NPs, PAs, DOs, MDs, DCs count). 0 if unknown.
+- provider_names: array of provider names found (empty array if none)
+- total_staff: estimated total staff if determinable, 0 if unknown
+- top_services: array of up to 8 main services offered (e.g. "Hormone Therapy", "IV Therapy", "Functional Medicine")
+
+Practice: ${prospect.company_name}, ${prospect.city}, ${prospect.state}
+HTML:\n${trimmedHtml}`,
+      }],
+    });
+
+    const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { skipped: true, cost: 0.01 };
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const updates: Record<string, any> = {};
+
+    if (parsed.provider_count && parsed.provider_count > 0) {
+      updates.provider_count = parsed.provider_count;
+    }
+    if (parsed.total_staff && parsed.total_staff > 0) {
+      updates.total_staff = parsed.total_staff;
+    }
+    if (Array.isArray(parsed.top_services) && parsed.top_services.length > 0) {
+      updates.top_services = JSON.stringify(parsed.top_services);
+    }
+    if (Array.isArray(parsed.provider_names) && parsed.provider_names.length > 0) {
+      updates.provider_details = JSON.stringify(parsed.provider_names);
+    }
+
+    if (Object.keys(updates).length === 0) return { skipped: true, cost: 0.01 };
+
+    // Re-score with new data
+    const merged = { ...prospect, ...updates };
+    const scoring = calculateScores(merged);
+    updates.pillar_scores = JSON.stringify(scoring.pillar_scores);
+    updates.total_score = scoring.total_score;
+    updates.qualification_tier = scoring.qualification_tier;
+    updates.sales_angles = JSON.stringify(scoring.sales_angles);
+
+    const setClauses: string[] = [];
+    const values: any[] = [prospect.id];
+    let idx = 2;
+    for (const [key, val] of Object.entries(updates)) {
+      setClauses.push(`${key} = $${idx++}`);
+      values.push(val);
+    }
+    setClauses.push("updated_at = NOW()");
+
+    await pool.query(
+      `UPDATE enrichment_prospects SET ${setClauses.join(", ")} WHERE id = $1`,
+      values
+    );
+
+    await this.delay(100);
+    return { skipped: false, cost: 0.01 };
+  }
+
   async pauseEnrichment(): Promise<void> {
     if (!this.activeRun) throw new Error("No active enrichment run");
     this.activeRun.pause = true;

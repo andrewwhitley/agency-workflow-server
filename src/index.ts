@@ -802,6 +802,12 @@ async function main(): Promise<void> {
       } catch (err: any) { res.status(500).json({ error: err.message || "Failed to start enrichment" }); }
     });
 
+    app.post("/api/sales/enrich/backfill", requireSalesAdmin as any, async (req, res) => {
+      try {
+        res.json(await enrichmentService.startBackfill(req.body));
+      } catch (err: any) { res.status(500).json({ error: err.message || "Failed to start backfill" }); }
+    });
+
     app.post("/api/sales/enrich/pause", requireSalesAdmin as any, async (_req, res) => {
       try { await enrichmentService.pauseEnrichment(); res.json({ success: true }); }
       catch (err: any) { res.status(500).json({ error: err.message || "Failed to pause" }); }
