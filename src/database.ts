@@ -1396,6 +1396,12 @@ Before saving, verify:
         ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    id: "030_fix_sms_phone_label",
+    sql: `
+      UPDATE cm_phone_numbers SET label = 'Main' WHERE label = 'SMS';
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
