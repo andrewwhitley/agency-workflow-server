@@ -161,7 +161,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
                       {!s.offered && <span className="text-xs px-2 py-0.5 ml-2 rounded bg-surface-2 text-dim">Not offered</span>}
                     </div>
                     <div className="flex items-center gap-1">
-                      {s.price && <span className="text-sm font-medium text-foreground mr-2">${s.price}</span>}
+                      {s.price != null && <span className="text-sm font-medium text-foreground mr-2">${s.price}</span>}
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditService(s)}>
                         <Pencil className="h-3 w-3" />
                       </Button>

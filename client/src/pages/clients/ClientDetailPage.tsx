@@ -143,7 +143,7 @@ export function ClientDetailPage() {
         ))}
       </div>
 
-      {tab === "info" && <InfoTab client={client} onClientUpdate={setClient} />}
+      {tab === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
       {tab === "services" && <ServicesSection clientId={client.id} />}
       {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
       {tab === "marketing-plan" && <MarketingPlanSection clientId={client.id} />}
@@ -196,7 +196,7 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
   return (
     <div className="space-y-8">
       {/* Editable company info sections */}
-      <CompanyInfoEdit client={client} onUpdate={onClientUpdate} />
+      <CompanyInfoEdit client={client as { id: number; [key: string]: unknown }} onUpdate={(c) => onClientUpdate(c as Client)} />
 
       {/* Contacts */}
       <CrudSection<Contact> title="Contacts" clientId={client.id} entityPath="contacts"

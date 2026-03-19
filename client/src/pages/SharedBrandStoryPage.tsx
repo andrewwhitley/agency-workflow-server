@@ -122,7 +122,7 @@ export function SharedBrandStoryPage() {
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         {/* Full Brand Story */}
-        {story.fullBrandStory && (
+        {!!story.fullBrandStory && (
           <div className="bg-white rounded-lg border shadow-sm p-6">
             <h2 className="text-lg font-semibold text-[#1a1f2e] mb-4">Full Brand Story</h2>
             <div className="text-sm text-[#1a1f2e] whitespace-pre-wrap leading-relaxed">{String(story.fullBrandStory)}</div>
@@ -159,13 +159,11 @@ export function SharedBrandStoryPage() {
           if (!sectionData || Object.keys(sectionData).length === 0) return null;
 
           const Icon = def.icon;
-          const content = typeof sectionData === "object" && sectionData.content
-            ? String(sectionData.content)
-            : Object.entries(sectionData).filter(([, v]) => v).map(([k, v]) =>
-                `**${k.replace(/([A-Z])/g, " $1").trim()}:** ${String(v)}`
-              ).join("\n\n");
+          const hasContent = typeof sectionData === "object" && sectionData.content;
+          const contentStr = hasContent ? String(sectionData.content) : null;
+          const entries = !hasContent ? Object.entries(sectionData).filter(([, v]) => v) : [];
 
-          if (!content) return null;
+          if (!contentStr && entries.length === 0) return null;
 
           const frameworkColors: Record<string, string> = {
             "Brand Story": "bg-blue-100 text-blue-700",
@@ -187,8 +185,15 @@ export function SharedBrandStoryPage() {
                   </span>
                 </div>
               </div>
-              <div className="p-4">
-                <div className="text-sm text-[#1a1f2e] whitespace-pre-wrap leading-relaxed">{content}</div>
+              <div className="p-4 space-y-3">
+                {contentStr ? (
+                  <div className="text-sm text-[#1a1f2e] whitespace-pre-wrap leading-relaxed">{contentStr}</div>
+                ) : entries.map(([k, v]) => (
+                  <div key={k}>
+                    <div className="text-xs font-semibold text-[#5a6478] capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</div>
+                    <div className="text-sm text-[#1a1f2e] whitespace-pre-wrap">{String(v)}</div>
+                  </div>
+                ))}
               </div>
             </div>
           );

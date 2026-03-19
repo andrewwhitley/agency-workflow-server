@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,8 @@ interface CheckboxFieldProps extends BaseProps {
 type FormFieldProps = TextFieldProps | TextareaFieldProps | CheckboxFieldProps;
 
 export function FormField(props: FormFieldProps) {
-  const id = props.label.toLowerCase().replace(/\s+/g, "-");
+  const reactId = useId();
+  const id = reactId;
 
   if (props.type === "checkbox") {
     return (

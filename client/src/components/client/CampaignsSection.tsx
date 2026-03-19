@@ -164,7 +164,7 @@ export function CampaignsSection({ clientId }: { clientId: number }) {
                   <div className="flex flex-wrap gap-2 text-xs text-dim">
                     {c.campaignType && <span className="px-2 py-0.5 rounded bg-surface-2">{c.campaignType}</span>}
                     {c.platforms && <span className="px-2 py-0.5 rounded bg-surface-2">{c.platforms}</span>}
-                    {c.budget && <span className="px-2 py-0.5 rounded bg-surface-2">${c.budget}</span>}
+                    {c.budget != null && <span className="px-2 py-0.5 rounded bg-surface-2">${c.budget}</span>}
                     {camDels.length > 0 && <span className="px-2 py-0.5 rounded bg-accent/10 text-accent">{camDels.length} deliverable{camDels.length !== 1 ? "s" : ""}</span>}
                   </div>
                 </div>

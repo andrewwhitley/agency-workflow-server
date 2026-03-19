@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,8 @@ export function MarketingGuidesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("published");
 
@@ -42,7 +44,7 @@ export function MarketingGuidesPage() {
     const params = new URLSearchParams();
     if (selectedStatus) params.set("status", selectedStatus);
     if (selectedCategory) params.set("categoryId", String(selectedCategory));
-    if (search) params.set("search", search);
+    if (debouncedSearch) params.set("search", debouncedSearch);
 
     Promise.all([
       api<Guide[]>(`/guides?${params}`).catch(() => []),
@@ -50,7 +52,14 @@ export function MarketingGuidesPage() {
     ]).then(([g, c]) => { setGuides(g); setCategories(c); }).finally(() => setLoading(false));
   };
 
-  useEffect(() => { reload(); }, [selectedStatus, selectedCategory, search]);
+  // Debounce search
+  useEffect(() => {
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [search]);
+
+  useEffect(() => { reload(); }, [selectedStatus, selectedCategory, debouncedSearch]);
 
   const createGuide = async () => {
     setCreatePending(true);
@@ -184,7 +193,14 @@ export function MarketingGuidesPage() {
       <FormDialog open={createOpen} onOpenChange={setCreateOpen} title="New Guide" onSubmit={createGuide} isPending={createPending} submitLabel="Create">
         <FormField label="Title" value={createForm.title} onChange={(v) => setCreateForm((p) => ({ ...p, title: v }))} required />
         <FormField label="Description" type="textarea" value={createForm.description} onChange={(v) => setCreateForm((p) => ({ ...p, description: v }))} rows={2} />
-        <FormField label="Category" value={createForm.categoryId} onChange={(v) => setCreateForm((p) => ({ ...p, categoryId: v }))} placeholder="Category ID (optional)" />
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Category</label>
+          <select value={createForm.categoryId} onChange={(e) => setCreateForm((p) => ({ ...p, categoryId: e.target.value }))}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+            <option value="">No category</option>
+            {categories.map((c) => <option key={c.id} value={String(c.id)}>{c.icon ? `${c.icon} ` : ""}{c.name}</option>)}
+          </select>
+        </div>
         <FormField label="Status" value={createForm.status} onChange={(v) => setCreateForm((p) => ({ ...p, status: v }))} placeholder="draft or published" />
       </FormDialog>
 

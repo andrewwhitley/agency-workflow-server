@@ -14,11 +14,13 @@ interface CrudSectionProps<T extends { id: number }> {
   renderForm: (form: Partial<T>, update: (field: string, val: unknown) => void) => React.ReactNode;
   wide?: boolean;
   deleteWarning?: string;
+  singularTitle?: string;
 }
 
 export function CrudSection<T extends { id: number }>({
-  title, clientId, entityPath, emptyForm, renderItem, renderForm, wide, deleteWarning,
+  title, clientId, entityPath, emptyForm, renderItem, renderForm, wide, deleteWarning, singularTitle,
 }: CrudSectionProps<T>) {
+  const singular = singularTitle || title.replace(/ies$/, "y").replace(/ses$/, "ss").replace(/s$/, "");
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,14 +87,14 @@ export function CrudSection<T extends { id: number }>({
       )}
 
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
-        title={editingId ? `Edit ${title.replace(/s$/, "")}` : `Add ${title.replace(/s$/, "")}`}
+        title={editingId ? `Edit ${singular}` : `Add ${singular}`}
         onSubmit={submit} isPending={pending} wide={wide}>
         {renderForm(form, update)}
       </FormDialog>
 
       <ConfirmDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}
-        title={`Delete ${title.replace(/s$/, "")}`}
-        description={deleteWarning || `This will permanently delete this ${title.replace(/s$/, "").toLowerCase()}.`}
+        title={`Delete ${singular}`}
+        description={deleteWarning || `This will permanently delete this ${singular.toLowerCase()}.`}
         onConfirm={doDelete} isPending={pending} />
     </div>
   );

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Check, Building2, Phone, Briefcase, Users, Target, FileText, Megaphone } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Building2, Briefcase, Users, Target, FileText, Megaphone } from "lucide-react";
 
 interface FormData {
   // Step 1: Company
@@ -57,9 +57,9 @@ const STEPS = [
   { label: "Operations", icon: Briefcase },
   { label: "Financial", icon: Target },
   { label: "Background", icon: FileText },
-  { label: "Services", icon: Users },
+  { label: "Services", icon: Briefcase },
   { label: "Marketing", icon: Megaphone },
-  { label: "Branding", icon: Phone },
+  { label: "Branding", icon: Target },
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -92,13 +92,18 @@ export function OnboardingPage() {
 
   const upd = (k: keyof FormData, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
+  const [savedSlug, setSavedSlug] = useState<string | null>(clientSlug);
+  const [error, setError] = useState<string | null>(null);
+
   const saveProgress = async () => {
     setSaving(true);
+    setError(null);
     try {
+      const excludeFromClient = ["servicesOffered", "marketingGoals", "competitorNames"];
+      const guideFields = ["targetAudience", "uniqueSellingPoints", "brandVoice"];
       const payload: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(form)) {
-        if (v && !["servicesOffered", "marketingGoals", "targetAudience", "competitorNames", "uniqueSellingPoints", "brandVoice"].includes(k)) {
-          // Convert numeric fields
+        if (v && !excludeFromClient.includes(k) && !guideFields.includes(k)) {
           if (["numberOfEmployees", "numberOfCustomers", "desiredNewClients", "combinedYearsExperience"].includes(k)) {
             payload[k] = v ? parseInt(v) : null;
           } else if (["estimatedAnnualRevenue", "targetRevenue", "avgClientLifetimeValue", "currentMarketingSpend", "currentAdsSpend"].includes(k)) {
@@ -109,17 +114,20 @@ export function OnboardingPage() {
         }
       }
 
-      if (savedClientId) {
-        await api(`/cm/clients/${savedClientId}`, { method: "PUT", body: JSON.stringify(payload) });
+      let currentClientId = savedClientId;
+      if (currentClientId) {
+        await api(`/cm/clients/${currentClientId}`, { method: "PUT", body: JSON.stringify(payload) });
       } else {
-        if (!form.companyName.trim()) { setSaving(false); return; }
+        if (!form.companyName.trim()) { setError("Company name is required"); setSaving(false); return; }
         const client = await api<{ id: number; slug: string }>("/cm/clients", { method: "POST", body: JSON.stringify(payload) });
+        currentClientId = client.id;
         setSavedClientId(client.id);
+        setSavedSlug(client.slug);
       }
 
       // Save content guidelines if marketing fields filled
-      if (savedClientId && (form.brandVoice || form.targetAudience || form.uniqueSellingPoints)) {
-        await api(`/cm/clients/${savedClientId}/content-guidelines`, {
+      if (currentClientId && (form.brandVoice || form.targetAudience || form.uniqueSellingPoints)) {
+        await api(`/cm/clients/${currentClientId}/content-guidelines`, {
           method: "PUT",
           body: JSON.stringify({
             brandVoice: form.brandVoice,
@@ -128,7 +136,10 @@ export function OnboardingPage() {
           }),
         });
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+      console.error(e);
+    }
     setSaving(false);
   };
 
@@ -141,8 +152,7 @@ export function OnboardingPage() {
 
   const finish = async () => {
     await saveProgress();
-    const slug = clientSlug || form.companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    navigate(`/clients/${slug}`);
+    navigate(`/clients/${savedSlug || "unknown"}`);
   };
 
   return (
@@ -167,6 +177,7 @@ export function OnboardingPage() {
       </div>
 
       {/* Form */}
+      {error && <div className="bg-destructive/10 text-destructive text-sm rounded-md px-4 py-2">{error}</div>}
       <div className="bg-surface border border-border rounded-md p-6 space-y-4">
         {step === 0 && (<>
           <h3 className="text-sm font-semibold text-foreground mb-2">Company Information</h3>

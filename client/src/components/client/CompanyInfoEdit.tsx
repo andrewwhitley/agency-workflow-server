@@ -195,7 +195,7 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
             ) : f.type === "textarea" ? (
               <FormField key={f.key} label={f.label} type="textarea" value={String(form[f.key] ?? "")} onChange={(v) => upd(f.key, v)} />
             ) : (
-              <FormField key={f.key} label={f.label} type={f.type || "text"} value={String(form[f.key] ?? "")} onChange={(v) => upd(f.key, f.type === "number" ? (v ? parseFloat(v) : null) : v)} />
+              <FormField key={f.key} label={f.label} type={f.type || "text"} value={String(form[f.key] ?? "")} onChange={(v: string) => upd(f.key, f.type === "number" ? (v ? parseFloat(v) : null) : v)} />
             )
           )}
         </FormDialog>

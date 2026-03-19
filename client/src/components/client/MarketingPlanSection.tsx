@@ -87,7 +87,7 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
                       item.isIncluded ? "bg-success/20 border-success text-success font-bold" : "border-dim"
                     )}>{item.isIncluded ? "✓" : ""}</span>
                     <span className={cn("text-sm", item.isIncluded ? "text-foreground" : "text-dim")}>{item.item}</span>
-                    {item.quantity && <span className="text-xs text-muted shrink-0">×{item.quantity}</span>}
+                    {item.quantity != null && <span className="text-xs text-muted shrink-0">×{item.quantity}</span>}
                     {!item.isIncluded && <span className="text-xs px-1.5 py-0.5 rounded bg-surface-3 text-dim shrink-0">Not Included</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
