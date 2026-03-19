@@ -239,7 +239,7 @@ function Field({ label, description, example, required, children }: {
   );
 }
 
-const inputCls = "bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20";
+const inputCls = "bg-slate-950 border-slate-500 text-white placeholder-slate-400 focus:border-blue-400 focus:ring-blue-400/20";
 const textareaCls = inputCls + " resize-none";
 
 // ── Main Component ───────────────────────────
@@ -367,7 +367,7 @@ export function PublicOnboardingPage() {
           </div>
           <h1 className="text-3xl font-bold text-white">Intake Complete!</h1>
           <p className="text-slate-300 text-lg">Thank you for taking the time to share your story. Our team will review your information and begin crafting your Brand Story Guide.</p>
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-left space-y-3">
+          <div className="bg-slate-900/60 border border-slate-600 rounded-xl p-6 text-left space-y-3">
             <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider">What Happens Next</h3>
             <ul className="space-y-2 text-sm text-slate-300">
               <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">1.</span>Our team reviews your intake and generates your Brand Story Guide</li>
@@ -389,7 +389,7 @@ export function PublicOnboardingPage() {
         <p>The best marketing starts with a deep understanding of your business, your clients, and your story. This intake helps us build a complete picture so we can create messaging that truly resonates.</p>
         <p className="mt-2">There are <strong>5 sections</strong>, and you can save your progress and come back anytime. Most people complete it in 20–30 minutes.</p>
       </InsightCard>
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="bg-slate-900/60 border border-slate-600 rounded-xl p-6 space-y-4">
         <h3 className="font-semibold text-white">Have an existing Client ID?</h3>
         <p className="text-sm text-slate-400">If you've already been set up in our system, enter your Client ID below. Otherwise, leave it blank and we'll create a new profile.</p>
         <div className="flex gap-3">
@@ -404,7 +404,7 @@ export function PublicOnboardingPage() {
           </div>
         )}
       </div>
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-3">
+      <div className="bg-slate-900/60 border border-slate-600 rounded-xl p-6 space-y-3">
         <h3 className="font-semibold text-white">What We'll Cover</h3>
         <div className="space-y-2">
           {sections.filter((s) => s.id >= 1 && s.id <= 5).map((s) => {
@@ -417,7 +417,7 @@ export function PublicOnboardingPage() {
                 </div>
                 <div>
                   <p className={`font-medium ${complete ? "text-emerald-300" : "text-white"}`}>Section {s.id}: {s.title}</p>
-                  <p className="text-xs text-slate-500">{s.subtitle}</p>
+                  <p className="text-xs text-slate-400">{s.subtitle}</p>
                 </div>
               </div>
             );
@@ -490,8 +490,8 @@ export function PublicOnboardingPage() {
       </Field>
       <h4 className="text-sm font-medium text-slate-300 pt-2">Competitors</h4>
       {[1, 2, 3].map((n) => (
-        <div key={n} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 space-y-3">
-          <p className="text-xs text-slate-500 font-medium">Competitor {n} {n === 3 ? "(Optional)" : ""}</p>
+        <div key={n} className="bg-slate-900/80 border border-slate-600/50 rounded-lg p-4 space-y-3">
+          <p className="text-xs text-slate-400 font-medium">Competitor {n} {n === 3 ? "(Optional)" : ""}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input value={(data as Record<string, string>)[`competitor${n}Name`]} onChange={(e) => upd(`competitor${n}Name`, e.target.value)} className={inputCls} placeholder="Name" />
             <Input value={(data as Record<string, string>)[`competitor${n}Website`]} onChange={(e) => upd(`competitor${n}Website`, e.target.value)} className={inputCls} placeholder="Website" />
@@ -618,8 +618,8 @@ export function PublicOnboardingPage() {
       </Field>
       <h4 className="text-sm font-medium text-slate-300 pt-2">Testimonials</h4>
       {[1, 2, 3].map((n) => (
-        <div key={n} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 space-y-3">
-          <p className="text-xs text-slate-500 font-medium">Testimonial {n} {n === 3 ? "(Optional)" : ""}</p>
+        <div key={n} className="bg-slate-900/80 border border-slate-600/50 rounded-lg p-4 space-y-3">
+          <p className="text-xs text-slate-400 font-medium">Testimonial {n} {n === 3 ? "(Optional)" : ""}</p>
           <Textarea value={(data as Record<string, string>)[`testimonial${n}`]} onChange={(e) => upd(`testimonial${n}`, e.target.value)} className={textareaCls} rows={2} placeholder="What did they say?" />
           <Input value={(data as Record<string, string>)[`testimonial${n}Author`]} onChange={(e) => upd(`testimonial${n}Author`, e.target.value)} className={inputCls} placeholder="Who said it? (e.g. Jennifer M., Milford CT)" />
         </div>
@@ -662,13 +662,13 @@ export function PublicOnboardingPage() {
         { label: "Client Journey", fields: [["Ideal Client", data.idealCustomerDescription], ["Frustration", data.biggestFrustration], ["How You Help", data.howYouHelp], ["Success Story", data.successStory ? "Provided" : ""]] },
         { label: "Content", fields: [["Top Questions", data.topQuestionsCustomersAsk], ["Topics", data.contentTopicsExcited], ["Testimonials", data.testimonial1 ? "Provided" : ""]] },
       ].map((sec) => (
-        <div key={sec.label} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
+        <div key={sec.label} className="bg-slate-900/80 border border-slate-600/50 rounded-lg p-4">
           <h4 className="text-sm font-medium text-white mb-2">{sec.label}</h4>
           <div className="space-y-1">
             {sec.fields.map(([label, value]) => (
               <div key={label} className="flex gap-2 text-sm">
-                <span className="text-slate-500 w-32 shrink-0">{label}:</span>
-                <span className={value ? "text-slate-300" : "text-slate-600 italic"}>{value ? (value.length > 80 ? value.slice(0, 80) + "..." : value) : "Not provided"}</span>
+                <span className="text-slate-400 w-32 shrink-0">{label}:</span>
+                <span className={value ? "text-slate-300" : "text-slate-500 italic"}>{value ? (value.length > 80 ? value.slice(0, 80) + "..." : value) : "Not provided"}</span>
               </div>
             ))}
           </div>
@@ -703,7 +703,7 @@ export function PublicOnboardingPage() {
         </div>
       )}
 
-      <header className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b border-slate-600/50 bg-slate-900/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -726,7 +726,7 @@ export function PublicOnboardingPage() {
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs whitespace-nowrap transition-all ${
                     isActive ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" :
                     complete ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                    "text-slate-500 border border-slate-700 hover:border-slate-600"
+                    "text-slate-400 border border-slate-600 hover:border-slate-500"
                   }`}>
                   {complete ? <Check className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
                   <span className="hidden sm:inline">{s.title}</span>
@@ -748,7 +748,7 @@ export function PublicOnboardingPage() {
         <div className="mb-8">{stepRenderers[step]()}</div>
 
         {step < TOTAL_STEPS - 1 && (
-          <div className="flex items-center justify-between pt-6 border-t border-slate-700/50">
+          <div className="flex items-center justify-between pt-6 border-t border-slate-600/50">
             <Button variant="ghost" onClick={goBack} disabled={step === 0} className="text-slate-400 hover:text-white">
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
