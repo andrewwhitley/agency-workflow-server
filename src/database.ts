@@ -1310,6 +1310,92 @@ Before saving, verify:
       CREATE INDEX IF NOT EXISTS idx_guides_category ON marketing_guides(category_id);
     `,
   },
+  {
+    id: "029_client_info_redesign",
+    sql: `
+      -- Phone numbers sub-table
+      CREATE TABLE IF NOT EXISTS cm_phone_numbers (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        label VARCHAR(100) NOT NULL DEFAULT 'Main',
+        phone_number VARCHAR(50) NOT NULL,
+        is_sms_capable BOOLEAN DEFAULT FALSE,
+        is_primary BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Email addresses sub-table
+      CREATE TABLE IF NOT EXISTS cm_email_addresses (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        label VARCHAR(100) NOT NULL DEFAULT 'General',
+        email_address VARCHAR(320) NOT NULL,
+        is_primary BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- New columns on cm_clients
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS founded_month INT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS business_hours_structured JSONB;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS payment_types JSONB;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS number_of_customers_period VARCHAR(10) DEFAULT 'monthly';
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS desired_new_clients_period VARCHAR(10) DEFAULT 'monthly';
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS estimated_annual_revenue_period VARCHAR(10) DEFAULT 'annual';
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS target_revenue_period VARCHAR(10) DEFAULT 'annual';
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS current_marketing_spend_period VARCHAR(10) DEFAULT 'monthly';
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS current_ads_spend_period VARCHAR(10) DEFAULT 'monthly';
+
+      -- New columns on cm_team_members
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS specialties TEXT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS credentials TEXT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS services_offered TEXT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS gravatar_email VARCHAR(320);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS tiktok_url VARCHAR(500);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS twitter_url VARCHAR(500);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(500);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS website_url VARCHAR(500);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS education TEXT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS years_experience INT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS professional_memberships TEXT;
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS languages_spoken VARCHAR(500);
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS accepting_new_patients BOOLEAN DEFAULT TRUE;
+
+      -- New columns on cm_contacts
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS marketing_role VARCHAR(255);
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS preferred_contact_method VARCHAR(100);
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS response_time VARCHAR(100);
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS approval_authority BOOLEAN DEFAULT FALSE;
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS gravatar_email VARCHAR(320);
+
+      -- Data migration: copy flat phone/email into sub-tables
+      INSERT INTO cm_phone_numbers (client_id, label, phone_number, is_primary)
+        SELECT id, 'Main', company_phone, TRUE FROM cm_clients WHERE company_phone IS NOT NULL AND company_phone != ''
+        ON CONFLICT DO NOTHING;
+      INSERT INTO cm_phone_numbers (client_id, label, phone_number, is_sms_capable)
+        SELECT id, 'SMS', sms_phone, TRUE FROM cm_clients WHERE sms_phone IS NOT NULL AND sms_phone != ''
+        ON CONFLICT DO NOTHING;
+      INSERT INTO cm_phone_numbers (client_id, label, phone_number)
+        SELECT id, 'Toll-Free', toll_free_phone FROM cm_clients WHERE toll_free_phone IS NOT NULL AND toll_free_phone != ''
+        ON CONFLICT DO NOTHING;
+      INSERT INTO cm_phone_numbers (client_id, label, phone_number)
+        SELECT id, 'Fax', fax_phone FROM cm_clients WHERE fax_phone IS NOT NULL AND fax_phone != ''
+        ON CONFLICT DO NOTHING;
+
+      INSERT INTO cm_email_addresses (client_id, label, email_address, is_primary)
+        SELECT id, 'General', company_email, TRUE FROM cm_clients WHERE company_email IS NOT NULL AND company_email != ''
+        ON CONFLICT DO NOTHING;
+      INSERT INTO cm_email_addresses (client_id, label, email_address)
+        SELECT id, 'Inquiries', inquiry_emails FROM cm_clients WHERE inquiry_emails IS NOT NULL AND inquiry_emails != ''
+        ON CONFLICT DO NOTHING;
+      INSERT INTO cm_email_addresses (client_id, label, email_address)
+        SELECT id, 'Employment', employment_email FROM cm_clients WHERE employment_email IS NOT NULL AND employment_email != ''
+        ON CONFLICT DO NOTHING;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

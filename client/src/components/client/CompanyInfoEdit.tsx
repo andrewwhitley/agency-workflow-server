@@ -3,6 +3,8 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
 import { FormField } from "@/components/FormField";
+import { BusinessHoursEditor } from "@/components/client/BusinessHoursEditor";
+import { PaymentTypesEditor } from "@/components/client/PaymentTypesEditor";
 import { Pencil } from "lucide-react";
 
 interface Client {
@@ -10,10 +12,42 @@ interface Client {
   [key: string]: unknown;
 }
 
+interface FieldConfig {
+  key: string;
+  label: string;
+  type?: "text" | "number" | "textarea" | "checkbox" | "select";
+  options?: { value: string; label: string }[];
+  // Pair with an adjacent period field
+  periodKey?: string;
+}
+
 interface SectionConfig {
   title: string;
-  fields: { key: string; label: string; type?: "text" | "number" | "textarea" | "checkbox"; }[];
+  fields: FieldConfig[];
+  customEditors?: string[]; // keys for custom inline editors
 }
+
+const PERIOD_OPTIONS = [
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "annual", label: "Annual" },
+];
+
+const MONTH_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "1", label: "January" },
+  { value: "2", label: "February" },
+  { value: "3", label: "March" },
+  { value: "4", label: "April" },
+  { value: "5", label: "May" },
+  { value: "6", label: "June" },
+  { value: "7", label: "July" },
+  { value: "8", label: "August" },
+  { value: "9", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
 
 const SECTIONS: SectionConfig[] = [
   {
@@ -28,7 +62,8 @@ const SECTIONS: SectionConfig[] = [
       { key: "timeZone", label: "Time Zone" },
       { key: "companyWebsite", label: "Website / Domain" },
       { key: "domainRegistrar", label: "Domain Registrar" },
-      { key: "yearFounded", label: "Year Founded", type: "number" },
+      { key: "foundedMonth", label: "Founded Month", type: "select", options: MONTH_OPTIONS },
+      { key: "yearFounded", label: "Founded Year", type: "number" },
       { key: "ein", label: "EIN" },
       { key: "crmSystem", label: "CRM System" },
       { key: "isLocalServiceArea", label: "Local Service Area", type: "checkbox" },
@@ -37,58 +72,26 @@ const SECTIONS: SectionConfig[] = [
     ],
   },
   {
-    title: "Phone Numbers",
-    fields: [
-      { key: "companyPhone", label: "Company Phone" },
-      { key: "mainPhone", label: "Main Phone" },
-      { key: "smsPhone", label: "SMS Phone" },
-      { key: "tollFreePhone", label: "Toll-Free" },
-      { key: "faxPhone", label: "Fax" },
-    ],
-  },
-  {
-    title: "Email Addresses",
-    fields: [
-      { key: "companyEmail", label: "Company Email" },
-      { key: "primaryEmail", label: "Primary Email" },
-      { key: "inquiryEmails", label: "Inquiry Emails" },
-      { key: "employmentEmail", label: "Employment Email" },
-    ],
-  },
-  {
     title: "Financial & Business Metrics",
     fields: [
       { key: "numberOfEmployees", label: "Number of Employees", type: "number" },
-      { key: "numberOfCustomers", label: "Number of Customers", type: "number" },
-      { key: "desiredNewClients", label: "Desired New Clients", type: "number" },
+      { key: "numberOfCustomers", label: "Number of Customers", type: "number", periodKey: "numberOfCustomersPeriod" },
+      { key: "desiredNewClients", label: "Desired New Clients", type: "number", periodKey: "desiredNewClientsPeriod" },
       { key: "avgClientLifetimeValue", label: "Avg Client Lifetime Value", type: "number" },
-      { key: "estimatedAnnualRevenue", label: "Estimated Annual Revenue", type: "number" },
-      { key: "targetRevenue", label: "Target Revenue", type: "number" },
-      { key: "currentMarketingSpend", label: "Current Marketing Spend", type: "number" },
-      { key: "currentAdsSpend", label: "Current Ads Spend", type: "number" },
-      { key: "paymentTypesAccepted", label: "Payment Types" },
-    ],
-  },
-  {
-    title: "Ads & Targeting",
-    fields: [
-      { key: "adsMarketingBudget", label: "Ads Marketing Budget" },
-      { key: "adsRecruitingBudget", label: "Ads Recruiting Budget" },
-      { key: "targetGoogleAdsConvRate", label: "Google Ads Conv Rate Target", type: "number" },
-      { key: "targetGoogleAdsCpa", label: "Google Ads CPA Target", type: "number" },
-      { key: "targetBingAdsConvRate", label: "Bing Ads Conv Rate Target", type: "number" },
-      { key: "targetBingAdsCpa", label: "Bing Ads CPA Target", type: "number" },
-      { key: "targetFacebookAdsCpa", label: "Facebook Ads CPA Target", type: "number" },
+      { key: "estimatedAnnualRevenue", label: "Estimated Revenue", type: "number", periodKey: "estimatedAnnualRevenuePeriod" },
+      { key: "targetRevenue", label: "Target Revenue", type: "number", periodKey: "targetRevenuePeriod" },
+      { key: "currentMarketingSpend", label: "Marketing Spend", type: "number", periodKey: "currentMarketingSpendPeriod" },
+      { key: "currentAdsSpend", label: "Ads Spend", type: "number", periodKey: "currentAdsSpendPeriod" },
     ],
   },
   {
     title: "Operations",
     fields: [
-      { key: "businessHours", label: "Business Hours", type: "textarea" },
       { key: "holidayHours", label: "Holiday Hours", type: "textarea" },
       { key: "serviceSeasonality", label: "Service Seasonality" },
       { key: "languagesSpoken", label: "Languages Spoken" },
     ],
+    customEditors: ["businessHoursStructured", "paymentTypes"],
   },
   {
     title: "Background & Credentials",
@@ -117,7 +120,19 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
 
   const openEdit = (section: SectionConfig) => {
     const data: Record<string, unknown> = {};
-    section.fields.forEach((f) => { data[f.key] = client[f.key] ?? (f.type === "checkbox" ? false : ""); });
+    section.fields.forEach((f) => {
+      data[f.key] = client[f.key] ?? (f.type === "checkbox" ? false : "");
+      if (f.periodKey) {
+        data[f.periodKey] = client[f.periodKey] ?? "monthly";
+      }
+    });
+    // Custom editors
+    if (section.customEditors?.includes("businessHoursStructured")) {
+      data["businessHoursStructured"] = client["businessHoursStructured"] ?? null;
+    }
+    if (section.customEditors?.includes("paymentTypes")) {
+      data["paymentTypes"] = client["paymentTypes"] ?? null;
+    }
     setForm(data);
     setEditSection(section);
   };
@@ -138,17 +153,47 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
     if (val == null || val === "") return null;
     return `$${Number(val).toLocaleString()}`;
   };
-  const pct = (val: unknown) => {
-    if (val == null || val === "") return null;
-    return `${val}%`;
+
+  const periodLabel = (key: string) => {
+    const v = client[key];
+    if (!v || v === "monthly") return "/mo";
+    if (v === "annual") return "/yr";
+    if (v === "weekly") return "/wk";
+    return "";
   };
 
-  const displayVal = (key: string, val: unknown, type?: string) => {
-    if (type === "checkbox") return val ? "Yes" : null;
+  const displayVal = (f: FieldConfig, val: unknown) => {
+    if (f.type === "checkbox") return val ? "Yes" : null;
     if (val == null || val === "") return null;
-    if (key.includes("Revenue") || key.includes("Spend") || key.includes("Budget") || key.includes("Cpa") || key.includes("LifetimeValue")) return currency(val);
-    if (key.includes("ConvRate")) return pct(val);
+    if (f.type === "select" && f.options) {
+      const opt = f.options.find((o) => String(o.value) === String(val));
+      return opt ? opt.label : String(val);
+    }
+    if (f.key.includes("Revenue") || f.key.includes("Spend") || f.key.includes("Budget") || f.key.includes("Cpa") || f.key.includes("LifetimeValue")) {
+      const suffix = f.periodKey ? periodLabel(f.periodKey) : "";
+      return `${currency(val)}${suffix}`;
+    }
+    if (f.key.includes("ConvRate")) return `${val}%`;
+    if (f.periodKey) {
+      return `${val}${periodLabel(f.periodKey)}`;
+    }
     return String(val);
+  };
+
+  const displayCustom = (key: string): string | null => {
+    const val = client[key];
+    if (!val || typeof val !== "object") return null;
+    if (key === "businessHoursStructured") {
+      const h = val as Record<string, { open?: string; close?: string; closed?: boolean }>;
+      return Object.entries(h).map(([day, d]) => d.closed ? `${day}: Closed` : `${day}: ${d.open || "?"}-${d.close || "?"}`).join("\n");
+    }
+    if (key === "paymentTypes") {
+      const p = val as { types?: string[]; other?: string };
+      const parts = [...(p.types || [])];
+      if (p.other) parts.push(p.other);
+      return parts.join(", ") || null;
+    }
+    return null;
   };
 
   return (
@@ -159,6 +204,7 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
           if (f.type === "checkbox") return v === true;
           return v != null && v !== "";
         });
+        const customFilled = (section.customEditors || []).filter((k) => displayCustom(k));
 
         return (
           <div key={section.title}>
@@ -168,14 +214,24 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
                 <Pencil className="h-3 w-3 mr-1" /> Edit
               </Button>
             </div>
-            {filled.length === 0 ? (
+            {filled.length === 0 && customFilled.length === 0 ? (
               <div className="text-sm text-muted">No data yet — click Edit to add.</div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
-                {filled.map((f) => (
-                  <div key={f.key}>
-                    <div className="text-xs text-dim">{f.label}</div>
-                    <div className="text-sm text-foreground whitespace-pre-wrap">{displayVal(f.key, client[f.key], f.type)}</div>
+              <div className="space-y-4">
+                {filled.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
+                    {filled.map((f) => (
+                      <div key={f.key}>
+                        <div className="text-xs text-dim">{f.label}</div>
+                        <div className="text-sm text-foreground whitespace-pre-wrap">{displayVal(f, client[f.key])}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {customFilled.map((k) => (
+                  <div key={k}>
+                    <div className="text-xs text-dim mb-1">{k === "businessHoursStructured" ? "Business Hours" : "Payment Types"}</div>
+                    <div className="text-sm text-foreground whitespace-pre-wrap">{displayCustom(k)}</div>
                   </div>
                 ))}
               </div>
@@ -187,14 +243,40 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
       {editSection && (
         <FormDialog open={true} onOpenChange={() => setEditSection(null)}
           title={`Edit ${editSection.title}`} onSubmit={submit} isPending={pending} wide>
-          {editSection.fields.map((f) =>
-            f.type === "checkbox" ? (
-              <FormField key={f.key} label={f.label} type="checkbox" checked={!!form[f.key]} onChange={(v) => upd(f.key, v)} />
-            ) : f.type === "textarea" ? (
-              <FormField key={f.key} label={f.label} type="textarea" value={String(form[f.key] ?? "")} onChange={(v) => upd(f.key, v)} />
-            ) : (
-              <FormField key={f.key} label={f.label} type={f.type || "text"} value={String(form[f.key] ?? "")} onChange={(v: string) => upd(f.key, f.type === "number" ? (v ? parseFloat(v) : null) : v)} />
-            )
+          {editSection.fields.map((f) => {
+            if (f.periodKey) {
+              return (
+                <div key={f.key} className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <FormField label={f.label} type={f.type === "number" ? "number" : "text"}
+                    value={String(form[f.key] ?? "")}
+                    onChange={(v: string) => upd(f.key, f.type === "number" ? (v ? parseFloat(v) : null) : v)} />
+                  <FormField label="Period" type="select" value={String(form[f.periodKey] ?? "monthly")}
+                    onChange={(v) => upd(f.periodKey!, v)} options={PERIOD_OPTIONS} />
+                </div>
+              );
+            }
+            if (f.type === "checkbox") {
+              return <FormField key={f.key} label={f.label} type="checkbox" checked={!!form[f.key]} onChange={(v) => upd(f.key, v)} />;
+            }
+            if (f.type === "textarea") {
+              return <FormField key={f.key} label={f.label} type="textarea" value={String(form[f.key] ?? "")} onChange={(v) => upd(f.key, v)} />;
+            }
+            if (f.type === "select" && f.options) {
+              return <FormField key={f.key} label={f.label} type="select" value={String(form[f.key] ?? "")} onChange={(v) => upd(f.key, f.key === "foundedMonth" ? (v ? parseInt(v) : null) : v)} options={f.options} />;
+            }
+            return (
+              <FormField key={f.key} label={f.label} type={f.type || "text"}
+                value={String(form[f.key] ?? "")}
+                onChange={(v: string) => upd(f.key, f.type === "number" ? (v ? parseFloat(v) : null) : v)} />
+            );
+          })}
+
+          {/* Custom editors for Operations section */}
+          {editSection.customEditors?.includes("businessHoursStructured") && (
+            <BusinessHoursEditor value={form["businessHoursStructured"]} onChange={(v) => upd("businessHoursStructured", v)} />
+          )}
+          {editSection.customEditors?.includes("paymentTypes") && (
+            <PaymentTypesEditor value={form["paymentTypes"]} onChange={(v) => upd("paymentTypes", v)} />
           )}
         </FormDialog>
       )}

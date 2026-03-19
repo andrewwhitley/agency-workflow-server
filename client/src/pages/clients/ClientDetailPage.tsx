@@ -72,15 +72,26 @@ interface Client {
   languagesSpoken: string | null;
   serviceSeasonality: string | null;
   telemedicineOffered: boolean;
+  foundedMonth: number | null;
+  businessHoursStructured: unknown;
+  paymentTypes: unknown;
+  numberOfCustomersPeriod: string | null;
+  desiredNewClientsPeriod: string | null;
+  estimatedAnnualRevenuePeriod: string | null;
+  targetRevenuePeriod: string | null;
+  currentMarketingSpendPeriod: string | null;
+  currentAdsSpendPeriod: string | null;
   status: string;
   [key: string]: unknown;
 }
 
-interface Contact { id: number; name: string; role: string | null; email: string | null; phone: string | null; phoneType: string | null; notes: string | null; isPrimary: boolean; shouldAttribute: boolean; linktreeUrl: string | null; wordpressEmail: string | null; }
+interface PhoneNumber { id: number; label: string; phoneNumber: string; isSmsCapable: boolean; isPrimary: boolean; notes: string | null; }
+interface EmailAddress { id: number; label: string; emailAddress: string; isPrimary: boolean; notes: string | null; }
+interface Contact { id: number; name: string; role: string | null; email: string | null; phone: string | null; phoneType: string | null; notes: string | null; isPrimary: boolean; shouldAttribute: boolean; linktreeUrl: string | null; wordpressEmail: string | null; marketingRole: string | null; preferredContactMethod: string | null; responseTime: string | null; approvalAuthority: boolean; gravatarEmail: string | null; }
 interface Address { id: number; label: string; streetAddress: string | null; city: string | null; state: string | null; postalCode: string | null; locationType: string; notes: string | null; isPrimary: boolean; }
 interface Service { id: number; category: string; serviceName: string; offered: boolean; price: number | null; duration: string | null; description: string | null; descriptionLong: string | null; idealPatientProfile: string | null; goodFitCriteria: string | null; notGoodFitCriteria: string | null; targetAgeRange: string | null; targetGender: string | null; targetConditions: string | null; targetInterests: string | null; serviceAreaCities: string | null; differentiators: string | null; expectedOutcomes: string | null; commonConcerns: string | null; parentServiceId: number | null; sortOrder: number; }
 interface ServiceArea { id: number; targetCities: string | null; targetCounties: string | null; notes: string | null; }
-interface TeamMember { id: number; fullName: string; role: string | null; email: string | null; phone: string | null; photoUrl: string | null; linkedinUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; bio: string | null; useForAttribution: boolean; preferredContactMethod: string | null; }
+interface TeamMember { id: number; fullName: string; role: string | null; email: string | null; phone: string | null; photoUrl: string | null; linkedinUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; bio: string | null; useForAttribution: boolean; preferredContactMethod: string | null; specialties: string | null; credentials: string | null; servicesOffered: string | null; gravatarEmail: string | null; tiktokUrl: string | null; twitterUrl: string | null; youtubeUrl: string | null; websiteUrl: string | null; education: string | null; yearsExperience: number | null; professionalMemberships: string | null; languagesSpoken: string | null; acceptingNewPatients: boolean; }
 interface Competitor { id: number; companyName: string; url: string | null; usps: string | null; description: string | null; rank: number | null; }
 interface Differentiator { id: number; category: string; title: string | null; description: string; }
 interface ImportantLink { id: number; linkType: string; url: string; label: string | null; notes: string | null; }
@@ -198,35 +209,116 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
       {/* Editable company info sections */}
       <CompanyInfoEdit client={client as { id: number; [key: string]: unknown }} onUpdate={(c) => onClientUpdate(c as Client)} />
 
-      {/* Contacts */}
-      <CrudSection<Contact> title="Contacts" clientId={client.id} entityPath="contacts"
-        emptyForm={() => ({ name: "", role: "", email: "", phone: "", phoneType: "", notes: "", isPrimary: false, shouldAttribute: false, linktreeUrl: "", wordpressEmail: "" } as Partial<Contact>)}
+      {/* Phone Numbers */}
+      <CrudSection<PhoneNumber> title="Phone Numbers" clientId={client.id} entityPath="phone-numbers"
+        emptyForm={() => ({ label: "Main", phoneNumber: "", isSmsCapable: false, isPrimary: false, notes: "" } as Partial<PhoneNumber>)}
+        renderItem={(p, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim">{p.label}</span>
+              <span className="text-sm font-medium text-foreground">{p.phoneNumber}</span>
+              {p.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
+              {p.isSmsCapable && <span className="text-xs px-2 py-0.5 rounded bg-success/10 text-success">SMS</span>}
+            </div>
+            {p.notes && <div className="text-xs text-muted mt-0.5">{p.notes}</div>}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Label" type="select" value={form.label || "Main"}
+            onChange={(v) => upd("label", v)}
+            options={[
+              { value: "Main", label: "Main" },
+              { value: "Toll-Free", label: "Toll-Free" },
+              { value: "Fax", label: "Fax" },
+              { value: "After Hours", label: "After Hours" },
+              { value: "Other", label: "Other" },
+            ]} />
+          <FormField label="Phone Number" value={form.phoneNumber || ""} onChange={(v) => upd("phoneNumber", v)} required />
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+          <div className="flex gap-4">
+            <FormField label="Primary" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
+            {form.label !== "Fax" && (
+              <FormField label="SMS Capable" type="checkbox" checked={!!form.isSmsCapable} onChange={(v) => upd("isSmsCapable", v)} />
+            )}
+          </div>
+        </>)}
+      />
+
+      {/* Email Addresses */}
+      <CrudSection<EmailAddress> title="Email Addresses" clientId={client.id} entityPath="email-addresses"
+        emptyForm={() => ({ label: "General", emailAddress: "", isPrimary: false, notes: "" } as Partial<EmailAddress>)}
+        renderItem={(e, onEdit, onDelete) => (
+          <CrudItem onEdit={onEdit} onDelete={onDelete}>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim">{e.label}</span>
+              <span className="text-sm font-medium text-foreground">{e.emailAddress}</span>
+              {e.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
+            </div>
+            {e.notes && <div className="text-xs text-muted mt-0.5">{e.notes}</div>}
+          </CrudItem>
+        )}
+        renderForm={(form, upd) => (<>
+          <FormField label="Label" type="select" value={form.label || "General"}
+            onChange={(v) => upd("label", v)}
+            options={[
+              { value: "General", label: "General" },
+              { value: "Inquiries", label: "Inquiries" },
+              { value: "Employment", label: "Employment" },
+              { value: "Billing", label: "Billing" },
+              { value: "Scheduling", label: "Scheduling" },
+              { value: "Other", label: "Other" },
+            ]} />
+          <FormField label="Email Address" type="email" value={form.emailAddress || ""} onChange={(v) => upd("emailAddress", v)} required />
+          <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
+          <FormField label="Primary" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
+        </>)}
+      />
+
+      {/* Contacts (Marketing Contacts) */}
+      <CrudSection<Contact> title="Marketing Contacts" clientId={client.id} entityPath="contacts"
+        emptyForm={() => ({ name: "", role: "", email: "", phone: "", phoneType: "", notes: "", isPrimary: false, shouldAttribute: false, linktreeUrl: "", gravatarEmail: "", marketingRole: "", preferredContactMethod: "", responseTime: "", approvalAuthority: false } as Partial<Contact>)}
         renderItem={(c, onEdit, onDelete) => (
           <CrudItem onEdit={onEdit} onDelete={onDelete}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-foreground">{c.name}</span>
               {c.role && <span className="text-xs text-muted">({c.role})</span>}
               {c.isPrimary && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Primary</span>}
+              {c.approvalAuthority && <span className="text-xs px-2 py-0.5 rounded bg-warning/10 text-warning">Approver</span>}
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-dim">
               {c.email && <span>{c.email}</span>}
               {c.phone && <span>{c.phone}{c.phoneType ? ` (${c.phoneType})` : ""}</span>}
+              {c.marketingRole && <span className="text-accent">{c.marketingRole}</span>}
             </div>
           </CrudItem>
         )}
         renderForm={(form, upd) => (<>
           <FormField label="Name" value={form.name || ""} onChange={(v) => upd("name", v)} required />
-          <FormField label="Role" value={form.role || ""} onChange={(v) => upd("role", v)} />
+          <FormField label="Role / Title" value={form.role || ""} onChange={(v) => upd("role", v)} />
+          <FormField label="Marketing Role" value={form.marketingRole || ""} onChange={(v) => upd("marketingRole", v)} placeholder="e.g. Approves content, Reviews ads" />
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
             <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
           </div>
-          <FormField label="Phone Type" value={form.phoneType || ""} onChange={(v) => upd("phoneType", v)} placeholder="e.g. Mobile, Office" />
-          <FormField label="WordPress Email" value={form.wordpressEmail || ""} onChange={(v) => upd("wordpressEmail", v)} />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Preferred Contact Method" type="select" value={form.preferredContactMethod || ""}
+              onChange={(v) => upd("preferredContactMethod", v)}
+              options={[
+                { value: "", label: "—" },
+                { value: "Email", label: "Email" },
+                { value: "Phone", label: "Phone" },
+                { value: "Text", label: "Text" },
+                { value: "Slack", label: "Slack" },
+                { value: "Other", label: "Other" },
+              ]} />
+            <FormField label="Response Time" value={form.responseTime || ""} onChange={(v) => upd("responseTime", v)} placeholder="e.g. Same day, 24-48hrs" />
+          </div>
+          <FormField label="Gravatar Email" type="email" value={form.gravatarEmail || ""} onChange={(v) => upd("gravatarEmail", v)} />
           <FormField label="Linktree URL" value={form.linktreeUrl || ""} onChange={(v) => upd("linktreeUrl", v)} />
           <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
           <div className="flex gap-4">
             <FormField label="Primary Contact" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
+            <FormField label="Approval Authority" type="checkbox" checked={!!form.approvalAuthority} onChange={(v) => upd("approvalAuthority", v)} />
             <FormField label="Use for Attribution" type="checkbox" checked={!!form.shouldAttribute} onChange={(v) => upd("shouldAttribute", v)} />
           </div>
         </>)}
@@ -261,40 +353,62 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
         </>)}
       />
 
-      {/* Team Members */}
+      {/* Team Members (Bio-Page Focused) */}
       <CrudSection<TeamMember> title="Team Members" clientId={client.id} entityPath="team-members" wide
-        emptyForm={() => ({ fullName: "", role: "", email: "", phone: "", bio: "", linkedinUrl: "", facebookUrl: "", instagramUrl: "", useForAttribution: false, preferredContactMethod: "" } as Partial<TeamMember>)}
+        emptyForm={() => ({ fullName: "", role: "", email: "", phone: "", bio: "", linkedinUrl: "", facebookUrl: "", instagramUrl: "", tiktokUrl: "", twitterUrl: "", youtubeUrl: "", websiteUrl: "", useForAttribution: false, gravatarEmail: "", specialties: "", credentials: "", servicesOffered: "", education: "", yearsExperience: null, professionalMemberships: "", languagesSpoken: "", acceptingNewPatients: true } as Partial<TeamMember>)}
         renderItem={(m, onEdit, onDelete) => (
           <CrudItem onEdit={onEdit} onDelete={onDelete}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-foreground">{m.fullName}</span>
               {m.role && <span className="text-xs text-muted">({m.role})</span>}
               {m.useForAttribution && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Attribution</span>}
+              {m.acceptingNewPatients === false && <span className="text-xs px-2 py-0.5 rounded bg-warning/10 text-warning">Not Accepting</span>}
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-dim">
               {m.email && <span>{m.email}</span>}
               {m.phone && <span>{m.phone}</span>}
+              {m.credentials && <span>{m.credentials}</span>}
+              {m.yearsExperience && <span>{m.yearsExperience}+ yrs</span>}
             </div>
-            {m.bio && <div className="text-xs text-muted mt-1">{m.bio}</div>}
+            {m.bio && <div className="text-xs text-muted mt-1 line-clamp-2">{m.bio}</div>}
           </CrudItem>
         )}
         renderForm={(form, upd) => (<>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Full Name" value={form.fullName || ""} onChange={(v) => upd("fullName", v)} required />
-            <FormField label="Role" value={form.role || ""} onChange={(v) => upd("role", v)} />
+            <FormField label="Role / Title" value={form.role || ""} onChange={(v) => upd("role", v)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
             <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
           </div>
-          <FormField label="Bio" type="textarea" value={form.bio || ""} onChange={(v) => upd("bio", v)} />
-          <FormField label="Preferred Contact Method" value={form.preferredContactMethod || ""} onChange={(v) => upd("preferredContactMethod", v)} />
-          <div className="grid grid-cols-3 gap-4">
-            <FormField label="LinkedIn URL" value={form.linkedinUrl || ""} onChange={(v) => upd("linkedinUrl", v)} />
-            <FormField label="Facebook URL" value={form.facebookUrl || ""} onChange={(v) => upd("facebookUrl", v)} />
-            <FormField label="Instagram URL" value={form.instagramUrl || ""} onChange={(v) => upd("instagramUrl", v)} />
+          <FormField label="Gravatar Email" type="email" value={form.gravatarEmail || ""} onChange={(v) => upd("gravatarEmail", v)} />
+          <FormField label="Credentials" value={form.credentials || ""} onChange={(v) => upd("credentials", v)} placeholder="e.g. DC, DACNB, MS" />
+          <FormField label="Specialties" type="textarea" value={form.specialties || ""} onChange={(v) => upd("specialties", v)} />
+          <FormField label="Services Offered" type="textarea" value={form.servicesOffered || ""} onChange={(v) => upd("servicesOffered", v)} />
+          <FormField label="Bio" type="textarea" value={form.bio || ""} onChange={(v) => upd("bio", v)} rows={5} />
+          <FormField label="Education" type="textarea" value={form.education || ""} onChange={(v) => upd("education", v)} />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Years of Experience" type="number" value={form.yearsExperience?.toString() || ""} onChange={(v) => upd("yearsExperience", v ? parseInt(v) : null)} />
+            <FormField label="Languages Spoken" value={form.languagesSpoken || ""} onChange={(v) => upd("languagesSpoken", v)} />
           </div>
-          <FormField label="Use for Attribution" type="checkbox" checked={!!form.useForAttribution} onChange={(v) => upd("useForAttribution", v)} />
+          <FormField label="Professional Memberships" type="textarea" value={form.professionalMemberships || ""} onChange={(v) => upd("professionalMemberships", v)} />
+          <FormField label="Photo URL" value={form.photoUrl || ""} onChange={(v) => upd("photoUrl", v)} />
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="LinkedIn" value={form.linkedinUrl || ""} onChange={(v) => upd("linkedinUrl", v)} />
+            <FormField label="Facebook" value={form.facebookUrl || ""} onChange={(v) => upd("facebookUrl", v)} />
+            <FormField label="Instagram" value={form.instagramUrl || ""} onChange={(v) => upd("instagramUrl", v)} />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="TikTok" value={form.tiktokUrl || ""} onChange={(v) => upd("tiktokUrl", v)} />
+            <FormField label="Twitter/X" value={form.twitterUrl || ""} onChange={(v) => upd("twitterUrl", v)} />
+            <FormField label="YouTube" value={form.youtubeUrl || ""} onChange={(v) => upd("youtubeUrl", v)} />
+          </div>
+          <FormField label="Website" value={form.websiteUrl || ""} onChange={(v) => upd("websiteUrl", v)} />
+          <div className="flex gap-4">
+            <FormField label="Use for Attribution" type="checkbox" checked={!!form.useForAttribution} onChange={(v) => upd("useForAttribution", v)} />
+            <FormField label="Accepting New Patients" type="checkbox" checked={form.acceptingNewPatients !== false} onChange={(v) => upd("acceptingNewPatients", v)} />
+          </div>
         </>)}
       />
 

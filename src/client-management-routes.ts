@@ -82,6 +82,10 @@ export function clientManagementRouter(): Router {
         "business_facts", "affiliations_associations", "certifications_trainings",
         "community_involvement", "languages_spoken", "service_seasonality",
         "telemedicine_offered", "status",
+        "founded_month", "business_hours_structured", "payment_types",
+        "number_of_customers_period", "desired_new_clients_period",
+        "estimated_annual_revenue_period", "target_revenue_period",
+        "current_marketing_spend_period", "current_ads_spend_period",
       ];
       for (const [key, val] of Object.entries(b)) {
         const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
@@ -176,6 +180,8 @@ export function clientManagementRouter(): Router {
   }
 
   // Register CRUD for all sub-entities
+  crudRoutes("cm_phone_numbers", "phone-numbers");
+  crudRoutes("cm_email_addresses", "email-addresses");
   crudRoutes("cm_contacts", "contacts");
   crudRoutes("cm_addresses", "addresses");
   crudRoutes("cm_services", "services");
