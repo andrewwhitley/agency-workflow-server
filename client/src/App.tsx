@@ -29,10 +29,17 @@ import { AgencyTeamPage } from "./pages/clients/AgencyTeamPage";
 import { WeeklyCheckInPage } from "./pages/clients/WeeklyCheckInPage";
 import { TrafficLightSettingsPage } from "./pages/clients/TrafficLightSettingsPage";
 import { EnrichmentPage } from "./pages/sales/EnrichmentPage";
+import { SharedBrandStoryPage } from "./pages/SharedBrandStoryPage";
+import { MarketingGuidesPage } from "./pages/MarketingGuidesPage";
+import { MarketingGuideEditorPage } from "./pages/MarketingGuideEditorPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
 
 export default function App() {
   return (
     <Routes>
+      {/* Public pages (no auth, no sidebar) */}
+      <Route path="/brand-story/:token" element={<SharedBrandStoryPage />} />
+
       <Route element={<DashboardLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -64,6 +71,9 @@ export default function App() {
         <Route path="/eos/meetings" element={<MeetingsPage />} />
         <Route path="/eos/people" element={<PeoplePage />} />
         <Route path="/eos/headlines" element={<HeadlinesPage />} />
+        <Route path="/guides" element={<MarketingGuidesPage />} />
+        <Route path="/guides/:id" element={<MarketingGuideEditorPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/sales/enrichment" element={<EnrichmentPage />} />
       </Route>
     </Routes>

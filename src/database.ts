@@ -1279,6 +1279,37 @@ Before saving, verify:
       CREATE INDEX IF NOT EXISTS idx_cm_services_parent ON cm_services(parent_service_id);
     `,
   },
+  {
+    id: "028_marketing_guides",
+    sql: `
+      CREATE TABLE IF NOT EXISTS guide_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        icon VARCHAR(100),
+        parent_id INT REFERENCES guide_categories(id) ON DELETE SET NULL,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS marketing_guides (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(500) NOT NULL,
+        category_id INT REFERENCES guide_categories(id) ON DELETE SET NULL,
+        content TEXT NOT NULL DEFAULT '',
+        description TEXT,
+        tags TEXT,
+        status VARCHAR(50) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
+        created_by VARCHAR(255),
+        updated_by VARCHAR(255),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_guides_status ON marketing_guides(status);
+      CREATE INDEX IF NOT EXISTS idx_guides_category ON marketing_guides(category_id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

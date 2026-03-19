@@ -6,7 +6,7 @@ import {
   HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
   Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
   Globe, TrendingUp, Radar, FileSearch, Search, Lightbulb,
-  Building2, Heart, Crosshair,
+  Building2, Heart, Crosshair, ClipboardList,
 } from "lucide-react";
 
 interface User {
@@ -21,6 +21,7 @@ const navSections = [
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/clients", label: "Clients", icon: Building2 },
+      { to: "/onboarding", label: "Client Onboarding", icon: ClipboardList },
       { to: "/weekly-check-in", label: "Weekly Check-In", icon: Heart },
     ],
   },
@@ -39,6 +40,7 @@ const navSections = [
     label: "Content",
     items: [
       { to: "/content", label: "Content Manager", icon: PenTool },
+      { to: "/guides", label: "Marketing Guides", icon: FileText },
       { to: "/workbooks", label: "Workbooks", icon: BookOpen },
       { to: "/agents", label: "AI Agents", icon: Bot },
     ],

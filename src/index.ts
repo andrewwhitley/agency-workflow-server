@@ -32,7 +32,7 @@ import { KnowledgeBase } from "./knowledge-base.js";
 import { SOPParser } from "./sop-parser.js";
 import { ClientAgent } from "./client-agent.js";
 import { DiscordBot } from "./discord-bot.js";
-import { runMigrations, closePool } from "./database.js";
+import { runMigrations, closePool, query as dbQuery } from "./database.js";
 import { Scheduler, type JobExecutor } from "./scheduler.js";
 import { streamChat } from "./chat-engine.js";
 import { agentService } from "./agent-service.js";
@@ -259,7 +259,43 @@ async function main(): Promise<void> {
   app.use(express.static(clientDistPath));
 
   // ─── 5. REST API (for dashboard) ───────────────────
-  // Protect all /api routes except /api/auth/me (already defined above)
+
+  // Public routes (no auth required)
+  if (process.env.DATABASE_URL) {
+    app.get("/api/public/brand-story/:token", async (req, res) => {
+      try {
+        const { rows: storyRows } = await dbQuery(
+          `SELECT bs.*, c.company_name, c.industry FROM cm_brand_story bs
+           JOIN cm_clients c ON c.id = bs.client_id
+           WHERE bs.share_token = $1`, [req.params.token]
+        );
+        if (!storyRows[0]) { res.status(404).json({ error: "Brand story not found" }); return; }
+        const row = storyRows[0];
+        const { rows: personaRows } = await dbQuery(
+          "SELECT * FROM cm_buyer_personas WHERE client_id = $1", [row.client_id]
+        );
+        const { rows: guideRows } = await dbQuery(
+          "SELECT brand_colors FROM cm_content_guidelines WHERE client_id = $1", [row.client_id]
+        );
+        const toCamel = (r: Record<string, unknown>) => {
+          const o: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(r)) o[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())] = v;
+          return o;
+        };
+        res.json({
+          story: toCamel(row),
+          companyName: row.company_name,
+          industry: row.industry,
+          status: row.status,
+          generatedAt: row.generated_at,
+          buyerPersonas: personaRows.map(toCamel),
+          brandColors: guideRows[0]?.brand_colors || null,
+        });
+      } catch (err) { console.error("Public brand story error:", err); res.status(500).json({ error: "Failed" }); }
+    });
+  }
+
+  // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
   app.get("/api/workflows", (_req, res) => {
@@ -727,6 +763,85 @@ async function main(): Promise<void> {
     app.use("/api/threads", express.json({ limit: "25mb" }));
     app.use("/api", apiRouter(engine, knowledgeBase, authService, seoService));
     app.use("/api/cm", clientManagementRouter());
+
+    // Marketing Guides CRUD
+    app.get("/api/guides/categories", async (_req, res) => {
+      try {
+        const { rows } = await dbQuery("SELECT * FROM guide_categories ORDER BY sort_order, name");
+        res.json(rows);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+    app.post("/api/guides/categories", async (req, res) => {
+      const { name, description, icon, parentId } = req.body;
+      try {
+        const { rows } = await dbQuery(
+          "INSERT INTO guide_categories (name, description, icon, parent_id) VALUES ($1, $2, $3, $4) RETURNING *",
+          [name, description, icon, parentId || null]
+        );
+        res.json(rows[0]);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+
+    app.get("/api/guides", async (req, res) => {
+      try {
+        const { status, categoryId, search } = req.query;
+        let sql = "SELECT g.*, c.name as category_name, c.icon as category_icon FROM marketing_guides g LEFT JOIN guide_categories c ON c.id = g.category_id WHERE 1=1";
+        const params: unknown[] = [];
+        let i = 1;
+        if (status) { sql += ` AND g.status = $${i++}`; params.push(status); }
+        if (categoryId) { sql += ` AND g.category_id = $${i++}`; params.push(categoryId); }
+        if (search) { sql += ` AND (g.title ILIKE $${i} OR g.description ILIKE $${i} OR g.tags ILIKE $${i})`; params.push(`%${search}%`); i++; }
+        sql += " ORDER BY g.updated_at DESC";
+        const { rows } = await dbQuery(sql, params);
+        res.json(rows);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+    app.get("/api/guides/:id", async (req, res) => {
+      try {
+        const { rows } = await dbQuery(
+          "SELECT g.*, c.name as category_name, c.icon as category_icon FROM marketing_guides g LEFT JOIN guide_categories c ON c.id = g.category_id WHERE g.id = $1",
+          [req.params.id]
+        );
+        if (!rows[0]) { res.status(404).json({ error: "Not found" }); return; }
+        res.json(rows[0]);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+    app.post("/api/guides", async (req, res) => {
+      const { title, categoryId, content, description, tags, status } = req.body;
+      try {
+        const { rows } = await dbQuery(
+          "INSERT INTO marketing_guides (title, category_id, content, description, tags, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+          [title, categoryId || null, content || "", description, tags, status || "draft"]
+        );
+        res.json(rows[0]);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+    app.put("/api/guides/:id", async (req, res) => {
+      const b = req.body;
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let pi = 1;
+      for (const [key, val] of Object.entries(b)) {
+        const col = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+        if (["title", "category_id", "content", "description", "tags", "status"].includes(col)) {
+          fields.push(`${col} = $${pi++}`);
+          values.push(val);
+        }
+      }
+      if (fields.length === 0) { res.json({}); return; }
+      fields.push("updated_at = NOW()");
+      values.push(req.params.id);
+      try {
+        const { rows } = await dbQuery(`UPDATE marketing_guides SET ${fields.join(", ")} WHERE id = $${pi} RETURNING *`, values);
+        res.json(rows[0]);
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
+    app.delete("/api/guides/:id", async (req, res) => {
+      try {
+        await dbQuery("DELETE FROM marketing_guides WHERE id = $1", [req.params.id]);
+        res.json({ success: true });
+      } catch (err) { console.error(err); res.status(500).json({ error: "Failed" }); }
+    });
   }
 
   // ─── 13. Dashboard Summary (single endpoint) ──────
@@ -1080,8 +1195,12 @@ async function main(): Promise<void> {
     });
   }
 
-  // ─── React SPA catch-all (protected) ──────────────
+  // ─── React SPA catch-all ──────────────────────
   // Must be AFTER all API routes, health check, and MCP endpoints
+  // Public pages (brand-story) skip auth; all others require it
+  app.get("/brand-story/*", (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
   app.get("*", requireAuth, (_req, res) => {
     res.sendFile(path.join(clientDistPath, "index.html"));
   });
