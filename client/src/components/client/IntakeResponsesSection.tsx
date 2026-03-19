@@ -140,7 +140,7 @@ export function IntakeResponsesSection({ clientId, clientSlug }: { clientId: num
 
   const copyOnboardingLink = () => {
     const slug = clientSlug || clientId;
-    const url = `${window.location.origin}/app/onboarding/intake?clientId=${slug}`;
+    const url = `${window.location.origin}/onboarding/intake?clientId=${slug}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

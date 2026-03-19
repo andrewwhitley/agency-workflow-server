@@ -9,404 +9,354 @@ import {
   ChevronRight,
   Check,
   Lightbulb,
+  ChevronDown,
+  ChevronUp,
   Building2,
   Users,
   Target,
   Megaphone,
+  Palette,
+  Heart,
+  BookOpen,
   Globe,
   Send,
   Sparkles,
+  Trophy,
+  Save,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────
 
-interface IntakeFormData {
-  // Section 1: Business Basics
+interface IntakeData {
+  // Client linking
+  clientId: string;
+  clientVerified: boolean;
+  clientName: string;
+
+  // Section 1: Your Business
   companyName: string;
   industry: string;
-  yearFounded: string;
-  location: string;
-  numberOfEmployees: string;
   companyWebsite: string;
   companyPhone: string;
   companyEmail: string;
-  domain: string;
+  location: string;
+  yearFounded: string;
+  numberOfEmployees: string;
+  foundingStory: string;
+  businessGoals: string;
+  biggestChallenges: string;
+  whatSuccessLooksLike: string;
+  teamMembers: string;
 
-  // Section 2: Products & Services
+  // Section 2: Your Marketing
   primaryServices: string;
-  secondaryServices: string;
-  serviceAreas: string;
-  averageProjectValue: string;
-  uniqueOfferings: string;
+  mostProfitableService: string;
+  mostRequestedService: string;
+  averageServicePrice: string;
+  serviceSeasonality: string;
+  currentMarketingEfforts: string;
+  adPlatforms: string;
+  currentMarketingSpend: string;
+  whatsWorking: string;
+  whatsNotWorking: string;
+  competitor1Name: string;
+  competitor1Website: string;
+  competitor1Strengths: string;
+  competitor2Name: string;
+  competitor2Website: string;
+  competitor2Strengths: string;
+  competitor3Name: string;
+  competitor3Website: string;
+  competitor3Strengths: string;
 
-  // Section 3: Target Audience
-  idealCustomerDescription: string;
-  customerDemographics: string;
-  customerPainPoints: string;
-  customerGoals: string;
-  decisionMakingProcess: string;
-  commonObjections: string;
-
-  // Section 4: Brand & Positioning
-  missionStatement: string;
-  brandValues: string;
+  // Section 3: Your Brand
   brandPersonality: string;
-  competitiveAdvantages: string;
-  topCompetitors: string;
-  desiredPerception: string;
+  brandTone: string;
+  brandColors: string;
+  brandFonts: string;
+  designInspiration: string;
+  dosAndDonts: string;
+  logoDescription: string;
+  visualStyle: string;
 
-  // Section 5: Marketing Current State
-  currentMarketingChannels: string;
-  currentMarketingBudget: string;
-  bestLeadSources: string;
-  previousMarketingExperience: string;
-  crmSystem: string;
+  // Section 4: Your Client's Journey (Brand Story)
+  idealCustomerDescription: string;
+  customerAge: string;
+  customerGender: string;
+  customerIncome: string;
+  customerLocation: string;
+  customerFrustrations: string;
+  customerDesires: string;
+  customerFeelsBefore: string;
+  customerFeelsAfter: string;
+  biggestFrustration: string;
+  practicalProblem: string;
+  emotionalProblem: string;
+  whyItMatters: string;
+  howYouHelp: string;
+  whyTrustYou: string;
+  threeStepProcess: string;
+  directCTA: string;
+  transitionalCTA: string;
+  successStory: string;
+  whatHappensIfTheyDontAct: string;
+  guarantees: string;
 
-  // Section 6: Goals & Expectations
-  primaryMarketingGoals: string;
-  targetTimeframe: string;
-  revenueGoals: string;
-  leadVolumeGoals: string;
-  specificCampaignIdeas: string;
-
-  // Section 7: Content & Assets
-  existingBrandAssets: string;
-  brandGuidelines: string;
-  contentPreferences: string;
-  socialMediaPresence: string;
-  testimonials: string;
+  // Section 5: Content & Thought Leadership
+  topQuestionsCustomersAsk: string;
+  willingToDiscussPricing: string;
+  willingToCompare: string;
+  willingToAddressProblems: string;
+  contentTopicsExcited: string;
+  expertiseAreas: string;
+  preferredContentFormats: string;
+  testimonial1: string;
+  testimonial1Author: string;
+  testimonial2: string;
+  testimonial2Author: string;
+  testimonial3: string;
+  testimonial3Author: string;
+  reviewPlatformUrl: string;
+  socialFacebook: string;
+  socialInstagram: string;
+  socialLinkedin: string;
+  socialYoutube: string;
+  socialTiktok: string;
+  googleBusinessUrl: string;
+  otherLinks: string;
+  languagesSpoken: string;
 }
 
-const defaultFormData: IntakeFormData = {
-  companyName: "",
-  industry: "",
-  yearFounded: "",
-  location: "",
-  numberOfEmployees: "",
-  companyWebsite: "",
-  companyPhone: "",
-  companyEmail: "",
-  domain: "",
-  primaryServices: "",
-  secondaryServices: "",
-  serviceAreas: "",
-  averageProjectValue: "",
-  uniqueOfferings: "",
-  idealCustomerDescription: "",
-  customerDemographics: "",
-  customerPainPoints: "",
-  customerGoals: "",
-  decisionMakingProcess: "",
-  commonObjections: "",
-  missionStatement: "",
-  brandValues: "",
-  brandPersonality: "",
-  competitiveAdvantages: "",
-  topCompetitors: "",
-  desiredPerception: "",
-  currentMarketingChannels: "",
-  currentMarketingBudget: "",
-  bestLeadSources: "",
-  previousMarketingExperience: "",
-  crmSystem: "",
-  primaryMarketingGoals: "",
-  targetTimeframe: "",
-  revenueGoals: "",
-  leadVolumeGoals: "",
-  specificCampaignIdeas: "",
-  existingBrandAssets: "",
-  brandGuidelines: "",
-  contentPreferences: "",
-  socialMediaPresence: "",
-  testimonials: "",
-};
+const defaultData: IntakeData = {
+  clientId: "", clientVerified: false as unknown as string, clientName: "",
+  companyName: "", industry: "", companyWebsite: "", companyPhone: "", companyEmail: "",
+  location: "", yearFounded: "", numberOfEmployees: "", foundingStory: "",
+  businessGoals: "", biggestChallenges: "", whatSuccessLooksLike: "", teamMembers: "",
+  primaryServices: "", mostProfitableService: "", mostRequestedService: "",
+  averageServicePrice: "", serviceSeasonality: "", currentMarketingEfforts: "",
+  adPlatforms: "", currentMarketingSpend: "", whatsWorking: "", whatsNotWorking: "",
+  competitor1Name: "", competitor1Website: "", competitor1Strengths: "",
+  competitor2Name: "", competitor2Website: "", competitor2Strengths: "",
+  competitor3Name: "", competitor3Website: "", competitor3Strengths: "",
+  brandPersonality: "", brandTone: "", brandColors: "", brandFonts: "",
+  designInspiration: "", dosAndDonts: "", logoDescription: "", visualStyle: "",
+  idealCustomerDescription: "", customerAge: "", customerGender: "",
+  customerIncome: "", customerLocation: "", customerFrustrations: "",
+  customerDesires: "", customerFeelsBefore: "", customerFeelsAfter: "",
+  biggestFrustration: "", practicalProblem: "", emotionalProblem: "",
+  whyItMatters: "", howYouHelp: "", whyTrustYou: "", threeStepProcess: "",
+  directCTA: "", transitionalCTA: "", successStory: "",
+  whatHappensIfTheyDontAct: "", guarantees: "",
+  topQuestionsCustomersAsk: "", willingToDiscussPricing: "", willingToCompare: "",
+  willingToAddressProblems: "", contentTopicsExcited: "", expertiseAreas: "",
+  preferredContentFormats: "",
+  testimonial1: "", testimonial1Author: "", testimonial2: "", testimonial2Author: "",
+  testimonial3: "", testimonial3Author: "", reviewPlatformUrl: "",
+  socialFacebook: "", socialInstagram: "", socialLinkedin: "",
+  socialYoutube: "", socialTiktok: "", googleBusinessUrl: "", otherLinks: "",
+  languagesSpoken: "",
+} as unknown as IntakeData;
 
-// ── Section & Step Definitions ─────────────────
+// ── Section Definitions ──────────────────────
 
-interface StepDef {
-  field: keyof IntakeFormData;
-  label: string;
-  type: "input" | "textarea";
-  placeholder: string;
-  example?: string;
-  insight?: string;
-  required?: boolean;
-}
-
-interface SectionDef {
+interface Section {
+  id: number;
   title: string;
-  icon: typeof Building2;
-  description: string;
+  subtitle: string;
+  icon: React.ElementType;
   color: string;
-  steps: StepDef[];
 }
 
-const SECTIONS: SectionDef[] = [
-  {
-    title: "Business Basics",
-    icon: Building2,
-    description: "Let's start with the fundamentals of your business.",
-    color: "from-blue-500 to-blue-600",
-    steps: [
-      { field: "companyName", label: "Company Name", type: "input", placeholder: "Acme Marketing Co.", required: true, insight: "Your company name is the foundation of your brand identity. It will be used consistently across all marketing materials." },
-      { field: "industry", label: "Industry / Niche", type: "input", placeholder: "e.g. Functional Medicine, SaaS, E-commerce", example: "Be specific! 'Functional Medicine for Women 35-55' is better than just 'Healthcare'", required: true },
-      { field: "yearFounded", label: "Year Founded", type: "input", placeholder: "e.g. 2018" },
-      { field: "location", label: "Primary Location / Service Area", type: "input", placeholder: "e.g. Austin, TX or Nationwide", example: "If you serve multiple areas, list your primary location and note 'also serving...'", required: true },
-      { field: "numberOfEmployees", label: "Number of Employees", type: "input", placeholder: "e.g. 12" },
-      { field: "companyWebsite", label: "Company Website", type: "input", placeholder: "https://www.example.com" },
-      { field: "companyPhone", label: "Company Phone", type: "input", placeholder: "(555) 123-4567" },
-      { field: "companyEmail", label: "Company Email", type: "input", placeholder: "info@example.com" },
-      { field: "domain", label: "Primary Domain", type: "input", placeholder: "example.com", insight: "Your domain is your digital storefront. We'll analyze it for SEO opportunities and technical health." },
-    ],
-  },
-  {
-    title: "Products & Services",
-    icon: Target,
-    description: "Tell us about what you offer and how you deliver value.",
-    color: "from-emerald-500 to-emerald-600",
-    steps: [
-      { field: "primaryServices", label: "Primary Services / Products", type: "textarea", placeholder: "List your main offerings...", example: "e.g. 'Comprehensive functional medicine consultations, hormone optimization programs, gut health restoration protocols, IV therapy'", required: true, insight: "Your primary services are what we'll lead with in your marketing. These should be your highest-value, most in-demand offerings." },
-      { field: "secondaryServices", label: "Secondary Services / Products", type: "textarea", placeholder: "Any additional offerings...", example: "e.g. 'Nutritional counseling, supplements, lab testing, wellness workshops'" },
-      { field: "serviceAreas", label: "Service Areas / Locations Served", type: "textarea", placeholder: "Where do you serve customers?", example: "e.g. 'Primary: Austin, TX metro area. Also serving: San Antonio, Dallas via telehealth'" },
-      { field: "averageProjectValue", label: "Average Customer Value", type: "input", placeholder: "e.g. $5,000 per year", insight: "Knowing your average customer value helps us calculate ROI on marketing spend and set realistic acquisition cost targets." },
-      { field: "uniqueOfferings", label: "What Makes Your Offerings Unique?", type: "textarea", placeholder: "What sets your products/services apart from competitors?", example: "e.g. 'We're the only practice in Austin offering DUTCH testing combined with personalized supplement protocols and monthly check-ins'" },
-    ],
-  },
-  {
-    title: "Target Audience",
-    icon: Users,
-    description: "Help us understand who your ideal customers are.",
-    color: "from-purple-500 to-purple-600",
-    steps: [
-      { field: "idealCustomerDescription", label: "Describe Your Ideal Customer", type: "textarea", placeholder: "Who is your perfect customer? Paint a picture...", example: "e.g. 'Health-conscious women 35-55, professional, frustrated with conventional medicine, willing to invest $500+/mo in their health, active on Instagram/Facebook'", required: true, insight: "The more specific your ideal customer profile, the more targeted and effective your marketing will be. Think about your best existing customers." },
-      { field: "customerDemographics", label: "Customer Demographics", type: "textarea", placeholder: "Age range, gender, income level, education, occupation...", example: "e.g. 'Women 35-55, household income $150k+, college-educated, professionals or business owners'" },
-      { field: "customerPainPoints", label: "Customer Pain Points", type: "textarea", placeholder: "What problems are your customers trying to solve?", example: "e.g. 'Chronic fatigue, hormonal imbalances, digestive issues, feeling dismissed by traditional doctors, wanting root-cause solutions'", required: true, insight: "Pain points are the emotional drivers that make customers take action. These become the foundation of your messaging strategy." },
-      { field: "customerGoals", label: "Customer Goals & Desires", type: "textarea", placeholder: "What do your customers want to achieve?", example: "e.g. 'Feel energized again, balance hormones naturally, lose stubborn weight, sleep through the night, have a trusted health partner'" },
-      { field: "decisionMakingProcess", label: "How Do Customers Find & Choose You?", type: "textarea", placeholder: "Typical customer journey from awareness to purchase...", example: "e.g. 'Usually Google search or referral -> read reviews -> visit website -> book discovery call -> initial consultation -> become long-term patient'" },
-      { field: "commonObjections", label: "Common Objections or Hesitations", type: "textarea", placeholder: "What concerns do potential customers have?", example: "e.g. 'Cost (not covered by insurance), time commitment, skepticism about functional medicine, already tried everything'" },
-    ],
-  },
-  {
-    title: "Brand & Positioning",
-    icon: Sparkles,
-    description: "Define how your brand should be perceived in the market.",
-    color: "from-amber-500 to-amber-600",
-    steps: [
-      { field: "missionStatement", label: "Mission Statement", type: "textarea", placeholder: "What is your company's mission?", example: "e.g. 'To empower women to take control of their health through personalized, root-cause functional medicine that treats the whole person, not just symptoms'", insight: "Your mission statement guides all messaging decisions. It answers 'why does this company exist beyond making money?'" },
-      { field: "brandValues", label: "Core Brand Values", type: "textarea", placeholder: "What values drive your business?", example: "e.g. 'Patient-first care, evidence-based protocols, holistic wellness, transparency, empowerment, continuous learning'" },
-      { field: "brandPersonality", label: "Brand Personality & Tone", type: "textarea", placeholder: "If your brand were a person, how would they communicate?", example: "e.g. 'Warm and approachable but authoritative. Like a trusted friend who happens to be a brilliant doctor. Uses plain language, avoids jargon, empathetic but confident'", required: true },
-      { field: "competitiveAdvantages", label: "Competitive Advantages", type: "textarea", placeholder: "What do you do better than anyone else?", example: "e.g. '15+ years experience, only board-certified functional medicine practice in Austin, proprietary wellness protocols, 95% patient retention rate'", required: true, insight: "Your competitive advantages become your key differentiators in all marketing campaigns. These are your 'unfair advantages.'" },
-      { field: "topCompetitors", label: "Top Competitors", type: "textarea", placeholder: "Who are your main competitors?", example: "e.g. 'Austin Functional Medicine ($200-500/visit), HealthSpan Clinic (telehealth focus), local naturopaths'" },
-      { field: "desiredPerception", label: "Desired Brand Perception", type: "textarea", placeholder: "How do you want people to think of your brand?", example: "e.g. 'The premier functional medicine practice in Austin - trusted, results-driven, caring, innovative, worth the investment'" },
-    ],
-  },
-  {
-    title: "Marketing Current State",
-    icon: Megaphone,
-    description: "Where are you now with your marketing efforts?",
-    color: "from-rose-500 to-rose-600",
-    steps: [
-      { field: "currentMarketingChannels", label: "Current Marketing Channels", type: "textarea", placeholder: "What marketing are you currently doing?", example: "e.g. 'Website (WordPress), Google Business Profile, Instagram (2x/week posts), occasional Facebook ads, email newsletter (monthly), patient referral program'", insight: "Understanding your current marketing helps us identify quick wins and avoid duplicating efforts." },
-      { field: "currentMarketingBudget", label: "Current Monthly Marketing Budget", type: "input", placeholder: "e.g. $3,000/month", example: "Include all marketing spend: ads, tools, freelancers, agency fees, etc." },
-      { field: "bestLeadSources", label: "Best Current Lead Sources", type: "textarea", placeholder: "Where do your best customers come from?", example: "e.g. 'Google organic (35%), patient referrals (30%), Google Ads (20%), Instagram (10%), other (5%)'" },
-      { field: "previousMarketingExperience", label: "Previous Marketing Experience", type: "textarea", placeholder: "What has worked? What hasn't? Any bad experiences?", example: "e.g. 'Tried SEO agency for 6 months - saw some improvement but felt they didn't understand our niche. Facebook ads worked well for events but not for patient acquisition.'", insight: "Learning from past marketing efforts helps us avoid repeating mistakes and double down on what works." },
-      { field: "crmSystem", label: "CRM / Practice Management System", type: "input", placeholder: "e.g. GoHighLevel, HubSpot, Practice Better" },
-    ],
-  },
-  {
-    title: "Goals & Expectations",
-    icon: Target,
-    description: "What does success look like for your marketing?",
-    color: "from-cyan-500 to-cyan-600",
-    steps: [
-      { field: "primaryMarketingGoals", label: "Primary Marketing Goals", type: "textarea", placeholder: "What are you hoping to achieve with marketing?", example: "e.g. '1) Increase new patient bookings from 8/month to 20/month, 2) Build brand awareness in Austin area, 3) Establish Dr. Smith as thought leader in functional medicine, 4) Reduce dependence on referrals'", required: true, insight: "Clear, measurable goals let us build a strategy with specific KPIs and a realistic timeline." },
-      { field: "targetTimeframe", label: "Target Timeframe", type: "input", placeholder: "e.g. 6-12 months", example: "When do you want to see results? Be realistic - SEO takes 3-6 months, ads can show results in weeks." },
-      { field: "revenueGoals", label: "Revenue Goals", type: "input", placeholder: "e.g. $1.5M annual revenue", example: "Where do you want revenue to be in 12 months?" },
-      { field: "leadVolumeGoals", label: "Lead / Appointment Volume Goals", type: "input", placeholder: "e.g. 40 discovery calls per month", insight: "Lead volume goals help us calculate the funnel metrics needed: traffic -> leads -> appointments -> customers." },
-      { field: "specificCampaignIdeas", label: "Specific Campaign or Project Ideas", type: "textarea", placeholder: "Any specific marketing projects you have in mind?", example: "e.g. 'New website design, Google Ads campaign for hormone therapy, monthly wellness blog, patient success story video series'" },
-    ],
-  },
-  {
-    title: "Content & Assets",
-    icon: Globe,
-    description: "What existing brand materials and content do you have?",
-    color: "from-indigo-500 to-indigo-600",
-    steps: [
-      { field: "existingBrandAssets", label: "Existing Brand Assets", type: "textarea", placeholder: "What brand materials do you currently have?", example: "e.g. 'Logo (vector file), brand colors (#1E3A5F, #4CAF50), letterhead, business cards, brochure template'", insight: "An inventory of existing assets saves time and money. We can build on what you have instead of starting from scratch." },
-      { field: "brandGuidelines", label: "Brand Guidelines", type: "textarea", placeholder: "Do you have documented brand guidelines?", example: "e.g. 'Basic logo usage guide exists but no formal brand book. We use Montserrat for headings and Open Sans for body text.'" },
-      { field: "contentPreferences", label: "Content Preferences & Restrictions", type: "textarea", placeholder: "Any preferences for content style or topics to avoid?", example: "e.g. 'Prefer educational tone over salesy. Avoid making specific health claims. Dr. Smith wants to be featured in content. Prefer video over blog posts.'" },
-      { field: "socialMediaPresence", label: "Social Media Presence", type: "textarea", placeholder: "List your social media accounts and follower counts...", example: "e.g. 'Instagram @drsmith_wellness (2.4k followers), Facebook /SmithFunctionalMedicine (1.1k likes), LinkedIn (personal, 500 connections), YouTube (just started, 50 subscribers)'" },
-      { field: "testimonials", label: "Testimonials & Success Stories", type: "textarea", placeholder: "Do you have customer testimonials or case studies?", example: "e.g. 'About 20 Google reviews (4.8 stars), 5 written testimonials, 2 video testimonials, several before/after stories with permission to share'" },
-    ],
-  },
+const sections: Section[] = [
+  { id: 0, title: "Welcome", subtitle: "Let's get started", icon: Sparkles, color: "from-amber-500 to-amber-600" },
+  { id: 1, title: "Your Business", subtitle: "Company basics, goals, and team", icon: Building2, color: "from-blue-500 to-blue-600" },
+  { id: 2, title: "Your Marketing", subtitle: "Services, platforms, and competitors", icon: Megaphone, color: "from-emerald-500 to-emerald-600" },
+  { id: 3, title: "Your Brand", subtitle: "Visual identity and personality", icon: Palette, color: "from-pink-500 to-pink-600" },
+  { id: 4, title: "Your Client's Journey", subtitle: "Understanding who you serve and how you help", icon: Users, color: "from-purple-500 to-purple-600" },
+  { id: 5, title: "Content & Thought Leadership", subtitle: "Building trust through transparency", icon: BookOpen, color: "from-indigo-500 to-indigo-600" },
+  { id: 6, title: "Review & Submit", subtitle: "Review your answers and submit", icon: Trophy, color: "from-green-500 to-green-600" },
 ];
 
-const TOTAL_STEPS = SECTIONS.reduce((acc, s) => acc + s.steps.length, 0);
-const LOCAL_STORAGE_KEY = "onboarding-intake-draft";
+const TOTAL_STEPS = sections.length;
+const LOCAL_STORAGE_KEY = "onboarding-intake-v2";
 
-// ── Component ─────────────────────────────────
+// ── Helper Components ────────────────────────
+
+function ExampleTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-amber-400 transition-colors">
+        <Lightbulb className="h-3.5 w-3.5" /><span>See example</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 top-full mt-1 w-80 max-w-[90vw] p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 shadow-lg">
+          <div className="flex items-start gap-2">
+            <Lightbulb className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+            <div>
+              <p className="font-medium text-xs text-amber-700 mb-1">Example</p>
+              <p className="text-xs leading-relaxed whitespace-pre-wrap">{text}</p>
+            </div>
+          </div>
+          <button onClick={() => setOpen(false)} className="absolute top-1 right-2 text-amber-400 hover:text-amber-600 text-xs">✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InsightCard({ title, children, icon: Icon }: { title: string; children: React.ReactNode; icon: React.ElementType }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 mb-6">
+      <button type="button" onClick={() => setExpanded(!expanded)} className="w-full flex items-center gap-3 text-left">
+        <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 text-blue-400" />
+        </div>
+        <p className="text-sm font-semibold text-blue-300 flex-1">{title}</p>
+        {expanded ? <ChevronUp className="h-4 w-4 text-blue-400" /> : <ChevronDown className="h-4 w-4 text-blue-400" />}
+      </button>
+      {expanded && <div className="mt-3 pl-11 text-sm text-blue-200/80 leading-relaxed">{children}</div>}
+    </div>
+  );
+}
+
+function Field({ label, description, example, required, children }: {
+  label: string; description?: string; example?: string; required?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm font-medium text-slate-200">
+          {label}{required && <span className="text-rose-400 ml-1">*</span>}
+        </Label>
+        {example && <ExampleTip text={example} />}
+      </div>
+      {description && <p className="text-xs text-slate-400">{description}</p>}
+      {children}
+    </div>
+  );
+}
+
+const inputCls = "bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20";
+const textareaCls = inputCls + " resize-none";
+
+// ── Main Component ───────────────────────────
 
 export function PublicOnboardingPage() {
   const [searchParams] = useSearchParams();
   const clientIdParam = searchParams.get("clientId");
 
-  const [formData, setFormData] = useState<IntakeFormData>(defaultFormData);
-  const [currentSection, setCurrentSection] = useState(0);
-  const [currentStepInSection, setCurrentStepInSection] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
+  const [data, setData] = useState<IntakeData>(defaultData);
+  const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [clientName, setClientName] = useState<string | null>(null);
-  const [showResumeBanner, setShowResumeBanner] = useState(false);
-  const [resolvedClientId, setResolvedClientId] = useState<string | null>(clientIdParam);
-  const formRef = useRef<HTMLDivElement>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [showResume, setShowResume] = useState(false);
+  const [verifiedNumericId, setVerifiedNumericId] = useState<number | null>(null);
+  const initialized = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Verify client on mount
-  useEffect(() => {
-    if (!clientIdParam) return;
-    fetch(`/api/public/onboarding/verify/${clientIdParam}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.found) {
-          setClientName(data.companyName);
-          setResolvedClientId(String(data.numericId));
-        }
-      })
-      .catch(console.error);
-  }, [clientIdParam]);
+  const upd = (field: string, value: string | boolean) => setData((prev) => ({ ...prev, [field]: value }));
 
-  // Load from localStorage on mount
+  // On mount: check for saved data or URL clientId
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const savedStep = localStorage.getItem(LOCAL_STORAGE_KEY + "-step");
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === "object" && parsed.companyName) {
-          setFormData({ ...defaultFormData, ...parsed });
-          setShowResumeBanner(true);
+        if (parsed && Object.values(parsed).some((v) => v && v !== "" && v !== false)) {
+          setData({ ...defaultData, ...parsed });
+          if (savedStep) setStep(parseInt(savedStep) || 0);
+          setShowResume(true);
         }
       }
     } catch { /* ignore */ }
-  }, []);
+    if (clientIdParam) upd("clientId", clientIdParam);
+  }, [clientIdParam]);
 
-  // Auto-save to localStorage
-  const saveToLocal = useCallback(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(formData));
-    } catch { /* ignore */ }
-  }, [formData]);
-
+  // Auto-save
   useEffect(() => {
-    const timer = setTimeout(saveToLocal, 500);
-    return () => clearTimeout(timer);
-  }, [saveToLocal]);
+    if (!initialized.current) return;
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(LOCAL_STORAGE_KEY + "-step", String(step));
+    } catch { /* ignore */ }
+  }, [data, step]);
 
-  // Get current absolute step index
-  const getAbsoluteStep = () => {
-    let step = 0;
-    for (let i = 0; i < currentSection; i++) step += SECTIONS[i].steps.length;
-    return step + currentStepInSection;
+  const progress = Math.round((step / (TOTAL_STEPS - 1)) * 100);
+  const currentSection = sections[step];
+  const SectionIcon = currentSection.icon;
+
+  const handleVerifyClient = async () => {
+    if (!data.clientId) return;
+    setVerifying(true);
+    try {
+      const res = await fetch(`/api/public/onboarding/verify/${data.clientId}`);
+      const result = await res.json();
+      if (result.found) {
+        upd("clientVerified", true);
+        upd("clientName", result.companyName || "");
+        if (result.companyName && !data.companyName) upd("companyName", result.companyName);
+        setVerifiedNumericId(result.numericId);
+      } else {
+        alert("Client ID not found. Please check and try again, or leave blank to create a new client.");
+      }
+    } catch { alert("Error verifying client ID"); }
+    setVerifying(false);
   };
 
-  const absoluteStep = getAbsoluteStep();
-  const progress = Math.round(((absoluteStep + 1) / TOTAL_STEPS) * 100);
-  const section = SECTIONS[currentSection];
-  const step = section.steps[currentStepInSection];
-  const SectionIcon = section.icon;
-
-  const updateField = (field: keyof IntakeFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  const goNext = () => { if (step < TOTAL_STEPS - 1) { setStep(step + 1); contentRef.current?.scrollTo({ top: 0 }); window.scrollTo({ top: 0, behavior: "smooth" }); } };
+  const goBack = () => { if (step > 0) { setStep(step - 1); contentRef.current?.scrollTo({ top: 0 }); window.scrollTo({ top: 0, behavior: "smooth" }); } };
 
   const canGoNext = () => {
-    if (step.required && !formData[step.field].trim()) return false;
+    if (step === 0) return true;
+    if (step === 1) return data.companyName.trim() !== "";
     return true;
   };
 
-  const goNext = () => {
-    if (!canGoNext()) return;
-    if (currentStepInSection < section.steps.length - 1) {
-      setCurrentStepInSection(currentStepInSection + 1);
-    } else if (currentSection < SECTIONS.length - 1) {
-      setCurrentSection(currentSection + 1);
-      setCurrentStepInSection(0);
+  const isSectionComplete = (id: number): boolean => {
+    switch (id) {
+      case 1: return !!(data.companyName && data.businessGoals);
+      case 2: return !!(data.primaryServices);
+      case 3: return !!(data.brandTone || data.brandPersonality);
+      case 4: return !!(data.idealCustomerDescription && data.customerFrustrations);
+      case 5: return !!(data.topQuestionsCustomersAsk || data.contentTopicsExcited);
+      default: return false;
     }
-    formRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  const goPrev = () => {
-    if (currentStepInSection > 0) {
-      setCurrentStepInSection(currentStepInSection - 1);
-    } else if (currentSection > 0) {
-      const prevSection = SECTIONS[currentSection - 1];
-      setCurrentSection(currentSection - 1);
-      setCurrentStepInSection(prevSection.steps.length - 1);
-    }
-    formRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const isLastStep = currentSection === SECTIONS.length - 1 && currentStepInSection === section.steps.length - 1;
 
   const handleSubmit = async () => {
-    // Validate required fields
-    const missing: string[] = [];
-    for (const sec of SECTIONS) {
-      for (const s of sec.steps) {
-        if (s.required && !formData[s.field].trim()) {
-          missing.push(s.label);
-        }
-      }
-    }
-    if (missing.length > 0) {
-      alert(`Please fill in the following required fields:\n\n${missing.join("\n")}`);
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const body: Record<string, unknown> = { intakeData: formData };
-      if (resolvedClientId) body.clientId = resolvedClientId;
+      const numericId = verifiedNumericId || (data.clientId ? parseInt(data.clientId) : NaN);
+      const body: Record<string, unknown> = { intakeData: data };
+      if (!isNaN(numericId)) body.clientId = numericId;
+      else if (data.clientId) body.clientSlug = data.clientId;
 
       const res = await fetch("/api/public/onboarding/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || "Submission failed");
       }
-
       localStorage.removeItem(LOCAL_STORAGE_KEY);
+      localStorage.removeItem(LOCAL_STORAGE_KEY + "-step");
       setSubmitted(true);
     } catch (err) {
       alert(`Failed to submit: ${err instanceof Error ? err.message : "Unknown error"}`);
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && step.type === "input" && !e.shiftKey) {
-      e.preventDefault();
-      if (isLastStep) handleSubmit();
-      else goNext();
-    }
-  };
-
-  const dismissResumeBanner = () => {
-    setShowResumeBanner(false);
-  };
-
-  const startFresh = () => {
-    setFormData(defaultFormData);
-    setCurrentSection(0);
-    setCurrentStepInSection(0);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
-    setShowResumeBanner(false);
-  };
-
-  // ── Success screen ─────────────────────────────
+  // ── Submitted Success ───────────────────────
 
   if (submitted) {
     return (
@@ -415,259 +365,398 @@ export function PublicOnboardingPage() {
           <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
             <Check className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">Onboarding Complete!</h1>
-          <p className="text-slate-300 text-lg">
-            Thank you for taking the time to share your business details. Our team will review your responses and begin building your customized marketing strategy.
-          </p>
+          <h1 className="text-3xl font-bold text-white">Intake Complete!</h1>
+          <p className="text-slate-300 text-lg">Thank you for taking the time to share your story. Our team will review your information and begin crafting your Brand Story Guide.</p>
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-left space-y-3">
             <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider">What Happens Next</h3>
             <ul className="space-y-2 text-sm text-slate-300">
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">1.</span>
-                Our team reviews your intake responses within 24 hours
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">2.</span>
-                We create your Brand Story using the StoryBrand framework
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">3.</span>
-                You'll receive a strategy call invitation to review everything together
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">4.</span>
-                Marketing campaigns launch based on your approved strategy
-              </li>
+              <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">1.</span>Our team reviews your intake and generates your Brand Story Guide</li>
+              <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">2.</span>We create your comprehensive brand messaging and content strategy</li>
+              <li className="flex items-start gap-2"><span className="text-emerald-400 mt-0.5">3.</span>You'll receive your complete Brand Story Guide for review and approval</li>
             </ul>
           </div>
-          {clientName && (
-            <p className="text-sm text-slate-400">Submitted for: <span className="text-white font-medium">{clientName}</span></p>
-          )}
+          {data.clientName && <p className="text-sm text-slate-400">Submitted for: <span className="text-white font-medium">{data.clientName}</span></p>}
         </div>
       </div>
     );
   }
 
-  // ── Section completed count for nav ────────────
+  // ── Step Renderers ──────────────────────────
 
-  const getSectionCompletion = (sectionIndex: number) => {
-    const sec = SECTIONS[sectionIndex];
-    const filled = sec.steps.filter((s) => formData[s.field].trim()).length;
-    return { filled, total: sec.steps.length };
-  };
+  const renderWelcome = () => (
+    <div className="space-y-6">
+      <InsightCard title="Why We Ask These Questions" icon={Heart}>
+        <p>The best marketing starts with a deep understanding of your business, your clients, and your story. This intake helps us build a complete picture so we can create messaging that truly resonates.</p>
+        <p className="mt-2">There are <strong>5 sections</strong>, and you can save your progress and come back anytime. Most people complete it in 20–30 minutes.</p>
+      </InsightCard>
+      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-4">
+        <h3 className="font-semibold text-white">Have an existing Client ID?</h3>
+        <p className="text-sm text-slate-400">If you've already been set up in our system, enter your Client ID below. Otherwise, leave it blank and we'll create a new profile.</p>
+        <div className="flex gap-3">
+          <Input placeholder="Enter Client ID (optional)" value={data.clientId} onChange={(e) => upd("clientId", e.target.value)} className={inputCls + " max-w-xs"} />
+          <Button variant="outline" onClick={handleVerifyClient} disabled={!data.clientId || verifying} className="border-slate-600 text-slate-200 hover:bg-slate-700">
+            {verifying ? "Checking..." : "Verify"}
+          </Button>
+        </div>
+        {data.clientVerified && (
+          <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+            <Check className="h-4 w-4" /><span>Connected to: <strong>{data.clientName}</strong></span>
+          </div>
+        )}
+      </div>
+      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 space-y-3">
+        <h3 className="font-semibold text-white">What We'll Cover</h3>
+        <div className="space-y-2">
+          {sections.filter((s) => s.id >= 1 && s.id <= 5).map((s) => {
+            const Icon = s.icon;
+            const complete = isSectionComplete(s.id);
+            return (
+              <div key={s.id} className="flex items-center gap-3 text-sm">
+                <div className={`h-8 w-8 rounded-lg ${complete ? "bg-emerald-500/20" : "bg-slate-700"} flex items-center justify-center shrink-0`}>
+                  {complete ? <Check className="h-4 w-4 text-emerald-400" /> : <Icon className="h-4 w-4 text-slate-400" />}
+                </div>
+                <div>
+                  <p className={`font-medium ${complete ? "text-emerald-300" : "text-white"}`}>Section {s.id}: {s.title}</p>
+                  <p className="text-xs text-slate-500">{s.subtitle}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 
-  // ── Main form ───────────────────────────────────
+  const renderSection1 = () => (
+    <div className="space-y-6">
+      <InsightCard title="Why This Matters" icon={Building2}>
+        <p>Before we can tell your story, we need to know the basics. This is the foundation everything else builds on.</p>
+      </InsightCard>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="Company Name" required example="Soleil Holistic Wellness"><Input value={data.companyName} onChange={(e) => upd("companyName", e.target.value)} className={inputCls} placeholder="Your company name" /></Field>
+        <Field label="Industry" example="Wellness, Dental, HVAC, Legal"><Input value={data.industry} onChange={(e) => upd("industry", e.target.value)} className={inputCls} placeholder="What industry?" /></Field>
+        <Field label="Website"><Input value={data.companyWebsite} onChange={(e) => upd("companyWebsite", e.target.value)} className={inputCls} placeholder="www.yoursite.com" /></Field>
+        <Field label="Phone"><Input value={data.companyPhone} onChange={(e) => upd("companyPhone", e.target.value)} className={inputCls} placeholder="(555) 123-4567" /></Field>
+        <Field label="Email"><Input value={data.companyEmail} onChange={(e) => upd("companyEmail", e.target.value)} className={inputCls} placeholder="info@example.com" /></Field>
+        <Field label="Location" example="Milford, CT"><Input value={data.location} onChange={(e) => upd("location", e.target.value)} className={inputCls} placeholder="City, State" /></Field>
+        <Field label="Year Founded"><Input value={data.yearFounded} onChange={(e) => upd("yearFounded", e.target.value)} className={inputCls} placeholder="2018" /></Field>
+        <Field label="Employees"><Input value={data.numberOfEmployees} onChange={(e) => upd("numberOfEmployees", e.target.value)} className={inputCls} placeholder="12" /></Field>
+      </div>
+      <Field label="Your founding story" description="How did this business come to be?" example="Dr. Sarah started Soleil after seeing too many patients fall through the cracks of conventional medicine.">
+        <Textarea value={data.foundingStory} onChange={(e) => upd("foundingStory", e.target.value)} className={textareaCls} rows={4} placeholder="Tell us how it all started..." />
+      </Field>
+      <Field label="Business goals for the next 12 months" required example="Increase new appointments by 40%. Launch aesthetics. Grow from $50K to $75K/month.">
+        <Textarea value={data.businessGoals} onChange={(e) => upd("businessGoals", e.target.value)} className={textareaCls} rows={4} placeholder="Where do you want to be in a year?" />
+      </Field>
+      <Field label="Biggest challenges right now" example="Not enough new clients. Website doesn't convert. Rely too much on word-of-mouth.">
+        <Textarea value={data.biggestChallenges} onChange={(e) => upd("biggestChallenges", e.target.value)} className={textareaCls} rows={3} placeholder="What's holding your business back?" />
+      </Field>
+      <Field label="What does success look like?" example="Fully booked 3 weeks out. Steady stream of new clients from online marketing.">
+        <Textarea value={data.whatSuccessLooksLike} onChange={(e) => upd("whatSuccessLooksLike", e.target.value)} className={textareaCls} rows={3} placeholder="Describe your ideal future" />
+      </Field>
+      <Field label="Key team members" example="Dr. Sarah Chen — Founder, ND, 15 years\nJen — Office Manager">
+        <Textarea value={data.teamMembers} onChange={(e) => upd("teamMembers", e.target.value)} className={textareaCls} rows={3} placeholder="Names, roles, credentials" />
+      </Field>
+      <Field label="Languages spoken"><Input value={data.languagesSpoken} onChange={(e) => upd("languagesSpoken", e.target.value)} className={inputCls} placeholder="English, Spanish" /></Field>
+    </div>
+  );
+
+  const renderSection2 = () => (
+    <div className="space-y-6">
+      <InsightCard title="What You Offer & How You Market" icon={Megaphone}>
+        <p>Your services are the core of your business. The more detail you give us, the better we can create targeted marketing for each service line.</p>
+      </InsightCard>
+      <Field label="Primary services or products" required example="Naturopathic Medicine, Acupuncture, IV Therapy, RF Microneedling, Bioidentical Hormones">
+        <Textarea value={data.primaryServices} onChange={(e) => upd("primaryServices", e.target.value)} className={textareaCls} rows={4} placeholder="List your services" />
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="Most profitable service" example="Aesthetics (RF Microneedling, PRP)"><Input value={data.mostProfitableService} onChange={(e) => upd("mostProfitableService", e.target.value)} className={inputCls} placeholder="Highest-revenue service" /></Field>
+        <Field label="Most requested service" example="Naturopathic consultations"><Input value={data.mostRequestedService} onChange={(e) => upd("mostRequestedService", e.target.value)} className={inputCls} placeholder="Most popular service" /></Field>
+        <Field label="Average service price" example="$150-$500 per visit"><Input value={data.averageServicePrice} onChange={(e) => upd("averageServicePrice", e.target.value)} className={inputCls} placeholder="Price range" /></Field>
+        <Field label="Seasonality" example="Aesthetics peak before summer. IV therapy during flu season."><Input value={data.serviceSeasonality} onChange={(e) => upd("serviceSeasonality", e.target.value)} className={inputCls} placeholder="Seasonal patterns?" /></Field>
+      </div>
+      <Field label="Current marketing efforts" example="Facebook/Instagram ads ($2K/month). Social media 3x/week. Google Business active.">
+        <Textarea value={data.currentMarketingEfforts} onChange={(e) => upd("currentMarketingEfforts", e.target.value)} className={textareaCls} rows={3} placeholder="What marketing are you doing?" />
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="Ad platforms"><Input value={data.adPlatforms} onChange={(e) => upd("adPlatforms", e.target.value)} className={inputCls} placeholder="Meta, Google Ads, TikTok" /></Field>
+        <Field label="Monthly marketing spend"><Input value={data.currentMarketingSpend} onChange={(e) => upd("currentMarketingSpend", e.target.value)} className={inputCls} placeholder="$2,000/month" /></Field>
+      </div>
+      <Field label="What's working well?" example="Google Business generates the most calls. Facebook ads for aesthetics get good engagement.">
+        <Textarea value={data.whatsWorking} onChange={(e) => upd("whatsWorking", e.target.value)} className={textareaCls} rows={3} placeholder="What's generating results?" />
+      </Field>
+      <Field label="What's NOT working?" example="Website doesn't convert. Instagram gets likes but no bookings.">
+        <Textarea value={data.whatsNotWorking} onChange={(e) => upd("whatsNotWorking", e.target.value)} className={textareaCls} rows={3} placeholder="What hasn't delivered?" />
+      </Field>
+      <h4 className="text-sm font-medium text-slate-300 pt-2">Competitors</h4>
+      {[1, 2, 3].map((n) => (
+        <div key={n} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 space-y-3">
+          <p className="text-xs text-slate-500 font-medium">Competitor {n} {n === 3 ? "(Optional)" : ""}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input value={(data as Record<string, string>)[`competitor${n}Name`]} onChange={(e) => upd(`competitor${n}Name`, e.target.value)} className={inputCls} placeholder="Name" />
+            <Input value={(data as Record<string, string>)[`competitor${n}Website`]} onChange={(e) => upd(`competitor${n}Website`, e.target.value)} className={inputCls} placeholder="Website" />
+          </div>
+          <Textarea value={(data as Record<string, string>)[`competitor${n}Strengths`]} onChange={(e) => upd(`competitor${n}Strengths`, e.target.value)} className={textareaCls} rows={2} placeholder="Strengths and weaknesses" />
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderSection3 = () => (
+    <div className="space-y-6">
+      <InsightCard title="Your Visual Identity" icon={Palette}>
+        <p>Your brand is more than a logo — it's how people <em>feel</em> when they interact with your business. This helps us understand your style and personality.</p>
+      </InsightCard>
+      <Field label="Brand tone of voice" description="If your brand were a person, how would they talk?" example="Lighthearted and fun, but knowledgeable. Like 'your smartest friend who also happens to be a doctor.'">
+        <Textarea value={data.brandTone} onChange={(e) => upd("brandTone", e.target.value)} className={textareaCls} rows={3} placeholder="Describe your ideal tone" />
+      </Field>
+      <Field label="Brand personality traits" description="3-5 words that define your brand." example="Warm, Knowledgeable, Holistic, Empowering, Approachable">
+        <Input value={data.brandPersonality} onChange={(e) => upd("brandPersonality", e.target.value)} className={inputCls} placeholder="e.g., Professional, Friendly, Bold, Caring" />
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="Brand Colors" example="#0d500f (forest green), #ffd871 (gold)"><Input value={data.brandColors} onChange={(e) => upd("brandColors", e.target.value)} className={inputCls} placeholder="Hex codes or color names" /></Field>
+        <Field label="Fonts" example="Montserrat headings, Open Sans body"><Input value={data.brandFonts} onChange={(e) => upd("brandFonts", e.target.value)} className={inputCls} placeholder="Font preferences" /></Field>
+      </div>
+      <Field label="Describe your logo" example="A sun with a leaf inside — represents holistic wellness and natural healing.">
+        <Textarea value={data.logoDescription} onChange={(e) => upd("logoDescription", e.target.value)} className={textareaCls} rows={2} placeholder="What does it look like?" />
+      </Field>
+      <Field label="Visual style" example="Clean and modern with lots of white space. Natural imagery — plants, sunlight. Warm tones.">
+        <Textarea value={data.visualStyle} onChange={(e) => upd("visualStyle", e.target.value)} className={textareaCls} rows={3} placeholder="What visual feel do you want?" />
+      </Field>
+      <Field label="Design inspiration" description="URLs of websites or brands you admire.">
+        <Textarea value={data.designInspiration} onChange={(e) => upd("designInspiration", e.target.value)} className={textareaCls} rows={2} placeholder="Links to websites you admire" />
+      </Field>
+      <Field label="Content do's and don'ts" example="DO: Emphasize holistic care. Use inclusive language.\nDON'T: Make guarantees. Use overly clinical language.">
+        <Textarea value={data.dosAndDonts} onChange={(e) => upd("dosAndDonts", e.target.value)} className={textareaCls} rows={3} placeholder="What should we always do or never do?" />
+      </Field>
+    </div>
+  );
+
+  const renderSection4 = () => (
+    <div className="space-y-6">
+      <InsightCard title="Your Client's Journey — Brand Story" icon={Users}>
+        <p>Great marketing starts with understanding the person you're trying to reach. Think about your <strong>best</strong> clients — the ones you wish you had 100 more of. Then we'll map out the problem you solve, how you guide them, and the transformation you deliver.</p>
+      </InsightCard>
+      <Field label="Describe your ideal client" required description="Paint a picture of the person who is the perfect fit." example="A health-conscious woman in her 30s-50s living in Southern CT. She's educated, earns $75K+, and wants something more holistic.">
+        <Textarea value={data.idealCustomerDescription} onChange={(e) => upd("idealCustomerDescription", e.target.value)} className={textareaCls} rows={4} placeholder="Who is your perfect client?" />
+      </Field>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Field label="Age Range"><Input value={data.customerAge} onChange={(e) => upd("customerAge", e.target.value)} className={inputCls} placeholder="30-65" /></Field>
+        <Field label="Gender"><Input value={data.customerGender} onChange={(e) => upd("customerGender", e.target.value)} className={inputCls} placeholder="75% female" /></Field>
+        <Field label="Income"><Input value={data.customerIncome} onChange={(e) => upd("customerIncome", e.target.value)} className={inputCls} placeholder="$75K+" /></Field>
+        <Field label="Location"><Input value={data.customerLocation} onChange={(e) => upd("customerLocation", e.target.value)} className={inputCls} placeholder="Southern CT" /></Field>
+      </div>
+      <Field label="What do they ultimately want?" example="They want to feel vibrant, energetic, and confident. They want a healthcare partner who listens.">
+        <Textarea value={data.customerDesires} onChange={(e) => upd("customerDesires", e.target.value)} className={textareaCls} rows={3} placeholder="The bigger transformation they're seeking" />
+      </Field>
+      <Field label="Biggest frustration before finding you" required example="Conventional medicine that only treats symptoms. A healthcare system that makes people feel like a number.">
+        <Textarea value={data.biggestFrustration} onChange={(e) => upd("biggestFrustration", e.target.value)} className={textareaCls} rows={3} placeholder="The root cause of their frustration" />
+      </Field>
+      <Field label="Practical, day-to-day problem" example="They can't find a doctor who takes a whole-person approach. Chronic symptoms that won't go away.">
+        <Textarea value={data.practicalProblem} onChange={(e) => upd("practicalProblem", e.target.value)} className={textareaCls} rows={3} placeholder="The tangible issue that makes them search" />
+      </Field>
+      <Field label="How does this problem make them feel?" example="Frustrated, unheard, exhausted, skeptical that anything will work.">
+        <Textarea value={data.emotionalProblem} onChange={(e) => upd("emotionalProblem", e.target.value)} className={textareaCls} rows={2} placeholder="The emotional weight behind the practical problem" />
+      </Field>
+      <Field label="Why does this matter on a deeper level?" example="Everyone deserves healthcare that treats the whole person, not just symptoms.">
+        <Textarea value={data.whyItMatters} onChange={(e) => upd("whyItMatters", e.target.value)} className={textareaCls} rows={2} placeholder="The deeper principle at stake" />
+      </Field>
+      <Field label="How do you help?" example="We help health-conscious people who are frustrated with conventional medicine find natural, whole-person solutions.">
+        <Textarea value={data.howYouHelp} onChange={(e) => upd("howYouHelp", e.target.value)} className={textareaCls} rows={3} placeholder="How do you explain what you do?" />
+      </Field>
+      <Field label="Why should someone trust you?" example="30+ combined years. Board-certified. 4.9-star Google rating with 200+ reviews.">
+        <Textarea value={data.whyTrustYou} onChange={(e) => upd("whyTrustYou", e.target.value)} className={textareaCls} rows={3} placeholder="Credentials, experience, proof" />
+      </Field>
+      <Field label="3 simple steps to work with you" example="Step 1: Book a free consultation\nStep 2: Get your personalized plan\nStep 3: Start feeling better">
+        <Textarea value={data.threeStepProcess} onChange={(e) => upd("threeStepProcess", e.target.value)} className={textareaCls} rows={3} placeholder="Step 1: ...\nStep 2: ...\nStep 3: ..." />
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="Main call to action" example="Book Your Free Consultation"><Input value={data.directCTA} onChange={(e) => upd("directCTA", e.target.value)} className={inputCls} placeholder="Book Now, Get Started" /></Field>
+        <Field label="Softer first step" example="Download Our Free Guide"><Input value={data.transitionalCTA} onChange={(e) => upd("transitionalCTA", e.target.value)} className={inputCls} placeholder="For people not ready to commit" /></Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <Field label="How clients feel BEFORE" example="Frustrated, confused, exhausted, stuck"><Textarea value={data.customerFeelsBefore} onChange={(e) => upd("customerFeelsBefore", e.target.value)} className={textareaCls} rows={2} placeholder="Emotions before" /></Field>
+        <Field label="How clients feel AFTER" example="Empowered, energetic, confident, in control"><Textarea value={data.customerFeelsAfter} onChange={(e) => upd("customerFeelsAfter", e.target.value)} className={textareaCls} rows={2} placeholder="Emotions after" /></Field>
+      </div>
+      <Field label="Your best client success story" example="Sarah came to us exhausted, dealing with chronic fatigue for 3 years. After 3 months, her energy was back.">
+        <Textarea value={data.successStory} onChange={(e) => upd("successStory", e.target.value)} className={textareaCls} rows={4} placeholder="Share a real transformation..." />
+      </Field>
+      <Field label="What happens if they DON'T take action?" example="They continue feeling exhausted. Symptoms get worse. They keep spending on treatments that don't work.">
+        <Textarea value={data.whatHappensIfTheyDontAct} onChange={(e) => upd("whatHappensIfTheyDontAct", e.target.value)} className={textareaCls} rows={3} placeholder="What's at stake if they do nothing?" />
+      </Field>
+      <Field label="Guarantees or risk-reducers" example="Free initial consultation. Satisfaction guarantee. We'll always explain options first. No pressure, ever.">
+        <Textarea value={data.guarantees} onChange={(e) => upd("guarantees", e.target.value)} className={textareaCls} rows={2} placeholder="What makes it easy to say yes?" />
+      </Field>
+    </div>
+  );
+
+  const renderSection5 = () => (
+    <div className="space-y-6">
+      <InsightCard title="Building Trust Through Transparency" icon={BookOpen}>
+        <p>The businesses that win online are willing to answer every question honestly — even uncomfortable ones. When you address what everyone's thinking but nobody's saying, you become the most trusted voice in your industry.</p>
+      </InsightCard>
+      <Field label="Top questions your clients ask" required example="How much does a consultation cost? Is it covered by insurance? How long before I see results?">
+        <Textarea value={data.topQuestionsCustomersAsk} onChange={(e) => upd("topQuestionsCustomersAsk", e.target.value)} className={textareaCls} rows={4} placeholder="Questions you hear most often" />
+      </Field>
+      <Field label="Comfortable discussing pricing openly?" example="Yes — we're happy to share ranges and explain what affects cost. We believe in transparency.">
+        <Textarea value={data.willingToDiscussPricing} onChange={(e) => upd("willingToDiscussPricing", e.target.value)} className={textareaCls} rows={2} placeholder="How open are you about pricing?" />
+      </Field>
+      <Field label="Comfortable comparing yourself to alternatives?" example="Yes, we're confident in what we offer and happy to explain how we're different.">
+        <Textarea value={data.willingToCompare} onChange={(e) => upd("willingToCompare", e.target.value)} className={textareaCls} rows={2} placeholder="How comfortable with honest comparisons?" />
+      </Field>
+      <Field label="Willing to address industry problems honestly?" example="Absolutely. We're honest that naturopathic medicine isn't a quick fix — it takes commitment.">
+        <Textarea value={data.willingToAddressProblems} onChange={(e) => upd("willingToAddressProblems", e.target.value)} className={textareaCls} rows={2} placeholder="How honest about industry issues?" />
+      </Field>
+      <Field label="Topics you're excited to create content about" example="Patient education videos. Blog posts about natural remedies. Q&A content.">
+        <Textarea value={data.contentTopicsExcited} onChange={(e) => upd("contentTopicsExcited", e.target.value)} className={textareaCls} rows={3} placeholder="What content are you excited to create?" />
+      </Field>
+      <Field label="Your areas of expertise" example="Naturopathic approaches to chronic fatigue. The connection between gut health and skin health.">
+        <Textarea value={data.expertiseAreas} onChange={(e) => upd("expertiseAreas", e.target.value)} className={textareaCls} rows={2} placeholder="What are you the expert on?" />
+      </Field>
+      <Field label="Preferred content formats" example="Short videos for social. Written blog posts. Instagram stories for behind-the-scenes.">
+        <Textarea value={data.preferredContentFormats} onChange={(e) => upd("preferredContentFormats", e.target.value)} className={textareaCls} rows={2} placeholder="Video, blog, social, podcast?" />
+      </Field>
+      <h4 className="text-sm font-medium text-slate-300 pt-2">Testimonials</h4>
+      {[1, 2, 3].map((n) => (
+        <div key={n} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4 space-y-3">
+          <p className="text-xs text-slate-500 font-medium">Testimonial {n} {n === 3 ? "(Optional)" : ""}</p>
+          <Textarea value={(data as Record<string, string>)[`testimonial${n}`]} onChange={(e) => upd(`testimonial${n}`, e.target.value)} className={textareaCls} rows={2} placeholder="What did they say?" />
+          <Input value={(data as Record<string, string>)[`testimonial${n}Author`]} onChange={(e) => upd(`testimonial${n}Author`, e.target.value)} className={inputCls} placeholder="Who said it? (e.g. Jennifer M., Milford CT)" />
+        </div>
+      ))}
+      <Field label="Link to your reviews"><Input value={data.reviewPlatformUrl} onChange={(e) => upd("reviewPlatformUrl", e.target.value)} className={inputCls} placeholder="Google Business, Yelp URL" /></Field>
+      <h4 className="text-sm font-medium text-slate-300 pt-2">Online Presence</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Facebook"><Input value={data.socialFacebook} onChange={(e) => upd("socialFacebook", e.target.value)} className={inputCls} placeholder="facebook.com/..." /></Field>
+        <Field label="Instagram"><Input value={data.socialInstagram} onChange={(e) => upd("socialInstagram", e.target.value)} className={inputCls} placeholder="instagram.com/..." /></Field>
+        <Field label="LinkedIn"><Input value={data.socialLinkedin} onChange={(e) => upd("socialLinkedin", e.target.value)} className={inputCls} placeholder="linkedin.com/..." /></Field>
+        <Field label="YouTube"><Input value={data.socialYoutube} onChange={(e) => upd("socialYoutube", e.target.value)} className={inputCls} placeholder="youtube.com/..." /></Field>
+        <Field label="TikTok"><Input value={data.socialTiktok} onChange={(e) => upd("socialTiktok", e.target.value)} className={inputCls} placeholder="tiktok.com/@..." /></Field>
+        <Field label="Google Business"><Input value={data.googleBusinessUrl} onChange={(e) => upd("googleBusinessUrl", e.target.value)} className={inputCls} placeholder="Google Business URL" /></Field>
+      </div>
+      <Field label="Other links" example="Yelp, Pinterest, directories"><Textarea value={data.otherLinks} onChange={(e) => upd("otherLinks", e.target.value)} className={textareaCls} rows={2} placeholder="One per line" /></Field>
+    </div>
+  );
+
+  const renderReview = () => (
+    <div className="space-y-6">
+      <InsightCard title="Almost Done!" icon={Trophy}>
+        <p>Review your answers below. You can go back to any section to make changes. When ready, hit Submit.</p>
+      </InsightCard>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+        {sections.filter((s) => s.id >= 1 && s.id <= 5).map((s) => {
+          const complete = isSectionComplete(s.id);
+          return (
+            <button key={s.id} onClick={() => setStep(s.id)}
+              className={`text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 ${complete ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
+              {complete ? <Check className="h-3 w-3" /> : <span className="h-3 w-3 rounded-full border border-amber-400 inline-block" />}
+              {s.title}
+            </button>
+          );
+        })}
+      </div>
+      {[
+        { label: "Your Business", fields: [["Company", data.companyName], ["Industry", data.industry], ["Location", data.location], ["Goals", data.businessGoals]] },
+        { label: "Your Marketing", fields: [["Services", data.primaryServices], ["Spend", data.currentMarketingSpend], ["What's Working", data.whatsWorking]] },
+        { label: "Your Brand", fields: [["Tone", data.brandTone], ["Personality", data.brandPersonality], ["Colors", data.brandColors]] },
+        { label: "Client Journey", fields: [["Ideal Client", data.idealCustomerDescription], ["Frustration", data.biggestFrustration], ["How You Help", data.howYouHelp], ["Success Story", data.successStory ? "Provided" : ""]] },
+        { label: "Content", fields: [["Top Questions", data.topQuestionsCustomersAsk], ["Topics", data.contentTopicsExcited], ["Testimonials", data.testimonial1 ? "Provided" : ""]] },
+      ].map((sec) => (
+        <div key={sec.label} className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-white mb-2">{sec.label}</h4>
+          <div className="space-y-1">
+            {sec.fields.map(([label, value]) => (
+              <div key={label} className="flex gap-2 text-sm">
+                <span className="text-slate-500 w-32 shrink-0">{label}:</span>
+                <span className={value ? "text-slate-300" : "text-slate-600 italic"}>{value ? (value.length > 80 ? value.slice(0, 80) + "..." : value) : "Not provided"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-6 text-center space-y-4">
+        <Trophy className="h-10 w-10 text-emerald-400 mx-auto" />
+        <h3 className="text-lg font-semibold text-white">Ready to Submit?</h3>
+        <p className="text-sm text-slate-400">Once submitted, our team will review your intake and generate your Brand Story Guide.</p>
+        <Button onClick={handleSubmit} disabled={submitting} className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-8">
+          {submitting ? "Submitting..." : <><Send className="h-4 w-4 mr-2" />Submit Intake</>}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const stepRenderers = [renderWelcome, renderSection1, renderSection2, renderSection3, renderSection4, renderSection5, renderReview];
+
+  // ── Render ──────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Resume Banner */}
-      {showResumeBanner && (
+      {showResume && step > 0 && (
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3">
           <div className="max-w-3xl mx-auto flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm font-medium">Welcome back! We found your saved progress.</span>
+            <span className="text-sm font-medium">Welcome back! We restored your progress — you left off at <strong>{currentSection.title}</strong>.</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={dismissResumeBanner}>
-                Continue
-              </Button>
-              <Button size="sm" variant="ghost" className="text-white/70 hover:text-white hover:bg-white/10" onClick={startFresh}>
-                Start Fresh
-              </Button>
+              <Button size="sm" variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => setShowResume(false)}>Continue</Button>
+              <Button size="sm" variant="ghost" className="text-white/70 hover:text-white hover:bg-white/10" onClick={() => { setData(defaultData); setStep(0); localStorage.removeItem(LOCAL_STORAGE_KEY); setShowResume(false); if (clientIdParam) upd("clientId", clientIdParam); }}>Start Fresh</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
       <header className="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h1 className="text-lg font-semibold text-white">Client Onboarding</h1>
-              {clientName && <p className="text-sm text-slate-400">{clientName}</p>}
+              {data.clientName && <p className="text-sm text-slate-400">{data.clientName}</p>}
             </div>
-            <span className="text-sm text-slate-400">
-              Step {absoluteStep + 1} of {TOTAL_STEPS}
-            </span>
+            <span className="text-sm text-slate-400">Step {step + 1} of {TOTAL_STEPS}</span>
           </div>
-          {/* Progress bar */}
           <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
-        </div>
-      </header>
-
-      <div className="max-w-3xl mx-auto px-4 py-8 flex gap-8">
-        {/* Section Nav (sidebar on desktop) */}
-        <nav className="hidden lg:block w-56 flex-shrink-0">
-          <div className="sticky top-28 space-y-1">
-            {SECTIONS.map((sec, i) => {
-              const { filled, total } = getSectionCompletion(i);
-              const Icon = sec.icon;
-              const isActive = i === currentSection;
-              const isComplete = filled === total && total > 0;
+          {/* Section pills */}
+          <div className="flex gap-1.5 mt-3 overflow-x-auto pb-1">
+            {sections.map((s) => {
+              const Icon = s.icon;
+              const isActive = s.id === step;
+              const complete = s.id >= 1 && s.id <= 5 && isSectionComplete(s.id);
               return (
-                <button
-                  key={i}
-                  onClick={() => { setCurrentSection(i); setCurrentStepInSection(0); }}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 ${
-                    isActive ? "bg-slate-700/50 text-white" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                  }`}
-                >
-                  <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-blue-400" : isComplete ? "text-emerald-400" : ""}`} />
-                  <span className="flex-1 truncate">{sec.title}</span>
-                  <span className={`text-xs ${isComplete ? "text-emerald-400" : "text-slate-500"}`}>
-                    {filled}/{total}
-                  </span>
+                <button key={s.id} onClick={() => setStep(s.id)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs whitespace-nowrap transition-all ${
+                    isActive ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" :
+                    complete ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                    "text-slate-500 border border-slate-700 hover:border-slate-600"
+                  }`}>
+                  {complete ? <Check className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
+                  <span className="hidden sm:inline">{s.title}</span>
                 </button>
               );
             })}
           </div>
-        </nav>
+        </div>
+      </header>
 
-        {/* Form Content */}
-        <div ref={formRef} className="flex-1 min-w-0">
-          {/* Section Header */}
-          <div className="mb-8">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r ${section.color} text-white text-sm font-medium mb-4`}>
-              <SectionIcon className="h-4 w-4" />
-              {section.title}
-            </div>
-            <p className="text-slate-400 text-sm">{section.description}</p>
-            {/* Section step dots */}
-            <div className="flex gap-1.5 mt-4">
-              {section.steps.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentStepInSection(i)}
-                  className={`h-1.5 rounded-full transition-all ${
-                    i === currentStepInSection ? "w-8 bg-blue-400" :
-                    formData[section.steps[i].field].trim() ? "w-4 bg-emerald-400/60" : "w-4 bg-slate-600"
-                  }`}
-                />
-              ))}
-            </div>
+      <div className="max-w-3xl mx-auto px-4 py-8" ref={contentRef}>
+        <div className="mb-6">
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r ${currentSection.color} text-white text-sm font-medium mb-3`}>
+            <SectionIcon className="h-4 w-4" />{currentSection.title}
           </div>
+          <p className="text-slate-400 text-sm">{currentSection.subtitle}</p>
+        </div>
 
-          {/* Current Step */}
-          <div className="space-y-4" onKeyDown={handleKeyDown}>
-            <Label className="text-white text-base font-medium">
-              {step.label}
-              {step.required && <span className="text-rose-400 ml-1">*</span>}
-            </Label>
+        <div className="mb-8">{stepRenderers[step]()}</div>
 
-            {step.type === "textarea" ? (
-              <Textarea
-                value={formData[step.field]}
-                onChange={(e) => updateField(step.field, e.target.value)}
-                placeholder={step.placeholder}
-                rows={5}
-                className="bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20 resize-none"
-                autoFocus
-              />
-            ) : (
-              <Input
-                value={formData[step.field]}
-                onChange={(e) => updateField(step.field, e.target.value)}
-                placeholder={step.placeholder}
-                className="bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-blue-500/20"
-                autoFocus
-              />
-            )}
-
-            {/* Example */}
-            {step.example && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 flex items-start gap-2">
-                <Lightbulb className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-slate-400">{step.example}</p>
-              </div>
-            )}
-
-            {/* Insight Card */}
-            {step.insight && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex items-start gap-2">
-                <Sparkles className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-blue-300">{step.insight}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-700/50">
-            <Button
-              variant="ghost"
-              onClick={goPrev}
-              disabled={absoluteStep === 0}
-              className="text-slate-400 hover:text-white"
-            >
+        {step < TOTAL_STEPS - 1 && (
+          <div className="flex items-center justify-between pt-6 border-t border-slate-700/50">
+            <Button variant="ghost" onClick={goBack} disabled={step === 0} className="text-slate-400 hover:text-white">
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
-
-            <div className="flex items-center gap-3">
-              {/* Skip (for non-required fields) */}
-              {!step.required && !isLastStep && (
-                <Button
-                  variant="ghost"
-                  onClick={goNext}
-                  className="text-slate-500 hover:text-slate-300"
-                >
-                  Skip
-                </Button>
-              )}
-
-              {isLastStep ? (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting || !canGoNext()}
-                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
-                >
-                  {submitting ? (
-                    "Submitting..."
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-1" /> Submit Onboarding
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  onClick={goNext}
-                  disabled={!canGoNext()}
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
-                >
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              )}
-            </div>
+            <Button onClick={goNext} disabled={!canGoNext()} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
+              {step === 0 ? "Get Started" : "Continue"} <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
           </div>
-
-          {/* Section quick nav (mobile) */}
-          <div className="lg:hidden mt-8 pt-6 border-t border-slate-700/50">
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Sections</p>
-            <div className="flex flex-wrap gap-2">
-              {SECTIONS.map((sec, i) => {
-                const { filled, total } = getSectionCompletion(i);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => { setCurrentSection(i); setCurrentStepInSection(0); }}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                      i === currentSection
-                        ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                        : filled === total && total > 0
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                        : "bg-slate-800 border-slate-700 text-slate-400"
-                    }`}
-                  >
-                    {sec.title} ({filled}/{total})
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
