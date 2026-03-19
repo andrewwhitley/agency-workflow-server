@@ -106,7 +106,7 @@ interface HealthEntry { id: number; departmentName: string; status: string; note
 
 // ── Tabs ─────────────────────────────────────
 
-const TABS = ["info", "services", "campaigns", "marketing-plan", "content-guide", "health", "brand-story"] as const;
+const TABS = ["info", "services", "campaigns", "deliverables", "content-guide", "health", "brand-story"] as const;
 type Tab = typeof TABS[number];
 
 export function ClientDetailPage() {
@@ -157,7 +157,7 @@ export function ClientDetailPage() {
       {tab === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
       {tab === "services" && <ServicesSection clientId={client.id} />}
       {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
-      {tab === "marketing-plan" && <MarketingPlanSection clientId={client.id} />}
+      {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
       {tab === "content-guide" && <ContentGuideSection clientId={client.id} />}
       {tab === "health" && <HealthTab clientId={client.id} />}
       {tab === "brand-story" && <BrandStoryTab clientId={client.id} />}

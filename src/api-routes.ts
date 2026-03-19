@@ -1383,5 +1383,71 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
     }
   });
 
+  // ═══════════════════════════════════════════════
+  //  DELIVERABLES — Import from Google Sheet
+  // ═══════════════════════════════════════════════
+
+  router.post("/cm/clients/:clientId/deliverables/import-sheet", async (req, res) => {
+    const { sheetId } = req.body;
+    if (!sheetId) { res.status(400).json({ error: "sheetId is required" }); return; }
+    if (!authService?.isAuthenticated()) { res.status(400).json({ error: "Google Drive not configured" }); return; }
+
+    try {
+      const driveService = new GoogleDriveService(authService.getClient());
+      const sheet = await driveService.readGoogleSheet(sheetId);
+      const rows = sheet.values || [];
+      if (rows.length < 2) { res.status(400).json({ error: "Sheet is empty" }); return; }
+
+      const clientId = parseInt(req.params.clientId);
+
+      // Delete existing deliverables for this client to re-import
+      await query("DELETE FROM cm_marketing_plan WHERE client_id = $1", [clientId]);
+
+      let currentCategory = "";
+      let imported = 0;
+
+      for (const row of rows) {
+        const col0 = (row[0] || "").trim();
+        const col1 = (row[1] || "").trim();
+        const col2 = (row[2] || "").trim();
+        const col3 = (row[3] || "").trim();
+
+        // Skip the header row
+        if (col0 === "Marketing Plan:" || col0 === "") continue;
+
+        // Category headers: rows with no col1 (no TRUE/FALSE) and only col0
+        if (!col1 && !col2 && !col3) {
+          currentCategory = col0;
+          continue;
+        }
+
+        // Data row: item, included, deliverables, notes
+        if (!currentCategory) currentCategory = "General";
+        const isIncluded = col1.toUpperCase() === "TRUE";
+
+        // Parse quantity from deliverables if it's just a number
+        let quantityVal: number | null = null;
+        let deliverables = col2;
+        const numMatch = col2.match(/^(\d+)$/);
+        if (numMatch) {
+          quantityVal = parseInt(numMatch[1]);
+          deliverables = "";
+        }
+
+        await query(
+          `INSERT INTO cm_marketing_plan (client_id, category, item, is_included, quantity, deliverables, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [clientId, currentCategory, col0, isIncluded, quantityVal, deliverables || null, col3 || null]
+        );
+        imported++;
+      }
+
+      res.json({ success: true, imported });
+    } catch (err) {
+      console.error("Import deliverables sheet error:", err);
+      res.status(500).json({ error: "Failed to import sheet" });
+    }
+  });
+
   return router;
 }

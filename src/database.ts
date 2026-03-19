@@ -1397,6 +1397,12 @@ Before saving, verify:
     `,
   },
   {
+    id: "031_marketing_plan_deliverables",
+    sql: `
+      ALTER TABLE cm_marketing_plan ADD COLUMN IF NOT EXISTS deliverables TEXT;
+    `,
+  },
+  {
     id: "030_fix_sms_phone_label",
     sql: `
       UPDATE cm_phone_numbers SET label = 'Main' WHERE label = 'SMS';
