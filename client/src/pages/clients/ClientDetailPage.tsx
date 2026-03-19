@@ -91,7 +91,7 @@ interface Contact { id: number; name: string; role: string | null; email: string
 interface Address { id: number; label: string; streetAddress: string | null; city: string | null; state: string | null; postalCode: string | null; locationType: string; notes: string | null; isPrimary: boolean; }
 interface Service { id: number; category: string; serviceName: string; offered: boolean; price: number | null; duration: string | null; description: string | null; descriptionLong: string | null; idealPatientProfile: string | null; goodFitCriteria: string | null; notGoodFitCriteria: string | null; targetAgeRange: string | null; targetGender: string | null; targetConditions: string | null; targetInterests: string | null; serviceAreaCities: string | null; differentiators: string | null; expectedOutcomes: string | null; commonConcerns: string | null; parentServiceId: number | null; sortOrder: number; }
 interface ServiceArea { id: number; targetCities: string | null; targetCounties: string | null; notes: string | null; }
-interface TeamMember { id: number; fullName: string; role: string | null; email: string | null; phone: string | null; photoUrl: string | null; linkedinUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; bio: string | null; useForAttribution: boolean; preferredContactMethod: string | null; specialties: string | null; credentials: string | null; servicesOffered: string | null; gravatarEmail: string | null; tiktokUrl: string | null; twitterUrl: string | null; youtubeUrl: string | null; websiteUrl: string | null; education: string | null; yearsExperience: number | null; professionalMemberships: string | null; languagesSpoken: string | null; acceptingNewPatients: boolean; }
+interface TeamMember { id: number; fullName: string; role: string | null; email: string | null; phone: string | null; photoUrl: string | null; linkedinUrl: string | null; facebookUrl: string | null; instagramUrl: string | null; bio: string | null; useForAttribution: boolean; preferredContactMethod: string | null; specialties: string | null; credentials: string | null; servicesOffered: string | null; gravatarEmail: string | null; tiktokUrl: string | null; twitterUrl: string | null; youtubeUrl: string | null; websiteUrl: string | null; education: string | null; yearsExperience: number | null; professionalMemberships: string | null; languagesSpoken: string | null; acceptingNewPatients: boolean; linktreeUrl: string | null; }
 interface Competitor { id: number; companyName: string; url: string | null; usps: string | null; description: string | null; rank: number | null; }
 interface Differentiator { id: number; category: string; title: string | null; description: string; }
 interface ImportantLink { id: number; linkType: string; url: string; label: string | null; notes: string | null; }
@@ -274,9 +274,9 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
         </>)}
       />
 
-      {/* Contacts (Marketing Contacts) */}
+      {/* Marketing Contacts */}
       <CrudSection<Contact> title="Marketing Contacts" clientId={client.id} entityPath="contacts"
-        emptyForm={() => ({ name: "", role: "", email: "", phone: "", phoneType: "", notes: "", isPrimary: false, shouldAttribute: false, linktreeUrl: "", gravatarEmail: "", marketingRole: "", preferredContactMethod: "", responseTime: "", approvalAuthority: false } as Partial<Contact>)}
+        emptyForm={() => ({ name: "", role: "", email: "", phone: "", phoneType: "", notes: "", isPrimary: false, marketingRole: "", preferredContactMethod: "", responseTime: "", approvalAuthority: false } as Partial<Contact>)}
         renderItem={(c, onEdit, onDelete) => (
           <CrudItem onEdit={onEdit} onDelete={onDelete}>
             <div className="flex items-center gap-2 mb-1">
@@ -288,16 +288,18 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
             <div className="flex flex-wrap gap-3 text-xs text-dim">
               {c.email && <span>{c.email}</span>}
               {c.phone && <span>{c.phone}{c.phoneType ? ` (${c.phoneType})` : ""}</span>}
-              {c.marketingRole && <span className="text-accent">{c.marketingRole}</span>}
+              {c.preferredContactMethod && <span>Prefers: {c.preferredContactMethod}</span>}
+              {c.responseTime && <span>Response: {c.responseTime}</span>}
             </div>
+            {c.marketingRole && <div className="text-xs text-accent mt-0.5">{c.marketingRole}</div>}
           </CrudItem>
         )}
         renderForm={(form, upd) => (<>
           <FormField label="Name" value={form.name || ""} onChange={(v) => upd("name", v)} required />
-          <FormField label="Role / Title" value={form.role || ""} onChange={(v) => upd("role", v)} />
-          <FormField label="Marketing Role" value={form.marketingRole || ""} onChange={(v) => upd("marketingRole", v)} placeholder="e.g. Approves content, Reviews ads" />
+          <FormField label="Role / Title" value={form.role || ""} onChange={(v) => upd("role", v)} placeholder="e.g. Office Manager, Owner" />
+          <FormField label="Marketing Coordination Role" value={form.marketingRole || ""} onChange={(v) => upd("marketingRole", v)} placeholder="e.g. Approves content, Reviews ads, Provides photos" />
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Email" value={form.email || ""} onChange={(v) => upd("email", v)} />
+            <FormField label="Email" type="email" value={form.email || ""} onChange={(v) => upd("email", v)} />
             <FormField label="Phone" value={form.phone || ""} onChange={(v) => upd("phone", v)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -313,13 +315,10 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
               ]} />
             <FormField label="Response Time" value={form.responseTime || ""} onChange={(v) => upd("responseTime", v)} placeholder="e.g. Same day, 24-48hrs" />
           </div>
-          <FormField label="Gravatar Email" type="email" value={form.gravatarEmail || ""} onChange={(v) => upd("gravatarEmail", v)} />
-          <FormField label="Linktree URL" value={form.linktreeUrl || ""} onChange={(v) => upd("linktreeUrl", v)} />
           <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
           <div className="flex gap-4">
             <FormField label="Primary Contact" type="checkbox" checked={!!form.isPrimary} onChange={(v) => upd("isPrimary", v)} />
             <FormField label="Approval Authority" type="checkbox" checked={!!form.approvalAuthority} onChange={(v) => upd("approvalAuthority", v)} />
-            <FormField label="Use for Attribution" type="checkbox" checked={!!form.shouldAttribute} onChange={(v) => upd("shouldAttribute", v)} />
           </div>
         </>)}
       />
@@ -355,14 +354,14 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
 
       {/* Team Members (Bio-Page Focused) */}
       <CrudSection<TeamMember> title="Team Members" clientId={client.id} entityPath="team-members" wide
-        emptyForm={() => ({ fullName: "", role: "", email: "", phone: "", bio: "", linkedinUrl: "", facebookUrl: "", instagramUrl: "", tiktokUrl: "", twitterUrl: "", youtubeUrl: "", websiteUrl: "", useForAttribution: false, gravatarEmail: "", specialties: "", credentials: "", servicesOffered: "", education: "", yearsExperience: null, professionalMemberships: "", languagesSpoken: "", acceptingNewPatients: true } as Partial<TeamMember>)}
+        emptyForm={() => ({ fullName: "", role: "", email: "", phone: "", bio: "", linkedinUrl: "", facebookUrl: "", instagramUrl: "", tiktokUrl: "", twitterUrl: "", youtubeUrl: "", websiteUrl: "", useForAttribution: false, gravatarEmail: "", specialties: "", credentials: "", servicesOffered: "", education: "", yearsExperience: null, professionalMemberships: "", languagesSpoken: "", acceptingNewPatients: true, linktreeUrl: "" } as Partial<TeamMember>)}
         renderItem={(m, onEdit, onDelete) => (
           <CrudItem onEdit={onEdit} onDelete={onDelete}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-foreground">{m.fullName}</span>
               {m.role && <span className="text-xs text-muted">({m.role})</span>}
               {m.useForAttribution && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">Attribution</span>}
-              {m.acceptingNewPatients === false && <span className="text-xs px-2 py-0.5 rounded bg-warning/10 text-warning">Not Accepting</span>}
+              {m.acceptingNewPatients === false && <span className="text-xs px-2 py-0.5 rounded bg-warning/10 text-warning">Not Accepting Clients</span>}
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-dim">
               {m.email && <span>{m.email}</span>}
@@ -394,6 +393,7 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
           </div>
           <FormField label="Professional Memberships" type="textarea" value={form.professionalMemberships || ""} onChange={(v) => upd("professionalMemberships", v)} />
           <FormField label="Photo URL" value={form.photoUrl || ""} onChange={(v) => upd("photoUrl", v)} />
+          <FormField label="Linktree URL" value={form.linktreeUrl || ""} onChange={(v) => upd("linktreeUrl", v)} />
           <div className="grid grid-cols-3 gap-4">
             <FormField label="LinkedIn" value={form.linkedinUrl || ""} onChange={(v) => upd("linkedinUrl", v)} />
             <FormField label="Facebook" value={form.facebookUrl || ""} onChange={(v) => upd("facebookUrl", v)} />
@@ -407,7 +407,7 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
           <FormField label="Website" value={form.websiteUrl || ""} onChange={(v) => upd("websiteUrl", v)} />
           <div className="flex gap-4">
             <FormField label="Use for Attribution" type="checkbox" checked={!!form.useForAttribution} onChange={(v) => upd("useForAttribution", v)} />
-            <FormField label="Accepting New Patients" type="checkbox" checked={form.acceptingNewPatients !== false} onChange={(v) => upd("acceptingNewPatients", v)} />
+            <FormField label="Accepting New Clients" type="checkbox" checked={form.acceptingNewPatients !== false} onChange={(v) => upd("acceptingNewPatients", v)} />
           </div>
         </>)}
       />

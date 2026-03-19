@@ -225,7 +225,7 @@ export function OnboardingPage() {
             <Field label="Target Revenue"><Input value={form.targetRevenue} onChange={(e) => upd("targetRevenue", e.target.value)} type="number" /></Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Current # of Customers"><Input value={form.numberOfCustomers} onChange={(e) => upd("numberOfCustomers", e.target.value)} type="number" /></Field>
+            <Field label="Current # of Clients"><Input value={form.numberOfCustomers} onChange={(e) => upd("numberOfCustomers", e.target.value)} type="number" /></Field>
             <Field label="Desired New Clients/Month"><Input value={form.desiredNewClients} onChange={(e) => upd("desiredNewClients", e.target.value)} type="number" /></Field>
           </div>
           <Field label="Avg Client Lifetime Value"><Input value={form.avgClientLifetimeValue} onChange={(e) => upd("avgClientLifetimeValue", e.target.value)} type="number" /></Field>
@@ -254,7 +254,7 @@ export function OnboardingPage() {
         {step === 5 && (<>
           <h3 className="text-sm font-semibold text-foreground mb-2">Marketing Goals & Strategy</h3>
           <Field label="Marketing Goals"><Textarea value={form.marketingGoals} onChange={(e) => upd("marketingGoals", e.target.value)} rows={3} placeholder="What does the client want to achieve?" /></Field>
-          <Field label="Target Audience"><Textarea value={form.targetAudience} onChange={(e) => upd("targetAudience", e.target.value)} rows={3} placeholder="Who is the ideal customer?" /></Field>
+          <Field label="Target Audience"><Textarea value={form.targetAudience} onChange={(e) => upd("targetAudience", e.target.value)} rows={3} placeholder="Who is the ideal client?" /></Field>
           <Field label="Competitors"><Textarea value={form.competitorNames} onChange={(e) => upd("competitorNames", e.target.value)} rows={2} placeholder="List main competitors, one per line" /></Field>
           <Field label="Unique Selling Points"><Textarea value={form.uniqueSellingPoints} onChange={(e) => upd("uniqueSellingPoints", e.target.value)} rows={3} placeholder="What makes this business different?" /></Field>
           <Field label="Brand Voice"><Textarea value={form.brandVoice} onChange={(e) => upd("brandVoice", e.target.value)} rows={2} placeholder="How should the brand sound? (e.g. professional, warm, authoritative)" /></Field>

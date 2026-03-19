@@ -75,7 +75,7 @@ const SECTIONS: SectionConfig[] = [
     title: "Financial & Business Metrics",
     fields: [
       { key: "numberOfEmployees", label: "Number of Employees", type: "number" },
-      { key: "numberOfCustomers", label: "Number of Customers", type: "number", periodKey: "numberOfCustomersPeriod" },
+      { key: "numberOfCustomers", label: "Number of Clients", type: "number", periodKey: "numberOfCustomersPeriod" },
       { key: "desiredNewClients", label: "Desired New Clients", type: "number", periodKey: "desiredNewClientsPeriod" },
       { key: "avgClientLifetimeValue", label: "Avg Client Lifetime Value", type: "number" },
       { key: "estimatedAnnualRevenue", label: "Estimated Revenue", type: "number", periodKey: "estimatedAnnualRevenuePeriod" },

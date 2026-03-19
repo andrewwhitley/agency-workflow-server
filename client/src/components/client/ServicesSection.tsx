@@ -176,7 +176,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
                   <div className="space-y-3">
                     {s.idealPatientProfile && (
                       <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Ideal Patient Profile</div>
+                        <div className="text-xs font-medium text-dim mb-0.5">Ideal Client Profile</div>
                         <div className="text-sm text-foreground whitespace-pre-wrap">{s.idealPatientProfile}</div>
                       </div>
                     )}
@@ -285,7 +285,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         <FormField label="Offered" type="checkbox" checked={svcForm.offered ?? true} onChange={(v) => upd("offered", v)} />
         <FormField label="Short Description" value={svcForm.description || ""} onChange={(v) => upd("description", v)} />
         <FormField label="Full Description" type="textarea" value={svcForm.descriptionLong || ""} onChange={(v) => upd("descriptionLong", v)} rows={4} />
-        <FormField label="Ideal Patient Profile" type="textarea" value={svcForm.idealPatientProfile || ""} onChange={(v) => upd("idealPatientProfile", v)} placeholder="Who is this service for?" rows={3} />
+        <FormField label="Ideal Client Profile" type="textarea" value={svcForm.idealPatientProfile || ""} onChange={(v) => upd("idealPatientProfile", v)} placeholder="Who is this service for?" rows={3} />
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Good Fit Criteria" type="textarea" value={svcForm.goodFitCriteria || ""} onChange={(v) => upd("goodFitCriteria", v)} placeholder="Best candidates for this service" rows={3} />
           <FormField label="Not a Good Fit" type="textarea" value={svcForm.notGoodFitCriteria || ""} onChange={(v) => upd("notGoodFitCriteria", v)} placeholder="Who should look elsewhere" rows={3} />
@@ -298,7 +298,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         <FormField label="Target Interests" value={svcForm.targetInterests || ""} onChange={(v) => upd("targetInterests", v)} placeholder="e.g. wellness, holistic health" />
         <FormField label="Service Area Cities" value={svcForm.serviceAreaCities || ""} onChange={(v) => upd("serviceAreaCities", v)} placeholder="Cities this service targets specifically" />
         <FormField label="Differentiators" type="textarea" value={svcForm.differentiators || ""} onChange={(v) => upd("differentiators", v)} placeholder="What makes this service different from competitors?" rows={3} />
-        <FormField label="Expected Outcomes" type="textarea" value={svcForm.expectedOutcomes || ""} onChange={(v) => upd("expectedOutcomes", v)} placeholder="What patients can expect" rows={3} />
+        <FormField label="Expected Outcomes" type="textarea" value={svcForm.expectedOutcomes || ""} onChange={(v) => upd("expectedOutcomes", v)} placeholder="What clients can expect" rows={3} />
         <FormField label="Common Concerns / FAQs" type="textarea" value={svcForm.commonConcerns || ""} onChange={(v) => upd("commonConcerns", v)} placeholder="Frequently asked questions or objections" rows={3} />
         <FormField label="Notes" type="textarea" value={svcForm.notes || ""} onChange={(v) => upd("notes", v)} rows={2} />
       </FormDialog>
