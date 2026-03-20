@@ -165,13 +165,16 @@ export function ClientDetailPage() {
       {tab === "services" && <ServicesSection clientId={client.id} />}
       {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
       {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
-      {tab === "content-guide" && <ContentGuideSection clientId={client.id} />}
-      {tab === "health" && <HealthTab clientId={client.id} />}
-      {tab === "brand-story" && (
+      {tab === "content-guide" && (
         <div className="space-y-8">
           <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
-          <BrandStoryTab clientId={client.id} clientName={client.companyName} />
+          <ImportDocumentsSection clientId={client.id} onComplete={() => { /* reload handled by content guide */ }} />
+          <ContentGuideSection clientId={client.id} />
         </div>
+      )}
+      {tab === "health" && <HealthTab clientId={client.id} />}
+      {tab === "brand-story" && (
+        <BrandStoryTab clientId={client.id} clientName={client.companyName} />
       )}
     </div>
   );
@@ -625,6 +628,89 @@ function HealthTab({ clientId }: { clientId: number }) {
   );
 }
 
+// ── Import Documents Section ──────────────────────────────────
+
+function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; onComplete: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [docIds, setDocIds] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleImport = async () => {
+    const ids = docIds.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
+    if (ids.length === 0) return;
+    setImporting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api<Record<string, unknown>>(`/cm/clients/${clientId}/import`, {
+        method: "POST",
+        body: JSON.stringify({ documentIds: ids, generateStory: false, enrichFromWeb: true }),
+      });
+      setResult(res);
+      onComplete();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+    }
+    setImporting(false);
+  };
+
+  if (!isOpen) {
+    return (
+      <div className="flex items-center gap-3">
+        <Button size="sm" variant="outline" onClick={() => setIsOpen(true)}>
+          <FileText className="h-3 w-3 mr-1.5" /> Import from Documents
+        </Button>
+        <span className="text-xs text-dim">Paste Google Doc/Sheet IDs to auto-fill the content guide</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <FileText className="h-4 w-4 text-blue-400" /> Import from Documents
+        </h3>
+        <Button size="sm" variant="ghost" onClick={() => { setIsOpen(false); setResult(null); setError(null); }}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <p className="text-xs text-dim">
+        Paste Google Doc or Sheet IDs/URLs (one per line or comma-separated). AI will extract
+        business data and fill in the content guide fields automatically.
+      </p>
+      <textarea
+        value={docIds}
+        onChange={(e) => setDocIds(e.target.value)}
+        placeholder={"Paste document IDs or URLs here...\ne.g., 1h5L...abc\nhttps://docs.google.com/document/d/1WWj..."}
+        className="w-full min-h-[100px] text-sm bg-surface-2 text-foreground border border-border rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+      />
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={handleImport} disabled={importing || !docIds.trim()}>
+          {importing ? (
+            <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" /> Importing...</>
+          ) : (
+            <><Sparkles className="h-3 w-3 mr-1.5" /> Extract & Import</>
+          )}
+        </Button>
+        {importing && <span className="text-xs text-dim">This may take 30-60 seconds...</span>}
+      </div>
+      {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
+      {result && (
+        <div className="text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2 text-success">
+          Import complete! {(result as any).summary?.fieldsExtracted || 0} fields extracted,{" "}
+          {(result as any).summary?.fieldsEnriched || 0} enriched from web.
+          {Object.entries((result as any).summary?.entitiesCreated || {}).map(([k, v]) => (
+            <span key={k} className="ml-2">{String(v)} {k}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Brand Story Tab (full generation + editing) ───────────────
 
 const BRAND_STORY_SECTIONS = [
@@ -741,6 +827,7 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [data, setData] = useState<BrandStoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generatingScript, setGeneratingScript] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -749,6 +836,7 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [savingSection, setSavingSection] = useState(false);
   const [regenSectionLoading, setRegenSectionLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"brandscript" | "full">("brandscript");
 
   const reload = useCallback(() => {
     api<BrandStoryData>(`/cm/clients/${clientId}/brand-story`).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
@@ -821,6 +909,18 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       }
       reload();
     } catch (e) { console.error(e); }
+  };
+
+  const handleGenerateScript = async () => {
+    setGeneratingScript(true);
+    setStatusMsg("Generating BrandScript... This may take 30-60 seconds.");
+    try {
+      await api(`/cm/clients/${clientId}/brand-story/generate-brandscript`, { method: "POST" });
+      setStatusMsg("BrandScript generated!");
+      reload();
+    } catch (e) { setStatusMsg("BrandScript generation failed. Please try again."); console.error(e); }
+    setGeneratingScript(false);
+    setTimeout(() => setStatusMsg(null), 4000);
   };
 
   const handleRevokeShare = async () => {
@@ -926,63 +1026,11 @@ ${sectionsHtml}
 
   if (loading) return <div className="text-sm text-dim">Loading brand story...</div>;
 
-  // ── No story generated yet — show generate CTA ──
+  const brandscript = (story as any)?.brandscript as Record<string, unknown> | null;
+  const hasBrandScript = !!brandscript;
+  const hasFullStory = story && story.status !== "draft" && !!story.heroSection;
 
-  if (!hasGeneratedStory) {
-    return (
-      <div className="space-y-6">
-        {buyerPersonas.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Target className="h-4 w-4 text-purple-400" /> Buyer Personas</h3>
-            {buyerPersonas.map((p, i) => <BuyerPersonaCard key={i} persona={p} />)}
-          </div>
-        )}
-
-        <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
-            <BookOpen className="h-8 w-8 text-blue-400" />
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">Generate {clientName}'s Brand Story</h3>
-            <p className="text-dim max-w-lg mx-auto text-sm">
-              Create a comprehensive Brand Story Guide using all the intake data, company info,
-              and content guidelines. This generates 12 detailed sections covering your customer,
-              messaging, content strategy, and implementation plan.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto">
-            {[
-              { label: "Customer & Problem", icon: Users, color: "text-blue-400" },
-              { label: "Authority & Process", icon: Compass, color: "text-emerald-400" },
-              { label: "Transformation", icon: Trophy, color: "text-amber-400" },
-              { label: "Content Strategy", icon: FileText, color: "text-purple-400" },
-            ].map((item) => (
-              <div key={item.label} className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-surface-2">
-                <item.icon className={`h-5 w-5 ${item.color}`} />
-                <span className="text-xs font-medium text-dim">{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 max-w-lg mx-auto">
-            <p className="text-sm text-amber-300">
-              <strong>Note:</strong> Generation uses AI to create 12 detailed sections. This may take 1-2 minutes.
-              {story?.status === "draft" && " Onboarding data has been collected and is ready to use."}
-            </p>
-          </div>
-          {statusMsg && <p className="text-sm text-accent">{statusMsg}</p>}
-          <Button onClick={handleGenerate} disabled={generating} className="px-8">
-            {generating ? (
-              <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating Brand Story...</>
-            ) : (
-              <><Wand2 className="h-4 w-4 mr-2" /> Generate Brand Story</>
-            )}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Brand Story Generated — full view ──
+  // ── Mode Toggle + Status ──
 
   const statusColors: Record<string, string> = {
     draft: "bg-surface-2 text-dim", generated: "bg-blue-500/10 text-blue-400",
@@ -991,65 +1039,301 @@ ${sectionsHtml}
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Mode Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-400" /> Brand Story
-          </h2>
-          <p className="text-sm text-dim mt-1">Complete brand messaging and content strategy guide</p>
+        <div className="flex items-center gap-1 bg-surface-2 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode("brandscript")}
+            className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              viewMode === "brandscript" ? "bg-accent text-white" : "text-dim hover:text-foreground")}
+          >
+            BrandScript
+          </button>
+          <button
+            onClick={() => setViewMode("full")}
+            className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors",
+              viewMode === "full" ? "bg-accent text-white" : "text-dim hover:text-foreground")}
+          >
+            Full Brand Story
+          </button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        {story && (
           <span className={cn("text-xs px-2 py-0.5 rounded font-medium capitalize", statusColors[story.status] || statusColors.draft)}>
             {story.status}
           </span>
-          {story.status === "generated" && (
-            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("reviewed")}>
-              <Check className="h-3 w-3 mr-1" /> Mark Reviewed
-            </Button>
-          )}
-          {story.status === "reviewed" && (
-            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("approved")}>
-              <Check className="h-3 w-3 mr-1" /> Approve
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={expandAll}><ChevronDown className="h-3 w-3 mr-1" /> Expand All</Button>
-          <Button size="sm" variant="outline" onClick={collapseAll}><ChevronRight className="h-3 w-3 mr-1" /> Collapse All</Button>
-          {story.shareToken ? (
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant="outline" onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
-              }}><Copy className="h-3 w-3 mr-1" /> Copy Link</Button>
-              <Button size="sm" variant="ghost" className="text-red-400" onClick={handleRevokeShare}><Unlink className="h-3 w-3" /></Button>
-            </div>
-          ) : (
-            <Button size="sm" variant="outline" onClick={handleShare}><Share2 className="h-3 w-3 mr-1" /> Share</Button>
-          )}
-          <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-3 w-3 mr-1" /> Export PDF</Button>
-          <Button size="sm" variant="outline" onClick={handleRegenerateAll} disabled={generating}>
-            {generating ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate All
-          </Button>
-        </div>
+        )}
       </div>
 
       {statusMsg && <p className="text-sm text-accent">{statusMsg}</p>}
 
-      {/* Buyer Personas */}
-      {buyerPersonas.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Target className="h-4 w-4 text-purple-400" /> Buyer Personas
-            <span className="text-[10px] px-1.5 py-0 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Audience</span>
-          </h3>
-          {buyerPersonas.map((p, i) => <BuyerPersonaCard key={i} persona={p} />)}
+      {/* ═══ BRANDSCRIPT VIEW ═══ */}
+      {viewMode === "brandscript" && (
+        <>
+          {!hasBrandScript ? (
+            <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <BookOpen className="h-8 w-8 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Generate {clientName}'s BrandScript</h3>
+              <p className="text-dim max-w-lg mx-auto text-sm">
+                Create a concise 2-page BrandScript — the core 7-part messaging framework.
+                Perfect for a quick deliverable or as the starting point before the full brand story.
+              </p>
+              <Button onClick={handleGenerateScript} disabled={generatingScript} className="px-8">
+                {generatingScript ? (
+                  <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating BrandScript...</>
+                ) : (
+                  <><Wand2 className="h-4 w-4 mr-2" /> Generate BrandScript</>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button size="sm" variant="outline" onClick={handleGenerateScript} disabled={generatingScript}>
+                  {generatingScript ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate
+                </Button>
+                {story?.shareToken ? (
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
+                    }}><Copy className="h-3 w-3 mr-1" /> Copy Link</Button>
+                    <Button size="sm" variant="ghost" className="text-red-400" onClick={handleRevokeShare}><Unlink className="h-3 w-3" /></Button>
+                  </div>
+                ) : story && (
+                  <Button size="sm" variant="outline" onClick={handleShare}><Share2 className="h-3 w-3 mr-1" /> Share</Button>
+                )}
+                <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-3 w-3 mr-1" /> Export PDF</Button>
+              </div>
+
+              {/* One-Liner */}
+              {brandscript.oneLiner && (
+                <div className="bg-surface border border-border rounded-lg p-6">
+                  <div className="text-xs font-semibold text-dim uppercase mb-2">One-Liner</div>
+                  <div className="text-lg font-medium text-foreground">{String(brandscript.oneLiner)}</div>
+                </div>
+              )}
+
+              {/* Character */}
+              {brandscript.character && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="h-4 w-4 text-blue-400" />
+                    <span className="text-sm font-semibold text-foreground">The Character (Customer)</span>
+                  </div>
+                  <div className="text-sm text-foreground whitespace-pre-wrap">{String(brandscript.character)}</div>
+                </div>
+              )}
+
+              {/* Problem */}
+              {brandscript.problem && typeof brandscript.problem === "object" && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-red-400" />
+                    <span className="text-sm font-semibold text-foreground">The Problem</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(["villain", "external", "internal", "philosophical"] as const).map((key) => {
+                      const val = (brandscript.problem as Record<string, unknown>)[key];
+                      if (!val) return null;
+                      const labels: Record<string, string> = { villain: "Root Cause", external: "External", internal: "Internal", philosophical: "Philosophical" };
+                      const colors: Record<string, string> = { villain: "border-l-red-500", external: "border-l-orange-400", internal: "border-l-amber-400", philosophical: "border-l-yellow-400" };
+                      return (
+                        <div key={key} className={`border-l-4 ${colors[key]} bg-surface-2 rounded-r-md p-3`}>
+                          <div className="text-[10px] font-semibold text-dim uppercase mb-1">{labels[key]}</div>
+                          <div className="text-sm text-foreground">{String(val)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Guide */}
+              {brandscript.guide && typeof brandscript.guide === "object" && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="h-4 w-4 text-emerald-400" />
+                    <span className="text-sm font-semibold text-foreground">The Guide (You)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(["empathy", "authority"] as const).map((key) => {
+                      const val = (brandscript.guide as Record<string, unknown>)[key];
+                      if (!val) return null;
+                      return (
+                        <div key={key} className="bg-surface-2 rounded-md p-3">
+                          <div className="text-[10px] font-semibold text-dim uppercase mb-1">{key}</div>
+                          <div className="text-sm text-foreground whitespace-pre-wrap">{String(val)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Plan */}
+              {brandscript.plan && typeof brandscript.plan === "object" && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Compass className="h-4 w-4 text-amber-400" />
+                    <span className="text-sm font-semibold text-foreground">The Plan</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {(["step1", "step2", "step3"] as const).map((key, idx) => {
+                      const val = (brandscript.plan as Record<string, unknown>)[key];
+                      if (!val) return null;
+                      return (
+                        <div key={key} className="flex-1 bg-surface-2 rounded-md p-3 text-center">
+                          <div className="text-lg font-bold text-accent mb-1">{idx + 1}</div>
+                          <div className="text-sm text-foreground">{String(val)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* CTA */}
+              {brandscript.callToAction && typeof brandscript.callToAction === "object" && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MousePointerClick className="h-4 w-4 text-purple-400" />
+                    <span className="text-sm font-semibold text-foreground">Call to Action</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(["direct", "transitional"] as const).map((key) => {
+                      const val = (brandscript.callToAction as Record<string, unknown>)[key];
+                      if (!val) return null;
+                      return (
+                        <div key={key} className={`rounded-md p-3 ${key === "direct" ? "bg-accent/10 border border-accent/20" : "bg-surface-2"}`}>
+                          <div className="text-[10px] font-semibold text-dim uppercase mb-1">{key === "direct" ? "Direct CTA" : "Transitional CTA"}</div>
+                          <div className="text-sm text-foreground font-medium">{String(val)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Success & Failure */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {brandscript.success && (
+                  <div className="bg-surface border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Trophy className="h-4 w-4 text-green-400" />
+                      <span className="text-sm font-semibold text-foreground">Success</span>
+                    </div>
+                    <div className="text-sm text-foreground whitespace-pre-wrap">{String(brandscript.success)}</div>
+                  </div>
+                )}
+                {brandscript.failure && (
+                  <div className="bg-surface border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Skull className="h-4 w-4 text-rose-400" />
+                      <span className="text-sm font-semibold text-foreground">Failure</span>
+                    </div>
+                    <div className="text-sm text-foreground whitespace-pre-wrap">{String(brandscript.failure)}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Transformation */}
+              {(brandscript.transformationBefore || brandscript.transformationAfter) && (
+                <div className="bg-surface border border-border rounded-lg p-4">
+                  <div className="text-sm font-semibold text-foreground mb-3">The Transformation</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {brandscript.transformationBefore && (
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-md p-3">
+                        <div className="text-[10px] font-semibold text-red-400 uppercase mb-1">Before</div>
+                        <div className="text-sm text-foreground">{String(brandscript.transformationBefore)}</div>
+                      </div>
+                    )}
+                    {brandscript.transformationAfter && (
+                      <div className="bg-green-500/5 border border-green-500/20 rounded-md p-3">
+                        <div className="text-[10px] font-semibold text-green-400 uppercase mb-1">After</div>
+                        <div className="text-sm text-foreground">{String(brandscript.transformationAfter)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══ FULL BRAND STORY VIEW ═══ */}
+      {viewMode === "full" && !hasFullStory && (
+        <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-4">
+          <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+            <BookOpen className="h-8 w-8 text-blue-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-foreground">Generate {clientName}'s Full Brand Story</h3>
+          <p className="text-dim max-w-lg mx-auto text-sm">
+            Create a comprehensive 12-section Brand Story Guide covering customer messaging,
+            content strategy, brand identity, and implementation roadmap.
+          </p>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 max-w-lg mx-auto">
+            <p className="text-sm text-amber-300">This takes 1-2 minutes to generate all 12 sections.</p>
+          </div>
+          <Button onClick={handleGenerate} disabled={generating} className="px-8">
+            {generating ? (
+              <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating Full Brand Story...</>
+            ) : (
+              <><Wand2 className="h-4 w-4 mr-2" /> Generate Full Brand Story</>
+            )}
+          </Button>
         </div>
       )}
 
-      {/* Brand Colors */}
-      {brandColors && <ColorSwatches colorStr={brandColors} />}
+      {viewMode === "full" && hasFullStory && (
+        <>
+          {/* Full Story Header Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {story.status === "generated" && (
+              <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("reviewed")}>
+                <Check className="h-3 w-3 mr-1" /> Mark Reviewed
+              </Button>
+            )}
+            {story.status === "reviewed" && (
+              <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("approved")}>
+                <Check className="h-3 w-3 mr-1" /> Approve
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={expandAll}><ChevronDown className="h-3 w-3 mr-1" /> Expand All</Button>
+            <Button size="sm" variant="outline" onClick={collapseAll}><ChevronRight className="h-3 w-3 mr-1" /> Collapse All</Button>
+            {story.shareToken ? (
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
+                }}><Copy className="h-3 w-3 mr-1" /> Copy Link</Button>
+                <Button size="sm" variant="ghost" className="text-red-400" onClick={handleRevokeShare}><Unlink className="h-3 w-3" /></Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={handleShare}><Share2 className="h-3 w-3 mr-1" /> Share</Button>
+            )}
+            <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-3 w-3 mr-1" /> Export PDF</Button>
+            <Button size="sm" variant="outline" onClick={handleRegenerateAll} disabled={generating}>
+              {generating ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate All
+            </Button>
+          </div>
 
-      {/* Sections */}
-      <div className="space-y-3">
+          {/* Buyer Personas */}
+          {buyerPersonas.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Target className="h-4 w-4 text-purple-400" /> Buyer Personas
+                <span className="text-[10px] px-1.5 py-0 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Audience</span>
+              </h3>
+              {buyerPersonas.map((p, i) => <BuyerPersonaCard key={i} persona={p} />)}
+            </div>
+          )}
+
+          {/* Brand Colors */}
+          {brandColors && <ColorSwatches colorStr={brandColors} />}
+
+          {/* Sections */}
+          <div className="space-y-3">
         {BRAND_STORY_SECTIONS.map((def) => {
           const sectionData = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
           if (!sectionData?.content) return null;
@@ -1136,7 +1420,9 @@ ${sectionsHtml}
             </div>
           );
         })}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

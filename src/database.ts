@@ -1430,6 +1430,13 @@ Before saving, verify:
     `,
   },
   {
+    id: "036_brandscript",
+    sql: `
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS brandscript JSONB;
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS brandscript_generated_at TIMESTAMPTZ;
+    `,
+  },
+  {
     id: "035_source_tracking",
     sql: `
       -- Source tracking: JSONB for flat tables, VARCHAR for sub-entity rows

@@ -648,6 +648,96 @@ export async function updateBrandStorySection(
   return { success: true };
 }
 
+// ── BrandScript (Short 2-Page Version) ──────────────────────
+
+const BRANDSCRIPT_SYSTEM_PROMPT = `You are a world-class brand strategist creating a concise BrandScript — a 2-page brand messaging framework. This should be punchy, specific, and immediately useful. No fluff.
+
+Output ONLY valid JSON with the following structure:
+{
+  "oneLiner": "A single sentence: [Problem] + [Solution] + [Result]",
+  "character": "Who is the customer? What do they want? (2-3 sentences)",
+  "problem": {
+    "villain": "The root cause (not a person — a force, system, or condition)",
+    "external": "The tangible, surface-level problem",
+    "internal": "How it makes them feel",
+    "philosophical": "Why this situation is just wrong"
+  },
+  "guide": {
+    "empathy": "How the brand shows understanding (2-3 statements)",
+    "authority": "Proof the brand can help (credentials, results, experience)"
+  },
+  "plan": {
+    "step1": "First step (action verb + what happens)",
+    "step2": "Second step",
+    "step3": "Third step"
+  },
+  "callToAction": {
+    "direct": "Primary CTA (e.g., 'Schedule Your Free Consultation')",
+    "transitional": "Softer entry point (e.g., 'Download Our Free Guide')"
+  },
+  "success": "What life looks like after (2-3 vivid outcomes)",
+  "failure": "What's at stake if they don't act (2-3 consequences)",
+  "transformationBefore": "How the customer feels/lives BEFORE",
+  "transformationAfter": "How the customer feels/lives AFTER"
+}
+
+CRITICAL: Be specific to THIS business. Use their actual name, services, and details. Never use placeholders.`;
+
+export async function generateBrandScript(
+  clientId: number
+): Promise<{ success: boolean; brandscript: Record<string, unknown> }> {
+  const data = await gatherClientData(clientId);
+  if (!data.client) throw new Error(`Client ${clientId} not found`);
+
+  let context = buildContextBlock(data);
+
+  if (isDataSparse(data)) {
+    console.log(`[brandscript] Data sparse for client ${clientId}, running research step...`);
+    const research = await runResearchStep(data);
+    context += `\n\n## Research Analysis\n${research}`;
+  }
+
+  const prompt = `Create a BrandScript for this business. Here is everything we know:\n\n${context}\n\nReturn ONLY the JSON object.`;
+
+  console.log(`[brandscript] Generating BrandScript for client ${clientId}...`);
+  const response = await callClaudeWithRetry(BRANDSCRIPT_SYSTEM_PROMPT, prompt);
+
+  // Parse JSON response
+  const cleaned = response.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+  let brandscript: Record<string, unknown>;
+  try {
+    brandscript = JSON.parse(cleaned);
+  } catch {
+    console.error("[brandscript] Failed to parse response, trying to extract JSON...");
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      brandscript = JSON.parse(jsonMatch[0]);
+    } else {
+      throw new Error("AI returned invalid JSON for BrandScript");
+    }
+  }
+
+  // Save to DB
+  await query(
+    `UPDATE cm_brand_story SET brandscript = $2, brandscript_generated_at = NOW(), updated_at = NOW()
+     WHERE client_id = $1`,
+    [clientId, JSON.stringify(brandscript)]
+  );
+
+  // If no brand_story row exists yet, create one
+  const existing = await query("SELECT id FROM cm_brand_story WHERE client_id = $1", [clientId]);
+  if (!existing.rows[0]) {
+    await query(
+      `INSERT INTO cm_brand_story (client_id, brandscript, brandscript_generated_at, status)
+       VALUES ($1, $2, NOW(), 'generated')`,
+      [clientId, JSON.stringify(brandscript)]
+    );
+  }
+
+  console.log(`[brandscript] Successfully generated BrandScript for client ${clientId}`);
+  return { success: true, brandscript };
+}
+
 // ── Internal Helpers ────────────────────────────────────────
 
 async function rebuildFullStory(clientId: number): Promise<void> {

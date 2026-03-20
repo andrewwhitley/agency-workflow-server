@@ -8,7 +8,7 @@
 
 import { Router } from "express";
 import { query } from "./database.js";
-import { generateBrandStory, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
+import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
@@ -319,6 +319,15 @@ export function clientManagementRouter(): Router {
       const result = await generateBrandStory(clientId);
       res.json(result);
     } catch (err) { console.error("Generate brand story error:", err); res.status(500).json({ error: "Brand story generation failed" }); }
+  });
+
+  // Generate short BrandScript (2-page version)
+  router.post("/clients/:clientId/brand-story/generate-brandscript", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    try {
+      const result = await generateBrandScript(clientId);
+      res.json(result);
+    } catch (err) { console.error("Generate BrandScript error:", err); res.status(500).json({ error: "BrandScript generation failed" }); }
   });
 
   // Regenerate a single section
