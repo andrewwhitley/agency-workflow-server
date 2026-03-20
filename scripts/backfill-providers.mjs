@@ -127,9 +127,9 @@ async function analyzeWithClaude(prospect, homepage, teamPage) {
     messages: [{
       role: "user",
       content: `Analyze this medical practice website HTML. Return ONLY valid JSON with these fields:
-- provider_count: number of doctors/providers/practitioners (NPs, PAs, DOs, MDs, DCs count). 0 if unknown.
+- provider_count: number of doctors/providers/practitioners (NPs, PAs, DOs, MDs, DCs count). null if you cannot determine.
 - provider_names: array of provider names found (empty array if none)
-- total_staff: estimated total staff if determinable, 0 if unknown
+- total_staff: estimated total staff if determinable, null if unknown
 - top_services: array of up to 8 main services offered (e.g. "Hormone Therapy", "IV Therapy", "Functional Medicine")
 
 Practice: ${prospect.company_name}, ${prospect.city}, ${prospect.state}
@@ -179,25 +179,31 @@ function recalcScore(prospect, updates) {
   return { pillar_scores: existing, total_score: total, qualification_tier: tier };
 }
 
-async function markProcessed(id, providerCount = 0) {
-  await pool.query("UPDATE enrichment_prospects SET provider_count = $2, updated_at = NOW() WHERE id = $1", [id, providerCount]);
+async function markSkipped(id) {
+  // Set provider_count to -1 as a "checked but unknown" sentinel so we don't re-process
+  await pool.query("UPDATE enrichment_prospects SET provider_count = -1, updated_at = NOW() WHERE id = $1", [id]);
 }
 
 async function processProspect(prospect) {
   const { homepage, teamPage } = await fetchHtmlWithTeamPage(prospect.website);
   if (!homepage) {
-    if (!DRY_RUN) await markProcessed(prospect.id);
+    if (!DRY_RUN) await markSkipped(prospect.id);
     return { status: "skipped", reason: "no html" };
   }
 
   const parsed = await analyzeWithClaude(prospect, homepage, teamPage);
   if (!parsed) {
-    if (!DRY_RUN) await markProcessed(prospect.id);
+    if (!DRY_RUN) await markSkipped(prospect.id);
     return { status: "skipped", reason: "no json" };
   }
 
-  // Always set provider_count (even 0) so we don't re-process
-  const updates = { provider_count: parsed.provider_count || 0 };
+  // Only set provider_count if Claude actually found providers; otherwise mark as checked-but-unknown
+  const updates = {};
+  if (parsed.provider_count && parsed.provider_count > 0) {
+    updates.provider_count = parsed.provider_count;
+  } else {
+    updates.provider_count = -1; // sentinel: checked but unknown
+  }
   if (parsed.total_staff > 0) updates.total_staff = parsed.total_staff;
   if (Array.isArray(parsed.top_services) && parsed.top_services.length > 0) updates.top_services = JSON.stringify(parsed.top_services);
   if (Array.isArray(parsed.provider_names) && parsed.provider_names.length > 0) updates.provider_details = JSON.stringify(parsed.provider_names);
@@ -233,7 +239,7 @@ async function processProspect(prospect) {
 async function main() {
   // Count eligible
   const { rows: [{ count }] } = await pool.query(
-    "SELECT COUNT(*)::int as count FROM enrichment_prospects WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live'"
+    "SELECT COUNT(*)::int as count FROM enrichment_prospects WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live' AND qualification_tier IN ('dream', 'good')"
   );
   const total = MAX > 0 ? Math.min(MAX, count) : count;
   console.log(`Backfill: ${count} eligible, processing ${total}${DRY_RUN ? " (DRY RUN)" : ""}`);
@@ -250,7 +256,7 @@ async function main() {
     const batchSize = Math.min(CONCURRENCY, total - processed);
     const { rows: batch } = await pool.query(`
       SELECT * FROM enrichment_prospects
-      WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live'
+      WHERE enrichment_status = 'completed' AND provider_count IS NULL AND website_status = 'live' AND qualification_tier IN ('dream', 'good')
       ORDER BY total_score DESC
       LIMIT $1
     `, [batchSize]);
@@ -283,6 +289,10 @@ async function main() {
   }
 
   console.log(`\n\nDone! Processed: ${processed}, Succeeded: ${succeeded}, Skipped: ${skipped}, Failed: ${failed}, Cost: ~$${cost.toFixed(2)}`);
+
+  // Convert -1 sentinels back to NULL (blank in exports)
+  const { rowCount: cleaned } = await pool.query("UPDATE enrichment_prospects SET provider_count = NULL WHERE provider_count = -1");
+  console.log(`\nCleaned ${cleaned} unknown provider counts back to NULL`);
 
   // Show updated tier distribution
   const { rows: tiers } = await pool.query(
