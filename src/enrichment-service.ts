@@ -1277,22 +1277,45 @@ HTML:\n${trimmedHtml}`,
       // ── Stage 4: Claude Analysis — provider count, services, staff ──
       if (html && !dryRun) {
         try {
-          // Trim HTML to ~12k chars to keep Haiku cost low
-          const trimmedHtml = html.length > 12000 ? html.slice(0, 12000) : html;
+          // Find and fetch team/about page for provider info
+          let teamHtml = "";
+          const teamUrl = this.findTeamPageUrl(html, websiteUrl);
+          if (teamUrl) {
+            try {
+              const ctrl = new AbortController();
+              const t = setTimeout(() => ctrl.abort(), 10000);
+              const r = await fetch(teamUrl, { signal: ctrl.signal, redirect: "follow", headers: { "User-Agent": "Mozilla/5.0 (compatible; AgencyBot/1.0)" } });
+              clearTimeout(t);
+              if (r.ok) teamHtml = await r.text();
+            } catch { /* team page fetch failed */ }
+          }
+
+          // Strip HTML to plain text for better content density
+          const homeText = this.stripHtml(html);
+          const teamText = teamHtml ? this.stripHtml(teamHtml) : "";
+          let content = "";
+          if (teamText) {
+            const trimmedTeam = teamText.length > 8000 ? teamText.slice(0, 8000) : teamText;
+            const trimmedHome = homeText.length > 4000 ? homeText.slice(0, 4000) : homeText;
+            content = `HOMEPAGE TEXT:\n${trimmedHome}\n\nTEAM/ABOUT PAGE TEXT:\n${trimmedTeam}`;
+          } else {
+            content = homeText.length > 10000 ? homeText.slice(0, 10000) : homeText;
+          }
+
           const claude = new Anthropic();
           const msg = await claude.messages.create({
             model: "claude-haiku-4-5-20251001",
             max_tokens: 512,
             messages: [{
               role: "user",
-              content: `Analyze this medical practice website HTML. Return ONLY valid JSON with these fields:
+              content: `Analyze this medical practice website. Return ONLY valid JSON with these fields:
 - provider_count: number of doctors/providers/practitioners (NPs, PAs, DOs, MDs, DCs count). 0 if unknown.
 - provider_names: array of provider names found (empty array if none)
 - total_staff: estimated total staff if determinable, 0 if unknown
 - top_services: array of up to 8 main services offered (e.g. "Hormone Therapy", "IV Therapy", "Functional Medicine")
 
 Practice: ${prospect.company_name}, ${prospect.city}, ${prospect.state}
-HTML:\n${trimmedHtml}`,
+${content}`,
             }],
           });
 
@@ -1456,6 +1479,47 @@ HTML:\n${trimmedHtml}`,
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private stripHtml(html: string): string {
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<svg[\s\S]*?<\/svg>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  private findTeamPageUrl(html: string, baseUrl: string): string | null {
+    const linkRegex = /href=["']([^"']+)["']/gi;
+    const seen = new Set<string>();
+    const scored: { url: string; score: number }[] = [];
+    let match;
+    while ((match = linkRegex.exec(html)) !== null) {
+      const href = match[1];
+      try {
+        const full = new URL(href, baseUrl).href;
+        if (seen.has(full)) continue;
+        seen.add(full);
+        if (new URL(full).hostname !== new URL(baseUrl).hostname) continue;
+        const path = new URL(full).pathname.toLowerCase();
+        if (path.match(/\.(jpg|png|gif|svg|css|js|pdf|zip)$/i)) continue;
+        let score = 0;
+        if (path.match(/meet[_-]?(the[_-]?)?team/i)) score = 10;
+        else if (path.match(/our[_-]?(team|doctors|providers|practitioners|staff|chiropractors)/i)) score = 9;
+        else if (path.match(/\/(team|providers|practitioners|doctors|staff|clinicians)\b/i)) score = 8;
+        else if (path.match(/about[_-]?us.*team|team.*about/i)) score = 7;
+        else if (path.match(/about[_-]?us|about\b|who[_-]?we[_-]?are/i)) score = 5;
+        if (score > 0) scored.push({ url: full, score });
+      } catch { /* invalid URL */ }
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0]?.url || null;
   }
 
   /** Parse CSV text into a 2D array of strings, handling quoted fields */
