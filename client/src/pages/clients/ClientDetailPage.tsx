@@ -4,7 +4,12 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
-import { Pencil, Share2, Link2, Unlink } from "lucide-react";
+import {
+  Pencil, Share2, Link2, Unlink, RefreshCw, ChevronDown, ChevronRight,
+  Users, AlertTriangle, Shield, Compass, MousePointerClick, Trophy, Skull,
+  MessageSquare, Eye, FileText, Palette, Rocket, Download, Check, X, Sparkles,
+  BookOpen, Wand2, Target, Copy, Unlink as Unlink2,
+} from "lucide-react";
 import { CompanyInfoEdit } from "@/components/client/CompanyInfoEdit";
 import { ServicesSection } from "@/components/client/ServicesSection";
 import { CampaignsSection } from "@/components/client/CampaignsSection";
@@ -164,7 +169,7 @@ export function ClientDetailPage() {
       {tab === "brand-story" && (
         <div className="space-y-8">
           <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
-          <BrandStoryTab clientId={client.id} />
+          <BrandStoryTab clientId={client.id} clientName={client.companyName} />
         </div>
       )}
     </div>
@@ -619,134 +624,518 @@ function HealthTab({ clientId }: { clientId: number }) {
   );
 }
 
-// ── Brand Story Tab (editable) ───────────────
+// ── Brand Story Tab (full generation + editing) ───────────────
 
-function BrandStoryTab({ clientId }: { clientId: number }) {
-  const [story, setStory] = useState<BrandStory | null>(null);
+const BRAND_STORY_SECTIONS = [
+  { key: "heroSection", title: "Your Customer", framework: "Brand Story" },
+  { key: "problemSection", title: "The Problem You Solve", framework: "Brand Story" },
+  { key: "guideSection", title: "Why You (Your Authority)", framework: "Brand Story" },
+  { key: "planSection", title: "Your Process", framework: "Brand Story" },
+  { key: "ctaSection", title: "Calls to Action", framework: "Brand Story" },
+  { key: "successSection", title: "The Transformation", framework: "Brand Story" },
+  { key: "failureSection", title: "What's at Stake", framework: "Brand Story" },
+  { key: "brandVoiceSection", title: "Brand Voice & Personality", framework: "Brand Identity" },
+  { key: "visualIdentitySection", title: "Visual Identity", framework: "Brand Identity" },
+  { key: "contentStrategySection", title: "Content Strategy", framework: "Thought Leadership" },
+  { key: "messagingSection", title: "Core Messaging", framework: "Messaging" },
+  { key: "implementationSection", title: "Implementation Roadmap", framework: "Strategy" },
+] as const;
+
+const sectionIcons: Record<string, React.ElementType> = {
+  heroSection: Users, problemSection: AlertTriangle, guideSection: Shield,
+  planSection: Compass, ctaSection: MousePointerClick, successSection: Trophy,
+  failureSection: Skull, brandVoiceSection: MessageSquare, visualIdentitySection: Eye,
+  contentStrategySection: FileText, messagingSection: Palette, implementationSection: Rocket,
+};
+
+const sectionColors: Record<string, string> = {
+  heroSection: "text-blue-500", problemSection: "text-red-500", guideSection: "text-emerald-500",
+  planSection: "text-amber-500", ctaSection: "text-purple-500", successSection: "text-green-500",
+  failureSection: "text-rose-500", brandVoiceSection: "text-pink-500", visualIdentitySection: "text-indigo-500",
+  contentStrategySection: "text-cyan-500", messagingSection: "text-orange-500", implementationSection: "text-teal-500",
+};
+
+const frameworkBadgeColors: Record<string, string> = {
+  "Brand Story": "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  "Brand Identity": "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  "Thought Leadership": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  Messaging: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+  Strategy: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+};
+
+interface SectionData { title: string; framework: string; content: string; generatedAt: string | null; editedAt: string | null; isEdited: boolean; }
+interface BrandStoryData {
+  story: BrandStory | null;
+  buyerPersonas: Array<Record<string, unknown>>;
+  brandColors: string | null;
+  client: Record<string, unknown> | null;
+}
+
+function parseColorString(colorStr: string): { name: string; hex: string }[] {
+  const colors: { name: string; hex: string }[] = [];
+  if (!colorStr) return colors;
+  const lines = colorStr.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+  for (const line of lines) {
+    const hexMatch = line.match(/#([0-9A-Fa-f]{3,8})\b/);
+    if (hexMatch) {
+      let name = line.replace(hexMatch[0], "").replace(/[():]/g, "").trim();
+      if (!name) name = hexMatch[0];
+      colors.push({ name, hex: hexMatch[0] });
+    }
+  }
+  return colors;
+}
+
+function ColorSwatches({ colorStr }: { colorStr: string }) {
+  const colors = parseColorString(colorStr);
+  if (colors.length === 0) return null;
+  return (
+    <div className="p-4 rounded-lg bg-surface-2 border border-border">
+      <h4 className="text-xs font-semibold text-dim uppercase mb-3 flex items-center gap-1.5">
+        <Palette className="h-3.5 w-3.5" /> Brand Colors
+      </h4>
+      <div className="flex flex-wrap gap-3">
+        {colors.map((color, i) => (
+          <div key={i} className="flex flex-col items-center gap-1.5">
+            <div className="w-12 h-12 rounded-lg border border-border" style={{ backgroundColor: color.hex }} title={`${color.name}: ${color.hex}`} />
+            <span className="text-[10px] font-medium text-dim max-w-[60px] text-center truncate">{color.name}</span>
+            <span className="text-[9px] font-mono text-dim/70">{color.hex}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BuyerPersonaCard({ persona }: { persona: Record<string, unknown> }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border border-border rounded-md border-l-4 border-l-purple-400 bg-surface">
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left p-4 hover:bg-surface-2 transition-colors">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-semibold text-sm text-foreground">{String(persona.personaName || "")}</h4>
+            {persona.age && <span className="text-xs text-dim">Age: {String(persona.age)}{persona.gender ? `, ${String(persona.gender)}` : ""}</span>}
+          </div>
+          {expanded ? <ChevronDown className="h-4 w-4 text-dim" /> : <ChevronRight className="h-4 w-4 text-dim" />}
+        </div>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-border space-y-2 text-sm">
+          {["description", "painPoints", "needsDescription", "gains", "buyingFactors"].map((field) =>
+            persona[field] ? (
+              <div key={field}>
+                <span className="text-xs font-semibold text-dim uppercase">{field.replace(/([A-Z])/g, " $1").trim()}</span>
+                <p className="mt-0.5 text-foreground">{String(persona[field])}</p>
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName: string }) {
+  const [data, setData] = useState<BrandStoryData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editFullStory, setEditFullStory] = useState("");
-  const [editStatus, setEditStatus] = useState("draft");
-  const [pending, setPending] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [regeneratingSection, setRegeneratingSection] = useState<string | null>(null);
+  const [regenerateContext, setRegenerateContext] = useState("");
+  const [savingSection, setSavingSection] = useState(false);
+  const [regenSectionLoading, setRegenSectionLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const reload = useCallback(() => {
-    api<BrandStory>(`/cm/clients/${clientId}/brand-story`).then(setStory).catch(() => setStory(null)).finally(() => setLoading(false));
+    api<BrandStoryData>(`/cm/clients/${clientId}/brand-story`).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
   }, [clientId]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  const openEdit = () => {
-    setEditFullStory(story?.fullBrandStory || "");
-    setEditStatus(story?.status || "draft");
-    setEditOpen(true);
+  const story = data?.story;
+  const buyerPersonas = data?.buyerPersonas || [];
+  const brandColors = data?.brandColors || null;
+  const hasGeneratedStory = story && story.status !== "draft";
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setStatusMsg("Generating brand story... This may take 1-2 minutes.");
+    try {
+      await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST" });
+      setStatusMsg("Brand story generated!");
+      reload();
+    } catch (e) { setStatusMsg("Generation failed. Please try again."); console.error(e); }
+    setGenerating(false);
+    setTimeout(() => setStatusMsg(null), 4000);
   };
 
-  const submit = async () => {
-    setPending(true);
+  const handleRegenerateAll = async () => {
+    if (!confirm("Regenerate all sections? This will overwrite existing content.")) return;
+    await handleGenerate();
+  };
+
+  const handleRegenerateSection = async (sectionKey: string) => {
+    setRegenSectionLoading(true);
     try {
-      if (story) {
-        await api(`/cm/brand-story/${story.id}`, { method: "PUT", body: JSON.stringify({ fullBrandStory: editFullStory, status: editStatus }) });
-      } else {
-        await api(`/cm/clients/${clientId}/brand-story`, { method: "POST", body: JSON.stringify({ fullBrandStory: editFullStory, status: editStatus }) });
-      }
-      setEditOpen(false);
+      await api(`/cm/clients/${clientId}/brand-story/regenerate-section`, {
+        method: "POST", body: JSON.stringify({ sectionKey, additionalContext: regenerateContext || undefined }),
+      });
+      setRegeneratingSection(null);
+      setRegenerateContext("");
       reload();
     } catch (e) { console.error(e); }
-    setPending(false);
+    setRegenSectionLoading(false);
   };
 
-  if (loading) return <div className="text-sm text-muted">Loading brand story...</div>;
+  const handleSaveEdit = async () => {
+    if (!editingSection || !story) return;
+    setSavingSection(true);
+    try {
+      await api(`/cm/brand-story/${story.id}/section`, {
+        method: "PUT", body: JSON.stringify({ sectionKey: editingSection, content: editContent }),
+      });
+      setEditingSection(null);
+      reload();
+    } catch (e) { console.error(e); }
+    setSavingSection(false);
+  };
 
-  const jsonSections = story ? [
-    { label: "Hero", data: story.heroSection },
-    { label: "Problem", data: story.problemSection },
-    { label: "Guide", data: story.guideSection },
-    { label: "Plan", data: story.planSection },
-    { label: "Call to Action", data: story.ctaSection },
-    { label: "Success", data: story.successSection },
-    { label: "Failure", data: story.failureSection },
-    { label: "Brand Voice", data: story.brandVoiceSection },
-    { label: "Visual Identity", data: story.visualIdentitySection },
-    { label: "Content Strategy", data: story.contentStrategySection },
-    { label: "Messaging", data: story.messagingSection },
-    { label: "Implementation", data: story.implementationSection },
-  ].filter((s) => s.data && Object.keys(s.data as object).length > 0) : [];
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!story) return;
+    try {
+      await api(`/cm/brand-story/${story.id}/status`, { method: "PUT", body: JSON.stringify({ status: newStatus }) });
+      reload();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleShare = async () => {
+    if (!story) return;
+    try {
+      const result = await api<BrandStory>(`/cm/brand-story/${story.id}/share`, { method: "POST" });
+      if (result?.shareToken) {
+        navigator.clipboard.writeText(`${window.location.origin}/brand-story/${result.shareToken}`);
+      }
+      reload();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!story) return;
+    try {
+      await api(`/cm/brand-story/${story.id}/share`, { method: "DELETE" });
+      reload();
+    } catch (e) { console.error(e); }
+  };
+
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const expandAll = () => setExpandedSections(new Set(BRAND_STORY_SECTIONS.map((s) => s.key)));
+  const collapseAll = () => setExpandedSections(new Set());
+
+  const handleExportPDF = () => {
+    if (!story) return;
+    const brandColorsParsed = brandColors ? parseColorString(brandColors) : [];
+    const primary = brandColorsParsed.length > 0 ? brandColorsParsed[0].hex : "#c9a96e";
+    const accent = brandColorsParsed.length > 1 ? brandColorsParsed[1].hex : "#4a90d9";
+    const clientInfo = data?.client;
+    const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    let sectionNum = 0;
+    const sectionsHtml = BRAND_STORY_SECTIONS.map((def) => {
+      const sd = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
+      if (!sd?.content) return "";
+      sectionNum++;
+      const num = String(sectionNum).padStart(2, "0");
+      return `<div class="section-page"><div class="section-header-bar"><div class="section-number">${num}</div><div class="section-meta"><span class="section-cat">${def.framework}</span><h2 class="section-title">${sd.title || def.title}</h2></div></div><div class="section-body"><pre style="white-space:pre-wrap;font-family:inherit;margin:0">${sd.content.replace(/</g, "&lt;")}</pre></div></div>`;
+    }).filter(Boolean).join("");
+
+    let tocNum = 0;
+    const tocItems = BRAND_STORY_SECTIONS.map((def) => {
+      const sd = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
+      if (!sd?.content) return "";
+      tocNum++;
+      return `<tr><td class="toc-num">${String(tocNum).padStart(2, "0")}</td><td class="toc-title">${sd.title || def.title}</td><td class="toc-cat">${def.framework}</td></tr>`;
+    }).filter(Boolean).join("");
+
+    const infoPairs: [string, string][] = [];
+    if (clientInfo) {
+      if (clientInfo.industry) infoPairs.push(["Industry", String(clientInfo.industry)]);
+      if (clientInfo.companyWebsite) infoPairs.push(["Website", String(clientInfo.companyWebsite)]);
+      if (clientInfo.companyPhone) infoPairs.push(["Phone", String(clientInfo.companyPhone)]);
+      if (clientInfo.location) infoPairs.push(["Location", String(clientInfo.location)]);
+    }
+    const infoGrid = infoPairs.map(([l, v]) => `<div class="ci"><span class="ci-label">${l}</span><span class="ci-value">${v}</span></div>`).join("");
+    const swatchHtml = brandColorsParsed.map((c) => `<div class="sw"><div class="sw-dot" style="background:${c.hex}"></div><span class="sw-name">${c.name}</span><span class="sw-hex">${c.hex}</span></div>`).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${clientName} — Brand Story</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+@page{size:A4;margin:0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;font-size:10pt;line-height:1.75;color:#d4d4d8;background:#0c0c14;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(160deg,#0c0c14 0%,#131320 35%,#0f1628 65%,#0c0c14 100%);padding:60px 50px;page-break-after:always;position:relative}
+.cover h1{font-family:'Playfair Display',serif;font-size:38pt;font-weight:700;color:#fff;line-height:1.15;margin-bottom:8px}
+.cover-eyebrow{font-size:8pt;font-weight:600;letter-spacing:.25em;text-transform:uppercase;color:${primary};margin-bottom:16px}
+.cover-rule{width:50px;height:3px;background:${primary};border-radius:2px;margin:18px auto}
+.cover-subtitle{font-size:12pt;font-weight:300;color:rgba(255,255,255,.55);letter-spacing:.04em}
+.ci-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 28px;margin-top:32px;padding:18px 24px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+.ci{display:flex;flex-direction:column;align-items:center}.ci-label{font-size:6pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:${primary};opacity:.8;margin-bottom:3px}.ci-value{font-size:9pt;font-weight:500;color:rgba(255,255,255,.85)}
+.sw-row{display:flex;justify-content:center;gap:20px;margin-top:28px}.sw{display:flex;flex-direction:column;align-items:center;gap:4px}.sw-dot{width:32px;height:32px;border-radius:50%}.sw-name{font-size:7pt;font-weight:600;color:rgba(255,255,255,.7)}.sw-hex{font-size:6pt;font-family:monospace;color:rgba(255,255,255,.35)}
+.cover-date{margin-top:28px;font-size:8pt;color:rgba(255,255,255,.3)}
+.toc-page{padding:50px;page-break-after:always;background:#0c0c14;min-height:100vh}
+.toc-page h2{font-family:'Playfair Display',serif;font-size:22pt;font-weight:700;color:#fff;margin-bottom:6px}
+.toc-rule{width:40px;height:2px;background:${primary};border-radius:1px;margin-bottom:28px}
+.toc-table{width:100%;border-collapse:collapse}.toc-table tr{border-bottom:1px solid rgba(255,255,255,.04)}
+.toc-num{width:30px;padding:10px 0;font-size:9pt;font-weight:700;color:${primary}}.toc-title{padding:10px 0;font-size:10pt;font-weight:500;color:#e4e4e7}.toc-cat{text-align:right;padding:10px 0;font-size:7pt;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.section-page{padding:44px 50px 36px;background:#0c0c14;page-break-inside:avoid}.section-page+.section-page{border-top:1px solid rgba(255,255,255,.04)}
+.section-header-bar{display:flex;align-items:flex-start;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.section-number{font-family:'Playfair Display',serif;font-size:30pt;font-weight:700;color:${primary};line-height:1;opacity:.25;min-width:40px}
+.section-meta{flex:1}.section-cat{display:inline-block;font-size:6pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${primary};background:${primary}18;padding:2px 8px;border-radius:3px;margin-bottom:4px}
+.section-title{font-family:'Playfair Display',serif;font-size:20pt;font-weight:700;color:#fff;line-height:1.3;margin-top:2px}
+.section-body{font-size:10pt;line-height:1.8;color:#a1a1aa}
+.doc-footer{text-align:center;padding:24px 50px;font-size:7pt;color:rgba(255,255,255,.2);border-top:1px solid rgba(255,255,255,.04)}
+</style></head><body>
+<div class="cover"><div class="cover-inner">
+<div class="cover-eyebrow">Brand Story Guide</div><h1>${clientName}</h1><div class="cover-rule"></div>
+<div class="cover-subtitle">A comprehensive brand narrative and marketing framework</div>
+<div class="ci-grid">${infoGrid}</div><div class="sw-row">${swatchHtml}</div>
+<div class="cover-date">Prepared ${dateStr}</div></div></div>
+<div class="toc-page"><h2>Contents</h2><div class="toc-rule"></div><table class="toc-table">${tocItems}</table></div>
+${sectionsHtml}
+<div class="doc-footer">Confidential — Prepared exclusively for ${clientName} · ${dateStr}</div>
+</body></html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, "_blank");
+    if (!w) {
+      const a = document.createElement("a");
+      a.href = url; a.download = `${clientName.replace(/[^a-zA-Z0-9]/g, "_")}_Brand_Story.html`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
+  if (loading) return <div className="text-sm text-dim">Loading brand story...</div>;
+
+  // ── No story generated yet — show generate CTA ──
+
+  if (!hasGeneratedStory) {
+    return (
+      <div className="space-y-6">
+        {buyerPersonas.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Target className="h-4 w-4 text-purple-400" /> Buyer Personas</h3>
+            {buyerPersonas.map((p, i) => <BuyerPersonaCard key={i} persona={p} />)}
+          </div>
+        )}
+
+        <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+            <BookOpen className="h-8 w-8 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-foreground mb-2">Generate {clientName}'s Brand Story</h3>
+            <p className="text-dim max-w-lg mx-auto text-sm">
+              Create a comprehensive Brand Story Guide using all the intake data, company info,
+              and content guidelines. This generates 12 detailed sections covering your customer,
+              messaging, content strategy, and implementation plan.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto">
+            {[
+              { label: "Customer & Problem", icon: Users, color: "text-blue-400" },
+              { label: "Authority & Process", icon: Compass, color: "text-emerald-400" },
+              { label: "Transformation", icon: Trophy, color: "text-amber-400" },
+              { label: "Content Strategy", icon: FileText, color: "text-purple-400" },
+            ].map((item) => (
+              <div key={item.label} className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-surface-2">
+                <item.icon className={`h-5 w-5 ${item.color}`} />
+                <span className="text-xs font-medium text-dim">{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 max-w-lg mx-auto">
+            <p className="text-sm text-amber-300">
+              <strong>Note:</strong> Generation uses AI to create 12 detailed sections. This may take 1-2 minutes.
+              {story?.status === "draft" && " Onboarding data has been collected and is ready to use."}
+            </p>
+          </div>
+          {statusMsg && <p className="text-sm text-accent">{statusMsg}</p>}
+          <Button onClick={handleGenerate} disabled={generating} className="px-8">
+            {generating ? (
+              <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating Brand Story...</>
+            ) : (
+              <><Wand2 className="h-4 w-4 mr-2" /> Generate Brand Story</>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Brand Story Generated — full view ──
+
+  const statusColors: Record<string, string> = {
+    draft: "bg-surface-2 text-dim", generated: "bg-blue-500/10 text-blue-400",
+    reviewed: "bg-amber-500/10 text-amber-400", approved: "bg-green-500/10 text-green-400",
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {story && (
-            <span className={cn("text-xs px-2 py-0.5 rounded font-medium capitalize",
-              story.status === "approved" ? "bg-success/10 text-success" :
-              story.status === "reviewed" ? "bg-accent/10 text-accent" : "bg-surface-2 text-dim"
-            )}>{story.status}</span>
-          )}
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-blue-400" /> Brand Story
+          </h2>
+          <p className="text-sm text-dim mt-1">Complete brand messaging and content strategy guide</p>
         </div>
-        <div className="flex items-center gap-2">
-          {story && (
-            story.shareToken ? (
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
-                }}>
-                  <Link2 className="h-3 w-3 mr-1" /> Copy Link
-                </Button>
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
-                  await api(`/cm/brand-story/${story.id}/share`, { method: "DELETE" });
-                  reload();
-                }}>
-                  <Unlink className="h-3 w-3 mr-1" /> Revoke
-                </Button>
-              </div>
-            ) : (
-              <Button size="sm" variant="outline" onClick={async () => {
-                await api(`/cm/brand-story/${story.id}/share`, { method: "POST" });
-                reload();
-              }}>
-                <Share2 className="h-3 w-3 mr-1" /> Share
-              </Button>
-            )
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn("text-xs px-2 py-0.5 rounded font-medium capitalize", statusColors[story.status] || statusColors.draft)}>
+            {story.status}
+          </span>
+          {story.status === "generated" && (
+            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("reviewed")}>
+              <Check className="h-3 w-3 mr-1" /> Mark Reviewed
+            </Button>
           )}
-          <Button size="sm" variant="outline" onClick={openEdit}>
-            <Pencil className="h-3 w-3 mr-1" /> {story ? "Edit" : "Create"} Brand Story
+          {story.status === "reviewed" && (
+            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate("approved")}>
+              <Check className="h-3 w-3 mr-1" /> Approve
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={expandAll}><ChevronDown className="h-3 w-3 mr-1" /> Expand All</Button>
+          <Button size="sm" variant="outline" onClick={collapseAll}><ChevronRight className="h-3 w-3 mr-1" /> Collapse All</Button>
+          {story.shareToken ? (
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/brand-story/${story.shareToken}`);
+              }}><Copy className="h-3 w-3 mr-1" /> Copy Link</Button>
+              <Button size="sm" variant="ghost" className="text-red-400" onClick={handleRevokeShare}><Unlink className="h-3 w-3" /></Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={handleShare}><Share2 className="h-3 w-3 mr-1" /> Share</Button>
+          )}
+          <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-3 w-3 mr-1" /> Export PDF</Button>
+          <Button size="sm" variant="outline" onClick={handleRegenerateAll} disabled={generating}>
+            {generating ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate All
           </Button>
         </div>
       </div>
 
-      {story?.fullBrandStory && (
-        <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3 pb-2 border-b border-border">Full Brand Story</h3>
-          <div className="bg-surface border border-border rounded-md p-6">
-            <div className="text-sm text-foreground whitespace-pre-wrap">{story.fullBrandStory}</div>
-          </div>
+      {statusMsg && <p className="text-sm text-accent">{statusMsg}</p>}
+
+      {/* Buyer Personas */}
+      {buyerPersonas.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Target className="h-4 w-4 text-purple-400" /> Buyer Personas
+            <span className="text-[10px] px-1.5 py-0 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">Audience</span>
+          </h3>
+          {buyerPersonas.map((p, i) => <BuyerPersonaCard key={i} persona={p} />)}
         </div>
       )}
 
-      {jsonSections.map((s) => (
-        <div key={s.label}>
-          <h3 className="text-sm font-semibold text-foreground mb-3 pb-2 border-b border-border">{s.label}</h3>
-          <div className="bg-surface-2 rounded-md p-4 space-y-2">
-            {Object.entries(s.data as Record<string, unknown>).map(([key, val]) => (
-              val ? (
-                <div key={key}>
-                  <div className="text-xs text-dim capitalize">{key.replace(/([A-Z])/g, " $1").trim()}</div>
-                  <div className="text-sm text-foreground whitespace-pre-wrap">{typeof val === "object" ? JSON.stringify(val, null, 2) : String(val)}</div>
+      {/* Brand Colors */}
+      {brandColors && <ColorSwatches colorStr={brandColors} />}
+
+      {/* Sections */}
+      <div className="space-y-3">
+        {BRAND_STORY_SECTIONS.map((def) => {
+          const sectionData = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
+          if (!sectionData?.content) return null;
+          const isExpanded = expandedSections.has(def.key);
+          const isEditing = editingSection === def.key;
+          const isRegenerating = regeneratingSection === def.key;
+          const Icon = sectionIcons[def.key] || BookOpen;
+          const iconColor = sectionColors[def.key] || "text-dim";
+
+          return (
+            <div key={def.key} className={cn("border border-border rounded-md bg-surface transition-all", isExpanded && "ring-1 ring-blue-500/30")}>
+              <button onClick={() => toggleSection(def.key)} className="w-full p-4 text-left hover:bg-surface-2 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-1.5 rounded-md bg-surface-2", iconColor)}><Icon className="h-4 w-4" /></div>
+                    <div>
+                      <div className="text-sm font-medium text-foreground">{def.title}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={cn("text-[10px] px-1.5 py-0 rounded border", frameworkBadgeColors[def.framework] || "")}>{def.framework}</span>
+                        {sectionData.isEdited && <span className="text-[10px] px-1.5 py-0 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">Edited</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {isExpanded ? <ChevronDown className="h-4 w-4 text-dim" /> : <ChevronRight className="h-4 w-4 text-dim" />}
                 </div>
-              ) : null
-            ))}
-          </div>
-        </div>
-      ))}
+              </button>
 
-      {!story && <div className="text-muted">No brand story yet. Click "Create Brand Story" to start.</div>}
-
-      <FormDialog open={editOpen} onOpenChange={setEditOpen}
-        title={story ? "Edit Brand Story" : "Create Brand Story"}
-        onSubmit={submit} isPending={pending} wide>
-        <FormField label="Status" value={editStatus} onChange={setEditStatus} placeholder="draft, generated, reviewed, approved" />
-        <FormField label="Full Brand Story" type="textarea" value={editFullStory} onChange={setEditFullStory} rows={20} />
-      </FormDialog>
+              {isExpanded && (
+                <div className="px-4 pb-4 border-t border-border">
+                  {isEditing ? (
+                    <div className="space-y-3 mt-4">
+                      <textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="w-full min-h-[300px] font-mono text-sm bg-surface-2 text-foreground border border-border rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+                        placeholder="Edit this section in markdown..."
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" onClick={handleSaveEdit} disabled={savingSection}>
+                          {savingSection ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />} Save
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingSection(null)}>
+                          <X className="h-3 w-3 mr-1" /> Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm text-foreground whitespace-pre-wrap mt-4 leading-relaxed">{sectionData.content}</div>
+                      <div className="border-t border-border mt-4 pt-4 flex items-center gap-2 flex-wrap">
+                        <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingSection(def.key); setEditContent(sectionData.content); }}>
+                          <Pencil className="h-3 w-3 mr-1" /> Edit
+                        </Button>
+                        {isRegenerating ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              value={regenerateContext}
+                              onChange={(e) => setRegenerateContext(e.target.value)}
+                              placeholder="Optional: additional guidance..."
+                              className="flex-1 text-sm bg-surface-2 text-foreground border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <Button size="sm" onClick={() => handleRegenerateSection(def.key)} disabled={regenSectionLoading}>
+                              {regenSectionLoading ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />} Regenerate
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setRegeneratingSection(null)}><X className="h-3 w-3" /></Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setRegeneratingSection(def.key); setRegenerateContext(""); }}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Regenerate Section
+                          </Button>
+                        )}
+                      </div>
+                      {sectionData.generatedAt && (
+                        <p className="text-[10px] text-dim mt-2">
+                          Generated: {new Date(sectionData.generatedAt).toLocaleString()}
+                          {sectionData.editedAt && ` · Edited: ${new Date(sectionData.editedAt).toLocaleString()}`}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

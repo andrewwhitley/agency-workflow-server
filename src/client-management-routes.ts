@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 import { query } from "./database.js";
+import { generateBrandStory, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
 
 export function clientManagementRouter(): Router {
   const router = Router();
@@ -239,8 +240,19 @@ export function clientManagementRouter(): Router {
 
   router.get("/clients/:clientId/brand-story", async (req, res) => {
     try {
-      const { rows } = await query("SELECT * FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1", [req.params.clientId]);
-      res.json(rows[0] ? toCamel(rows[0]) : null);
+      const clientId = req.params.clientId;
+      const [storyResult, personasResult, guidelinesResult, clientResult] = await Promise.all([
+        query("SELECT * FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1", [clientId]),
+        query("SELECT * FROM cm_buyer_personas WHERE client_id = $1", [clientId]),
+        query("SELECT * FROM cm_content_guidelines WHERE client_id = $1 LIMIT 1", [clientId]),
+        query("SELECT company_name, industry, company_website, location, company_phone, company_email, year_founded FROM cm_clients WHERE id = $1", [clientId]),
+      ]);
+      res.json({
+        story: storyResult.rows[0] ? toCamel(storyResult.rows[0]) : null,
+        buyerPersonas: rowsToCamel(personasResult.rows),
+        brandColors: guidelinesResult.rows[0]?.brand_colors || null,
+        client: clientResult.rows[0] ? toCamel(clientResult.rows[0]) : null,
+      });
     } catch (err) { console.error("Get brand story error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
@@ -295,6 +307,51 @@ export function clientManagementRouter(): Router {
       const { rows } = await query("UPDATE cm_brand_story SET share_token = NULL, updated_at = NOW() WHERE id = $1 RETURNING *", [req.params.id]);
       res.json(rows[0] ? toCamel(rows[0]) : null);
     } catch (err) { console.error("Revoke share link error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Generate brand story using AI
+  router.post("/clients/:clientId/brand-story/generate", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    try {
+      const result = await generateBrandStory(clientId);
+      res.json(result);
+    } catch (err) { console.error("Generate brand story error:", err); res.status(500).json({ error: "Brand story generation failed" }); }
+  });
+
+  // Regenerate a single section
+  router.post("/clients/:clientId/brand-story/regenerate-section", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { sectionKey, additionalContext } = req.body;
+    if (!sectionKey) { res.status(400).json({ error: "sectionKey required" }); return; }
+    try {
+      const result = await regenerateBrandStorySection(clientId, sectionKey, additionalContext);
+      res.json(result);
+    } catch (err) { console.error("Regenerate section error:", err); res.status(500).json({ error: "Section regeneration failed" }); }
+  });
+
+  // Update a single section (manual edit)
+  router.put("/brand-story/:id/section", async (req, res) => {
+    const { sectionKey, content } = req.body;
+    if (!sectionKey || content === undefined) { res.status(400).json({ error: "sectionKey and content required" }); return; }
+    try {
+      // Get the story to find clientId
+      const { rows: storyRows } = await query("SELECT client_id FROM cm_brand_story WHERE id = $1", [req.params.id]);
+      if (!storyRows[0]) { res.status(404).json({ error: "Brand story not found" }); return; }
+      const result = await updateBrandStorySection(storyRows[0].client_id, sectionKey, content);
+      res.json(result);
+    } catch (err) { console.error("Update section error:", err); res.status(500).json({ error: "Section update failed" }); }
+  });
+
+  // Update brand story status
+  router.put("/brand-story/:id/status", async (req, res) => {
+    const { status } = req.body;
+    if (!status || !["draft", "generated", "reviewed", "approved"].includes(status)) {
+      res.status(400).json({ error: "Invalid status" }); return;
+    }
+    try {
+      const { rows } = await query("UPDATE cm_brand_story SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *", [status, req.params.id]);
+      res.json(rows[0] ? toCamel(rows[0]) : null);
+    } catch (err) { console.error("Update status error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
   // ════════════════════════════════════════════════════════
