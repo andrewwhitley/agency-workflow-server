@@ -324,7 +324,7 @@ export function PublicOnboardingPage() {
       case 1: return !!(data.companyName && data.businessGoals);
       case 2: return !!(data.primaryServices);
       case 3: return !!(data.brandTone || data.brandPersonality);
-      case 4: return !!(data.idealCustomerDescription && data.customerFrustrations);
+      case 4: return !!(data.idealCustomerDescription && data.biggestFrustration);
       case 5: return !!(data.topQuestionsCustomersAsk || data.contentTopicsExcited);
       default: return false;
     }
