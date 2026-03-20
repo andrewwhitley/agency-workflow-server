@@ -239,7 +239,7 @@ function Field({ label, description, example, required, children }: {
   );
 }
 
-const inputCls = "bg-slate-700/50 border-slate-400/60 text-white placeholder-slate-300/70 focus:border-blue-400 focus:ring-blue-400/30";
+const inputCls = "bg-slate-600/40 border-slate-400 text-white placeholder-slate-300 focus:border-blue-400 focus:ring-blue-400/30";
 const textareaCls = inputCls + " resize-none";
 
 // ── Main Component ───────────────────────────
