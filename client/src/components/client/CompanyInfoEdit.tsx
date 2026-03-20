@@ -137,13 +137,25 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
     setEditSection(section);
   };
 
+  const [error, setError] = useState<string | null>(null);
+
   const submit = async () => {
     setPending(true);
+    setError(null);
     try {
-      const updated = await api<Client>(`/cm/clients/${client.id}`, { method: "PUT", body: JSON.stringify(form) });
+      // Filter out empty strings and unchanged defaults to avoid sending unnecessary fields
+      const payload: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(form)) {
+        if (val === "" || val === undefined) continue;
+        payload[key] = val;
+      }
+      const updated = await api<Client>(`/cm/clients/${client.id}`, { method: "PUT", body: JSON.stringify(payload) });
       onUpdate(updated);
       setEditSection(null);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Failed to save");
+    }
     setPending(false);
   };
 
@@ -241,8 +253,9 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
       })}
 
       {editSection && (
-        <FormDialog open={true} onOpenChange={() => setEditSection(null)}
+        <FormDialog open={true} onOpenChange={() => { setEditSection(null); setError(null); }}
           title={`Edit ${editSection.title}`} onSubmit={submit} isPending={pending} wide>
+          {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
           {editSection.fields.map((f) => {
             if (f.periodKey) {
               return (
