@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════
  *  Brand Story Generator
- *  AI-powered brand story generation using StoryBrand framework.
+ *  AI-powered brand story generation using Brand Story framework.
  *  Generates 12 sections covering brand story, identity, messaging,
  *  and strategy — batched into 2 API calls for efficiency.
  * ═══════════════════════════════════════════════════════════════
@@ -485,7 +485,7 @@ export async function generateBrandStory(
     context += `\n\n## Research Analysis\n${research}`;
   }
 
-  // 3. Generate batch 1 (core StoryBrand sections)
+  // 3. Generate batch 1 (core Brand Story sections)
   console.log(`[brand-story] Generating batch 1 for client ${clientId}...`);
   const batch1Prompt = buildBatchPrompt(BATCH_1_KEYS, context);
   const batch1Response = await callClaudeWithRetry(GENERATION_SYSTEM_PROMPT, batch1Prompt);

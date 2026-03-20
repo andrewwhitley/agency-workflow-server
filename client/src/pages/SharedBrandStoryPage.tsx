@@ -153,7 +153,7 @@ export function SharedBrandStoryPage() {
           </div>
         )}
 
-        {/* StoryBrand Sections */}
+        {/* Brand Story Sections */}
         {sectionDefs.map((def) => {
           const sectionData = story[def.key] as Record<string, unknown> | null;
           if (!sectionData || Object.keys(sectionData).length === 0) return null;

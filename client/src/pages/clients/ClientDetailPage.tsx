@@ -88,6 +88,7 @@ interface Client {
   currentMarketingSpendPeriod: string | null;
   currentAdsSpendPeriod: string | null;
   status: string;
+  fieldSources: Record<string, string> | null;
   [key: string]: unknown;
 }
 

@@ -9,6 +9,9 @@
 import { Router } from "express";
 import { query } from "./database.js";
 import { generateBrandStory, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
+import { importClientData } from "./client-import.js";
+import { GoogleDriveService } from "./google-drive.js";
+import { GoogleAuthService } from "./google-auth.js";
 
 export function clientManagementRouter(): Router {
   const router = Router();
@@ -352,6 +355,33 @@ export function clientManagementRouter(): Router {
       const { rows } = await query("UPDATE cm_brand_story SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *", [status, req.params.id]);
       res.json(rows[0] ? toCamel(rows[0]) : null);
     } catch (err) { console.error("Update status error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  AI IMPORT — bulk document extraction + enrichment
+  // ════════════════════════════════════════════════════════
+
+  router.post("/clients/:clientId/import", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { documentIds, generateStory, enrichFromWeb } = req.body;
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      res.status(400).json({ error: "documentIds array is required" }); return;
+    }
+    try {
+      const authService = new GoogleAuthService();
+      if (!authService.isAuthenticated()) {
+        res.status(503).json({ error: "Google Drive not configured — cannot read documents" }); return;
+      }
+      const driveService = new GoogleDriveService(authService.getClient());
+      const result = await importClientData(clientId, documentIds, driveService, {
+        generateStory: generateStory !== false,
+        enrichFromWeb: enrichFromWeb !== false,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("Import client data error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Import failed" });
+    }
   });
 
   // ════════════════════════════════════════════════════════

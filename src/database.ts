@@ -1429,6 +1429,22 @@ Before saving, verify:
       ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS intake_submitted_at TIMESTAMPTZ;
     `,
   },
+  {
+    id: "035_source_tracking",
+    sql: `
+      -- Source tracking: JSONB for flat tables, VARCHAR for sub-entity rows
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS field_sources JSONB DEFAULT '{}';
+      ALTER TABLE cm_content_guidelines ADD COLUMN IF NOT EXISTS field_sources JSONB DEFAULT '{}';
+
+      ALTER TABLE cm_contacts ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_buyer_personas ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_competitors ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_differentiators ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_team_members ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_services ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+      ALTER TABLE cm_important_links ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -112,7 +112,7 @@ export const coreServiceSchema = z.object({
   subServices: z.array(subServiceSchema).optional(),
 });
 
-export const storyBrandSchema = z.object({
+export const brandStorySchema = z.object({
   hero: z.string().max(2000),
   problem: z.string().max(2000),
   guide: z.string().max(2000),
@@ -134,7 +134,7 @@ export const contentProfileSchema = z.object({
   tagline: z.string().max(500).optional(),
   cities: z.array(z.string().max(200)).optional(),
   coreServices: z.array(coreServiceSchema).optional(),
-  storybrand: storyBrandSchema.optional(),
+  storybrand: brandStorySchema.optional(),
   brandVoice: brandVoiceSchema.optional(),
   contentPrompts: z.record(z.string().max(10000)).optional(),
 });

@@ -9,6 +9,7 @@ import { Pencil } from "lucide-react";
 
 interface Client {
   id: number;
+  fieldSources?: Record<string, string> | null;
   [key: string]: unknown;
 }
 
@@ -232,12 +233,19 @@ export function CompanyInfoEdit({ client, onUpdate }: { client: Client; onUpdate
               <div className="space-y-4">
                 {filled.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
-                    {filled.map((f) => (
-                      <div key={f.key}>
-                        <div className="text-xs text-dim">{f.label}</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{displayVal(f, client[f.key])}</div>
-                      </div>
-                    ))}
+                    {filled.map((f) => {
+                      const src = client.fieldSources?.[f.key.replace(/[A-Z]/g, (c: string) => `_${c.toLowerCase()}`)];
+                      return (
+                        <div key={f.key}>
+                          <div className="text-xs text-dim flex items-center gap-1">
+                            {f.label}
+                            {src === "client" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" title="From client documents" />}
+                            {src === "ai" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500" title="AI-enriched from web" />}
+                          </div>
+                          <div className="text-sm text-foreground whitespace-pre-wrap">{displayVal(f, client[f.key])}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {customFilled.map((k) => (

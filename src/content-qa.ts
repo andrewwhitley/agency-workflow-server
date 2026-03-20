@@ -52,7 +52,7 @@ const QA_SYSTEM_PROMPT = `You are an expert content editor, SEO specialist, and 
 You will receive:
 1. The generated content (markdown)
 2. The page specification (what was requested)
-3. The client's brand profile (services, voice, StoryBrand, etc.)
+3. The client's brand profile (services, voice, Brand Story, etc.)
 4. The sitemap of the website (for internal link validation)
 
 ## Evaluation Criteria
@@ -62,7 +62,7 @@ You will receive:
 - No fabricated statistics, credentials, or claims
 - Service descriptions match what the client actually offers
 - Location references are correct
-- StoryBrand elements are properly applied (hero, guide, plan)
+- Brand Story elements are properly applied (hero, guide, plan)
 
 ### SEO (0-100)
 - Meta title: starts with main keyword/topic, includes city/state if local, ends with brand name separated by "|", under 60-70 chars (not counting brand)

@@ -30,7 +30,7 @@ export interface CoreService {
   subServices?: SubService[];
 }
 
-export interface StoryBrand {
+export interface BrandStory {
   hero: string;
   problem: string;
   guide: string;
@@ -52,7 +52,7 @@ export interface ContentProfile {
   tagline?: string;
   cities?: string[];
   coreServices?: CoreService[];
-  storybrand?: StoryBrand;
+  storybrand?: BrandStory;
   brandVoice?: BrandVoice;
   contentPrompts?: Record<string, string>;
 }
@@ -173,7 +173,7 @@ const WRITING_GUIDELINES = `
 const DEFAULT_PROMPTS: Record<ContentType, string> = {
   "website-page": `You are an expert website content writer focused on local business sites that outrank competitors in search and AI results. Write content that is specific, useful, and optimized for both humans and search engines.
 
-Your content must follow the StoryBrand framework: the customer is the hero, the business is the guide.
+Your content must follow the Brand Story framework: the customer is the hero, the business is the guide.
 
 Rules:
 - Write 500-1000 words per page (adjust based on topic depth)
@@ -326,10 +326,10 @@ function buildPagePrompt(
     }
   }
 
-  // StoryBrand context
+  // Brand Story context
   if (profile.storybrand) {
     brandContext.push("");
-    brandContext.push("StoryBrand Framework:");
+    brandContext.push("Brand Story Framework:");
     brandContext.push(`- Hero (customer): ${profile.storybrand.hero}`);
     brandContext.push(`- Problem: ${profile.storybrand.problem}`);
     brandContext.push(`- Guide (business): ${profile.storybrand.guide}`);
