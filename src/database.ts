@@ -1445,6 +1445,26 @@ Before saving, verify:
     `,
   },
   {
+    id: "038_cleanup_bad_marketing_plan_v2",
+    sql: `
+      -- Nuke ALL marketing plan items that don't match our known template items
+      -- These were created by a bad AI import. Users can re-seed the template.
+      DELETE FROM cm_marketing_plan
+      WHERE LOWER(TRIM(item)) NOT IN (
+        'new build', 'hosting & maintenance',
+        'social account setup & optimization', 'social posts per week', 'networks',
+        '# of services / towns included in plan', 'business listing management',
+        'standard blog posts (1000+ words)', 'long-form blog posts (2000+ words)',
+        'media releases for long-form blog posts',
+        'google ppc', 'google retargeting', 'google lsas', 'facebook ads', 'facebook retargeting',
+        'review monitoring / reporting', 'review funnel / landing pages',
+        'email signature snippet', 'review request management', 'review responses',
+        'negative review disputation',
+        'full access to system & automations', 'ai chat bot'
+      );
+    `,
+  },
+  {
     id: "035_source_tracking",
     sql: `
       -- Source tracking: JSONB for flat tables, VARCHAR for sub-entity rows
