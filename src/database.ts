@@ -1458,6 +1458,14 @@ Before saving, verify:
     `,
   },
   {
+    id: "041_widen_content_guideline_cols",
+    sql: `
+      ALTER TABLE cm_content_guidelines ALTER COLUMN writing_style TYPE TEXT;
+      ALTER TABLE cm_content_guidelines ALTER COLUMN content_purpose TYPE TEXT;
+      ALTER TABLE cm_content_guidelines ALTER COLUMN tone TYPE TEXT;
+    `,
+  },
+  {
     id: "038_cleanup_bad_marketing_plan_v2",
     sql: `
       -- Nuke ALL marketing plan items that don't match our known template items
