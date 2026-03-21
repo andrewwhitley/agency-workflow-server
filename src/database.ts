@@ -1458,6 +1458,13 @@ Before saving, verify:
     `,
   },
   {
+    id: "042_brand_story_unique_client",
+    sql: `
+      -- brand_story_generator uses ON CONFLICT (client_id) but no unique constraint exists
+      CREATE UNIQUE INDEX IF NOT EXISTS cm_brand_story_client_id_unique ON cm_brand_story (client_id);
+    `,
+  },
+  {
     id: "041_widen_content_guideline_cols",
     sql: `
       ALTER TABLE cm_content_guidelines ALTER COLUMN writing_style TYPE TEXT;
