@@ -472,11 +472,13 @@ async function mergeToDatabase(
         }
       }
 
-      for (const [rawKey, val] of Object.entries(item)) {
-        if (rawKey.startsWith("_") || val === null || val === undefined || val === "") continue;
+      for (const [rawKey, rawVal] of Object.entries(item)) {
+        if (rawKey.startsWith("_") || rawVal === null || rawVal === undefined || rawVal === "") continue;
         // Convert camelCase to snake_case
         const key = rawKey.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
         if (allowed.length > 0 && !allowed.includes(key)) continue;
+        // Stringify arrays/objects for TEXT columns
+        const val = (typeof rawVal === "object" && !Array.isArray(rawVal)) ? JSON.stringify(rawVal) : (Array.isArray(rawVal) ? rawVal.join(", ") : rawVal);
         cols.push(key);
         vals.push(val);
         placeholders.push(`$${i++}`);
@@ -552,11 +554,13 @@ async function mergeToDatabase(
     const updates: string[] = [];
     let i = 2;
 
-    for (const [rawKey, val] of Object.entries(data.contentGuidelines)) {
-      if (rawKey.startsWith("_") || val === null || val === undefined || val === "") continue;
+    for (const [rawKey, rawVal] of Object.entries(data.contentGuidelines)) {
+      if (rawKey.startsWith("_") || rawVal === null || rawVal === undefined || rawVal === "") continue;
       // Convert camelCase to snake_case
       const key = rawKey.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
       if (!allowedGuidelineFields.includes(key)) continue;
+      // Stringify arrays/objects for TEXT columns
+      const val = (typeof rawVal === "object") ? JSON.stringify(rawVal) : rawVal;
       cols.push(key);
       vals.push(val);
       placeholders.push(`$${i}`);
