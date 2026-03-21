@@ -79,8 +79,10 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
 
   const openAdd = () => { setForm(emptyItem()); setEditingId(null); setDialogOpen(true); };
   const openEdit = (item: MarketingPlanItem) => { setForm({ ...item }); setEditingId(item.id); setDialogOpen(true); };
+  const [error, setError] = useState<string | null>(null);
   const submit = async () => {
     setPending(true);
+    setError(null);
     try {
       if (editingId) {
         await api(`/cm/marketing-plan/${editingId}`, { method: "PUT", body: JSON.stringify(form) });
@@ -89,7 +91,10 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
       }
       setDialogOpen(false);
       reload();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Failed to save");
+    }
     setPending(false);
   };
   const doDelete = async () => {
@@ -217,9 +222,10 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
         );
       })}
 
-      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
+      <FormDialog open={dialogOpen} onOpenChange={() => { setDialogOpen(false); setError(null); }}
         title={editingId ? "Edit Deliverable" : "Add Deliverable"}
         onSubmit={submit} isPending={pending}>
+        {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
         <FormField label="Category" type="select" value={form.category || ""}
           onChange={(v) => upd("category", v)}
           options={[{ value: "", label: "— Select —" }, ...CATEGORIES.map((c) => ({ value: c, label: c })), { value: "Other", label: "Other" }]} />

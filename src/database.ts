@@ -1445,6 +1445,13 @@ Before saving, verify:
     `,
   },
   {
+    id: "039_fix_completion_target_type",
+    sql: `
+      -- completion_target was TIMESTAMPTZ but users enter free text like "Ongoing" or "02/28/2025"
+      ALTER TABLE cm_marketing_plan ALTER COLUMN completion_target TYPE TEXT USING completion_target::TEXT;
+    `,
+  },
+  {
     id: "038_cleanup_bad_marketing_plan_v2",
     sql: `
       -- Nuke ALL marketing plan items that don't match our known template items
