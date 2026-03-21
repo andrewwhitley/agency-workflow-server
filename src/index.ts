@@ -431,6 +431,28 @@ async function main(): Promise<void> {
         return;
       }
 
+      if (action === "test-extract") {
+        const { GoogleAuthService } = await import("./google-auth.js");
+        const { GoogleDriveService } = await import("./google-drive.js");
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const anthropic = new Anthropic();
+        const auth = new GoogleAuthService();
+        const drive = new GoogleDriveService(auth.getClient());
+        const docId = String(req.query.doc || "1WWj51y9UEcuGKKHoYUfYA1CV7zLVpf-SHO_efewEx3E");
+        let content = "";
+        try { content = await drive.readFile(docId, "application/vnd.google-apps.document"); } catch { }
+        if (!content) { try { content = await drive.readFile(docId, "application/vnd.google-apps.spreadsheet"); } catch { } }
+        // Ask Claude to just extract content guidelines
+        const resp = await anthropic.messages.create({
+          model: "claude-sonnet-4-5-20250929", max_tokens: 4096,
+          system: "Return only valid JSON.",
+          messages: [{ role: "user", content: `Extract content guidelines from this document. Return a JSON object with keys like: brand_voice, tone, writing_style, dos_and_donts, unique_selling_points, guarantees, competitive_advantages, brand_colors, fonts, target_audience_summary, demographics, seo_keywords, focus_topics, featured_testimonials. Use snake_case keys.\n\nDOCUMENT:\n${content.substring(0, 10000)}` }],
+        });
+        const text = resp.content.find((b) => b.type === "text")?.text || "";
+        res.json({ docLength: content.length, extraction: text.substring(0, 2000) });
+        return;
+      }
+
       if (action === "status") {
         const counts = await Promise.all([
           dbQuery("SELECT COUNT(*) as c FROM cm_content_guidelines WHERE client_id = $1", [clientId]),
