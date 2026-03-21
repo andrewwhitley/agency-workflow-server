@@ -548,6 +548,26 @@ async function mergeToDatabase(
     }
   }
 
+  // 4. Deduplicate — remove duplicate rows created by import
+  const dedupConfigs = [
+    { table: "cm_contacts", key: "LOWER(TRIM(name))" },
+    { table: "cm_team_members", key: "LOWER(TRIM(full_name))" },
+    { table: "cm_services", key: "LOWER(TRIM(service_name)), LOWER(TRIM(category))" },
+    { table: "cm_competitors", key: "LOWER(TRIM(company_name))" },
+    { table: "cm_differentiators", key: "LOWER(TRIM(COALESCE(title,''))), LOWER(TRIM(category))" },
+    { table: "cm_buyer_personas", key: "LOWER(TRIM(persona_name))" },
+    { table: "cm_important_links", key: "LOWER(TRIM(url))" },
+    { table: "cm_addresses", key: "LOWER(TRIM(COALESCE(street_address,''))), LOWER(TRIM(COALESCE(city,'')))" },
+    { table: "cm_logins", key: "LOWER(TRIM(platform))" },
+  ];
+  for (const { table, key } of dedupConfigs) {
+    await query(
+      `DELETE FROM ${table} WHERE client_id = $1 AND id NOT IN (
+        SELECT MIN(id) FROM ${table} WHERE client_id = $1 GROUP BY ${key}
+      )`, [clientId]
+    );
+  }
+
   return { fieldsExtracted, entitiesCreated };
 }
 
