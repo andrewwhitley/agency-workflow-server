@@ -386,6 +386,48 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temporary: clean re-import for a client (remove after use)
+  app.post("/api/admin/reimport", async (req, res) => {
+    if (req.query.token !== "reimport-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    try {
+      const { query: dbQuery } = await import("./database.js");
+      const { importClientData, getClientIdBySlug } = await import("./client-import.js");
+      const { GoogleAuthService } = await import("./google-auth.js");
+      const { GoogleDriveService } = await import("./google-drive.js");
+
+      const slug = String(req.query.slug || "");
+      const clientId = await getClientIdBySlug(slug);
+      if (!clientId) { res.status(404).json({ error: `Client ${slug} not found` }); return; }
+
+      const auth = new GoogleAuthService();
+      if (!auth.isAuthenticated()) { res.status(503).json({ error: "Drive not configured" }); return; }
+      const drive = new GoogleDriveService(auth.getClient());
+      const docs = String(req.query.docs || "").split(",").filter(Boolean);
+      if (!docs.length) { res.status(400).json({ error: "No docs" }); return; }
+
+      // 1. Wipe all sub-entity data for this client
+      const tables = [
+        "cm_contacts", "cm_addresses", "cm_services", "cm_service_areas",
+        "cm_team_members", "cm_competitors", "cm_differentiators",
+        "cm_buyer_personas", "cm_important_links", "cm_logins",
+        "cm_marketing_plan", "cm_content_guidelines",
+      ];
+      for (const t of tables) {
+        await dbQuery(`DELETE FROM ${t} WHERE client_id = $1`, [clientId]);
+      }
+      // Reset field_sources on client
+      await dbQuery(`UPDATE cm_clients SET field_sources = '{}' WHERE id = $1`, [clientId]);
+
+      console.log(`[admin-reimport] Wiped sub-entity data for client ${clientId}`);
+
+      // 2. Fire-and-forget the import
+      res.json({ success: true, clientId, message: "Wiped and import started", docs: docs.length });
+      importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
+        .then((r) => console.log("[admin-reimport] Done:", JSON.stringify(r.summary)))
+        .catch((e) => console.error("[admin-reimport] Failed:", e));
+    } catch (err) { console.error("Reimport error:", err); res.status(500).json({ error: String(err) }); }
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
