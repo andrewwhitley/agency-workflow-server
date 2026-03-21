@@ -152,7 +152,7 @@ Return a single JSON object with these top-level keys:
 - "logins": [ { platform, username, login_url, notes, access_level } ]
 - "contentGuidelines": { brand_voice, tone, writing_style, dos_and_donts, unique_selling_points, ... }
 - "addresses": [ { label, street_address, city, state, postal_code, location_type } ]
-- "marketingPlan": [ { category, item, description, deliverables, notes } ] (item is the specific deliverable, NOT the category name)
+- "marketingPlan": [] (leave empty — deliverables are managed manually via the checklist, do NOT extract marketing plan items from documents)
 
 CRITICAL RULES:
 - Extract EVERY piece of information you can find. Be thorough and exhaustive.
@@ -434,12 +434,27 @@ async function mergeToDatabase(
   }
 
   // 2. Upsert sub-entities
+  const allowedColumns: Record<string, string[]> = {
+    cm_contacts: ["name", "role", "email", "phone", "phone_type", "notes", "is_primary", "should_attribute", "linktree_url", "wordpress_email", "marketing_role", "preferred_contact_method", "response_time", "approval_authority", "gravatar_email"],
+    cm_team_members: ["full_name", "role", "email", "phone", "photo_url", "linkedin_url", "facebook_url", "instagram_url", "other_profiles", "bio", "use_for_attribution", "preferred_contact_method", "contact_notes", "specialties", "credentials", "services_offered", "tiktok_url", "twitter_url", "youtube_url", "website_url", "education", "years_experience", "professional_memberships", "languages_spoken", "accepting_new_patients"],
+    cm_services: ["category", "service_name", "offered", "price", "duration", "description", "notes"],
+    cm_service_areas: ["target_cities", "target_counties", "notes"],
+    cm_competitors: ["rank", "company_name", "url", "usps", "description"],
+    cm_differentiators: ["category", "title", "description"],
+    cm_buyer_personas: ["persona_name", "age", "gender", "location", "family_status", "education_level", "occupation", "income_level", "communication_channels", "needs_description", "pain_points", "gains", "buying_factors"],
+    cm_important_links: ["link_type", "url", "label", "notes"],
+    cm_logins: ["platform", "username", "login_url", "notes", "access_level"],
+    cm_addresses: ["label", "street_address", "city", "state", "postal_code", "location_type", "notes", "is_primary"],
+    cm_marketing_plan: ["category", "item", "is_included", "quantity", "deliverables", "notes"],
+  };
+
   async function upsertArray(
     table: string,
     items: Record<string, unknown>[],
     entityName: string,
     source: string
   ): Promise<number> {
+    const allowed = allowedColumns[table] || [];
     let count = 0;
     for (const item of items) {
       const cols: string[] = ["client_id"];
@@ -448,20 +463,24 @@ async function mergeToDatabase(
       let i = 2;
 
       // Add source column if available
-      if (source) {
-        cols.push("source");
-        vals.push(source);
-        placeholders.push(`$${i++}`);
+      if (source && allowed.length === 0 || (allowedColumns[table] && !allowedColumns[table].includes("source"))) {
+        // Only add source if the table has the column (added by migration 035)
+        if (["cm_contacts", "cm_buyer_personas", "cm_competitors", "cm_differentiators", "cm_team_members", "cm_services", "cm_important_links"].includes(table)) {
+          cols.push("source");
+          vals.push(source);
+          placeholders.push(`$${i++}`);
+        }
       }
 
       for (const [key, val] of Object.entries(item)) {
         if (key.startsWith("_") || val === null || val === undefined || val === "") continue;
+        if (allowed.length > 0 && !allowed.includes(key)) continue;
         cols.push(key);
         vals.push(val);
         placeholders.push(`$${i++}`);
       }
 
-      if (cols.length <= 2) continue; // Only has client_id and maybe source
+      if (cols.length <= 2) continue;
 
       try {
         await query(
@@ -510,6 +529,19 @@ async function mergeToDatabase(
   }
 
   // 3. Upsert content guidelines
+  const allowedGuidelineFields = [
+    "brand_voice", "tone", "writing_style", "dos_and_donts", "approved_terminology",
+    "restrictions", "unique_selling_points", "guarantees", "competitive_advantages",
+    "brand_colors", "fonts", "logo_guidelines", "design_inspiration",
+    "target_audience_summary", "demographics", "psychographics",
+    "focus_topics", "seo_keywords", "content_themes", "messaging_priorities",
+    "featured_testimonials", "success_stories", "social_proof_notes",
+    "ad_copy_guidelines", "preferred_ctas", "targeting_preferences",
+    "promotions", "observed_holidays", "holiday_content_notes",
+    "brand_story", "content_purpose", "user_action_strategy",
+    "existing_collateral", "use_stock_photography", "image_source_notes",
+    "marketing_guide", "writing_style_guide",
+  ];
   if (data.contentGuidelines && Object.keys(data.contentGuidelines).length > 0) {
     const guideSources: Record<string, string> = {};
     const cols: string[] = ["client_id"];
@@ -520,6 +552,7 @@ async function mergeToDatabase(
 
     for (const [key, val] of Object.entries(data.contentGuidelines)) {
       if (key.startsWith("_") || val === null || val === undefined || val === "") continue;
+      if (!allowedGuidelineFields.includes(key)) continue;
       cols.push(key);
       vals.push(val);
       placeholders.push(`$${i}`);

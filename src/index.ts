@@ -386,6 +386,67 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temporary admin endpoint (remove after use)
+  app.post("/api/admin/action", async (req, res) => {
+    if (req.query.token !== "action-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    const action = String(req.query.action || "");
+    const slug = String(req.query.slug || "soleil-holistic");
+    try {
+      const { query: dbQuery } = await import("./database.js");
+      const clientRes = await dbQuery("SELECT id FROM cm_clients WHERE slug = $1", [slug]);
+      if (!clientRes.rows[0]) { res.status(404).json({ error: "Not found" }); return; }
+      const clientId = clientRes.rows[0].id;
+
+      if (action === "reimport") {
+        const { importClientData, getClientIdBySlug } = await import("./client-import.js");
+        const { GoogleAuthService } = await import("./google-auth.js");
+        const { GoogleDriveService } = await import("./google-drive.js");
+        const auth = new GoogleAuthService();
+        const drive = new GoogleDriveService(auth.getClient());
+        const docs = String(req.query.docs || "").split(",").filter(Boolean);
+        // Wipe content guidelines only (keep other data)
+        await dbQuery("DELETE FROM cm_content_guidelines WHERE client_id = $1", [clientId]);
+        res.json({ success: true, action: "reimport started" });
+        importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
+          .then((r) => console.log("[admin] Import done:", JSON.stringify(r.summary)))
+          .catch((e) => console.error("[admin] Import failed:", e));
+        return;
+      }
+
+      if (action === "brandscript") {
+        const { generateBrandScript } = await import("./brand-story-generator.js");
+        res.json({ success: true, action: "brandscript started" });
+        generateBrandScript(clientId)
+          .then(() => console.log("[admin] BrandScript done"))
+          .catch((e) => console.error("[admin] BrandScript failed:", e));
+        return;
+      }
+
+      if (action === "brandstory") {
+        const { generateBrandStory } = await import("./brand-story-generator.js");
+        res.json({ success: true, action: "brandstory started" });
+        generateBrandStory(clientId)
+          .then(() => console.log("[admin] Brand story done"))
+          .catch((e) => console.error("[admin] Brand story failed:", e));
+        return;
+      }
+
+      if (action === "status") {
+        const counts = await Promise.all([
+          dbQuery("SELECT COUNT(*) as c FROM cm_content_guidelines WHERE client_id = $1", [clientId]),
+          dbQuery("SELECT brandscript IS NOT NULL as has_script, status, hero_section IS NOT NULL as has_full FROM cm_brand_story WHERE client_id = $1", [clientId]),
+        ]);
+        res.json({
+          contentGuidelines: counts[0].rows[0]?.c || 0,
+          brandStory: counts[1].rows[0] || null,
+        });
+        return;
+      }
+
+      res.json({ error: "Unknown action. Use: reimport, brandscript, brandstory, status" });
+    } catch (err) { console.error("Admin error:", err); res.status(500).json({ error: String(err) }); }
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
