@@ -386,53 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temporary admin endpoint for one-off fixes (remove after use)
-  app.post("/api/admin/fix-client/:slug", async (req, res) => {
-    const token = req.query.token;
-    if (token !== "fix-soleil-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    try {
-      const { query: dbQuery } = await import("./database.js");
-      const { generateBrandStory } = await import("./brand-story-generator.js");
-
-      const slug = req.params.slug;
-      const clientRes = await dbQuery("SELECT id, company_name FROM cm_clients WHERE slug = $1", [slug]);
-      if (!clientRes.rows[0]) { res.status(404).json({ error: "Client not found" }); return; }
-      const clientId = clientRes.rows[0].id;
-      const name = clientRes.rows[0].company_name;
-
-      // 1. Delete bad marketing plan items
-      const deleted = await dbQuery(
-        `DELETE FROM cm_marketing_plan WHERE client_id = $1 AND (
-          item IS NULL OR item = '' OR LOWER(TRIM(item)) = LOWER(TRIM(category))
-          OR LOWER(TRIM(category)) NOT IN ('website','social media','seo','web content','ad management','reputation management','business automatrix')
-        ) RETURNING id`,
-        [clientId]
-      );
-
-      // 2. Generate brand story (fire-and-forget to avoid Cloudflare timeout)
-      let storyResult = "skipped";
-      if (req.query.story !== "false") {
-        storyResult = "started";
-        generateBrandStory(clientId).then(() => {
-          console.log(`[admin] Brand story generated for ${name}`);
-        }).catch((err) => {
-          console.error(`[admin] Brand story generation failed for ${name}:`, err);
-        });
-      }
-
-      res.json({
-        success: true,
-        client: name,
-        clientId,
-        deletedBadItems: deleted.rows.length,
-        brandStory: storyResult,
-      });
-    } catch (err) {
-      console.error("Admin fix error:", err);
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
