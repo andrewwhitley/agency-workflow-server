@@ -386,29 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temporary import endpoint (remove after use)
-  app.post("/api/admin/import-client", async (req, res) => {
-    if (req.query.token !== "import-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    try {
-      const { importClientData, getClientIdBySlug } = await import("./client-import.js");
-      const { GoogleAuthService } = await import("./google-auth.js");
-      const { GoogleDriveService } = await import("./google-drive.js");
-      const auth = new GoogleAuthService();
-      if (!auth.isAuthenticated()) { res.status(503).json({ error: "Drive not configured" }); return; }
-      const drive = new GoogleDriveService(auth.getClient());
-      const slug = String(req.query.slug || "");
-      const clientId = await getClientIdBySlug(slug);
-      if (!clientId) { res.status(404).json({ error: `Client ${slug} not found` }); return; }
-      const docs = String(req.query.docs || "").split(",").filter(Boolean);
-      if (!docs.length) { res.status(400).json({ error: "No docs provided" }); return; }
-      // Fire and forget to avoid timeout
-      res.json({ success: true, clientId, message: "Import started", docs: docs.length });
-      importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
-        .then((r) => console.log("[admin-import] Done:", JSON.stringify(r.summary)))
-        .catch((e) => console.error("[admin-import] Failed:", e));
-    } catch (err) { res.status(500).json({ error: String(err) }); }
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
