@@ -386,7 +386,7 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temporary reimport endpoint (will remove after Soleil import completes)
+  // Temporary reimport endpoint (step 1: wipe, step 2: import)
   app.post("/api/admin/reimport", async (req, res) => {
     if (req.query.token !== "reimport-2026") { res.status(403).json({ error: "Forbidden" }); return; }
     try {
@@ -397,19 +397,45 @@ async function main(): Promise<void> {
       const slug = String(req.query.slug || "");
       const clientId = await getClientIdBySlug(slug);
       if (!clientId) { res.status(404).json({ error: `Client ${slug} not found` }); return; }
-      const auth = new GoogleAuthService();
-      if (!auth.isAuthenticated()) { res.status(503).json({ error: "Drive not configured" }); return; }
-      const drive = new GoogleDriveService(auth.getClient());
-      const docs = String(req.query.docs || "").split(",").filter(Boolean);
-      if (!docs.length) { res.status(400).json({ error: "No docs" }); return; }
-      // Wipe sub-entity data
-      for (const t of ["cm_contacts","cm_addresses","cm_services","cm_service_areas","cm_team_members","cm_competitors","cm_differentiators","cm_buyer_personas","cm_important_links","cm_logins","cm_marketing_plan","cm_content_guidelines"]) {
-        await dbQuery(`DELETE FROM ${t} WHERE client_id = $1`, [clientId]);
+      const step = String(req.query.step || "wipe");
+
+      if (step === "wipe") {
+        for (const t of ["cm_contacts","cm_addresses","cm_services","cm_service_areas","cm_team_members","cm_competitors","cm_differentiators","cm_buyer_personas","cm_important_links","cm_logins","cm_marketing_plan","cm_content_guidelines"]) {
+          await dbQuery(`DELETE FROM ${t} WHERE client_id = $1`, [clientId]);
+        }
+        await dbQuery(`UPDATE cm_clients SET field_sources = '{}' WHERE id = $1`, [clientId]);
+        res.json({ success: true, step: "wipe", clientId });
+        return;
       }
-      await dbQuery(`UPDATE cm_clients SET field_sources = '{}' WHERE id = $1`, [clientId]);
-      // Run import and wait for completion
-      const result = await importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true });
-      res.json(result);
+
+      if (step === "import") {
+        const auth = new GoogleAuthService();
+        if (!auth.isAuthenticated()) { res.status(503).json({ error: "Drive not configured" }); return; }
+        const drive = new GoogleDriveService(auth.getClient());
+        const docs = String(req.query.docs || "").split(",").filter(Boolean);
+        if (!docs.length) { res.status(400).json({ error: "No docs" }); return; }
+        res.json({ success: true, step: "import", clientId, message: "Import started" });
+        importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
+          .then((r) => console.log("[admin-reimport] COMPLETE:", JSON.stringify(r.summary)))
+          .catch((e) => console.error("[admin-reimport] FAILED:", e));
+        return;
+      }
+
+      // Check status
+      const counts = await Promise.all([
+        dbQuery("SELECT COUNT(*) as c FROM cm_contacts WHERE client_id = $1", [clientId]),
+        dbQuery("SELECT COUNT(*) as c FROM cm_services WHERE client_id = $1", [clientId]),
+        dbQuery("SELECT COUNT(*) as c FROM cm_team_members WHERE client_id = $1", [clientId]),
+        dbQuery("SELECT COUNT(*) as c FROM cm_competitors WHERE client_id = $1", [clientId]),
+        dbQuery("SELECT COUNT(*) as c FROM cm_content_guidelines WHERE client_id = $1", [clientId]),
+      ]);
+      res.json({
+        contacts: counts[0].rows[0].c,
+        services: counts[1].rows[0].c,
+        teamMembers: counts[2].rows[0].c,
+        competitors: counts[3].rows[0].c,
+        contentGuidelines: counts[4].rows[0].c,
+      });
     } catch (err) { console.error("Reimport error:", err); res.status(500).json({ error: String(err) }); }
   });
 
