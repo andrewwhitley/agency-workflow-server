@@ -386,6 +386,40 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temporary: deduplicate client data (remove after use)
+  app.post("/api/admin/dedup", async (req, res) => {
+    if (req.query.token !== "dedup-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    try {
+      const { query: dbQuery } = await import("./database.js");
+      const clientId = Number(req.query.clientId || 1);
+      const results: Record<string, number> = {};
+
+      // Deduplicate each table by keeping only the row with the lowest id for each unique key
+      const dedupConfigs = [
+        { table: "cm_contacts", key: "LOWER(TRIM(name))" },
+        { table: "cm_team_members", key: "LOWER(TRIM(full_name))" },
+        { table: "cm_services", key: "LOWER(TRIM(service_name)), LOWER(TRIM(category))" },
+        { table: "cm_competitors", key: "LOWER(TRIM(company_name))" },
+        { table: "cm_differentiators", key: "LOWER(TRIM(COALESCE(title,''))), LOWER(TRIM(category))" },
+        { table: "cm_buyer_personas", key: "LOWER(TRIM(persona_name))" },
+        { table: "cm_important_links", key: "LOWER(TRIM(url))" },
+        { table: "cm_addresses", key: "LOWER(TRIM(COALESCE(street_address,''))), LOWER(TRIM(COALESCE(city,'')))" },
+        { table: "cm_logins", key: "LOWER(TRIM(platform))" },
+      ];
+
+      for (const { table, key } of dedupConfigs) {
+        const r = await dbQuery(
+          `DELETE FROM ${table} WHERE client_id = $1 AND id NOT IN (
+            SELECT MIN(id) FROM ${table} WHERE client_id = $1 GROUP BY ${key}
+          )`, [clientId]
+        );
+        if (r.rowCount > 0) results[table] = r.rowCount;
+      }
+
+      res.json({ success: true, clientId, deleted: results });
+    } catch (err) { console.error("Dedup error:", err); res.status(500).json({ error: String(err) }); }
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
