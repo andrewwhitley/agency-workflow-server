@@ -217,7 +217,7 @@ async function gatherClientData(clientId: number): Promise<ClientData> {
         [clientId]
       ),
       query(
-        `SELECT persona_name, description, pain_points, gains, buying_factors, needs_description
+        `SELECT persona_name, pain_points, gains, buying_factors, needs_description
          FROM cm_buyer_personas WHERE client_id = $1`,
         [clientId]
       ),
@@ -304,7 +304,6 @@ function buildContextBlock(data: ClientData): string {
     parts.push("\n## Buyer Personas");
     for (const p of data.personas) {
       parts.push(`### ${p.persona_name}`);
-      if (p.description) parts.push(`${p.description}`);
       if (p.pain_points) parts.push(`- **Pain Points**: ${p.pain_points}`);
       if (p.gains) parts.push(`- **Gains**: ${p.gains}`);
       if (p.buying_factors) parts.push(`- **Buying Factors**: ${p.buying_factors}`);
