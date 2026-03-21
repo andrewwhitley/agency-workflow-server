@@ -426,12 +426,20 @@ async function main(): Promise<void> {
 
       if (action === "brandstory") {
         const { generateBrandStory } = await import("./brand-story-generator.js");
-        try {
-          const result = await generateBrandStory(clientId);
-          res.json({ success: true, result });
-        } catch (e: any) {
-          res.json({ error: e?.message, stack: e?.stack?.substring(0, 300) });
-        }
+        res.json({ success: true, action: "brandstory started" });
+        generateBrandStory(clientId)
+          .then(async () => {
+            await dbQuery("UPDATE cm_clients SET business_facts = 'BRAND_STORY_OK' WHERE id = $1", [clientId]);
+          })
+          .catch(async (e) => {
+            await dbQuery("UPDATE cm_clients SET business_facts = $2 WHERE id = $1", [clientId, `BRAND_STORY_ERROR: ${e?.message}`]);
+          });
+        return;
+      }
+
+      if (action === "check-error") {
+        const r = await dbQuery("SELECT business_facts FROM cm_clients WHERE id = $1", [clientId]);
+        res.json({ businessFacts: r.rows[0]?.business_facts });
         return;
       }
 
