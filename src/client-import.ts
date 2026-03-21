@@ -491,7 +491,23 @@ async function mergeToDatabase(
   if (data.importantLinks?.length) await upsertArray("cm_important_links", data.importantLinks, "importantLinks", "client");
   if (data.logins?.length) await upsertArray("cm_logins", data.logins, "logins", "");
   if (data.addresses?.length) await upsertArray("cm_addresses", data.addresses, "addresses", "");
-  if (data.marketingPlan?.length) await upsertArray("cm_marketing_plan", data.marketingPlan, "marketingPlan", "");
+  if (data.marketingPlan?.length) {
+    // Clean up marketing plan: fix key names, filter out category-as-item rows
+    const cleanedPlan = data.marketingPlan
+      .map((item) => {
+        const cleaned = { ...item };
+        // Fix common AI key mismatches
+        if (cleaned.item_name && !cleaned.item) { cleaned.item = cleaned.item_name; delete cleaned.item_name; }
+        return cleaned;
+      })
+      .filter((item) => {
+        // Skip rows where item is missing or equals the category
+        const itemVal = String(item.item || "").trim();
+        const catVal = String(item.category || "").trim();
+        return itemVal && itemVal !== catVal;
+      });
+    if (cleanedPlan.length) await upsertArray("cm_marketing_plan", cleanedPlan, "marketingPlan", "");
+  }
 
   // 3. Upsert content guidelines
   if (data.contentGuidelines && Object.keys(data.contentGuidelines).length > 0) {

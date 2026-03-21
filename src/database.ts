@@ -1437,6 +1437,14 @@ Before saving, verify:
     `,
   },
   {
+    id: "037_cleanup_bad_marketing_plan",
+    sql: `
+      -- Delete marketing plan items where item is NULL, empty, or equals the category (bad import data)
+      DELETE FROM cm_marketing_plan
+      WHERE item IS NULL OR item = '' OR item = category;
+    `,
+  },
+  {
     id: "035_source_tracking",
     sql: `
       -- Source tracking: JSONB for flat tables, VARCHAR for sub-entity rows
