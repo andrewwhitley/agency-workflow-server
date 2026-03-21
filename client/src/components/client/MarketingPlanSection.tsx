@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2, Download, ListPlus } from "lucide-react";
 interface MarketingPlanItem {
   id: number; category: string; item: string; isIncluded: boolean;
   quantity: number | null; deliverables: string | null; notes: string | null; completionTarget: string | null;
+  details: Record<string, unknown> | null;
 }
 
 const CATEGORIES = [
@@ -52,8 +53,12 @@ const TEMPLATE_ITEMS: { category: string; item: string }[] = [
 ];
 
 const emptyItem = (): Partial<MarketingPlanItem> => ({
-  category: "", item: "", isIncluded: false, quantity: null, deliverables: "", notes: "", completionTarget: "",
+  category: "", item: "", isIncluded: false, quantity: null, deliverables: "", notes: "", completionTarget: "", details: null,
 });
+
+// Items that need extra fields when included
+const ITEMS_WITH_PAGES = ["New Build"];
+const needsPages = (item: string) => ITEMS_WITH_PAGES.includes(item);
 
 export function MarketingPlanSection({ clientId }: { clientId: number }) {
   const [items, setItems] = useState<MarketingPlanItem[]>([]);
@@ -154,16 +159,30 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
 
   const upd = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
+  const clearAll = async () => {
+    if (!confirm("Delete ALL deliverable items for this client? This cannot be undone.")) return;
+    setPending(true);
+    try {
+      for (const item of items) {
+        await api(`/cm/marketing-plan/${item.id}`, { method: "DELETE" });
+      }
+      reload();
+    } catch (e) { console.error(e); }
+    setPending(false);
+  };
+
   if (loading) return <div className="text-sm text-muted">Loading deliverables...</div>;
 
-  const categories = [...new Set(items.map((i) => i.category))];
+  // Filter out bad items where item is empty or equals the category
+  const validItems = items.filter((i) => i.item && i.item.trim() !== "" && i.item.trim().toLowerCase() !== i.category.trim().toLowerCase());
+  const categories = [...new Set(validItems.map((i) => i.category))];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Client Deliverables</h3>
         <div className="flex gap-2">
-          {items.length === 0 && (
+          {validItems.length === 0 && (
             <Button size="sm" variant="outline" onClick={seedTemplate} disabled={seeding}>
               <ListPlus className="h-3 w-3 mr-1" /> {seeding ? "Seeding..." : "Seed Template"}
             </Button>
@@ -174,13 +193,18 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
           <Button size="sm" variant="outline" onClick={openAdd}>
             <Plus className="h-3 w-3 mr-1" /> Add Item
           </Button>
+          {items.length > 0 && (
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={clearAll} disabled={pending}>
+              <Trash2 className="h-3 w-3 mr-1" /> Clear All
+            </Button>
+          )}
         </div>
       </div>
 
-      {items.length === 0 && <div className="text-muted text-sm">No deliverables yet. Use "Seed Template" for standard items or import from a Google Sheet.</div>}
+      {validItems.length === 0 && <div className="text-muted text-sm">No deliverables yet. Use "Seed Template" for standard items or import from a Google Sheet.</div>}
 
       {categories.map((cat) => {
-        const catItems = items.filter((i) => i.category === cat);
+        const catItems = validItems.filter((i) => i.category === cat);
         const included = catItems.filter((i) => i.isIncluded).length;
         return (
           <div key={cat}>
@@ -204,6 +228,9 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
                       </div>
                       {item.deliverables && (
                         <div className="text-xs text-muted mt-0.5">{item.deliverables}</div>
+                      )}
+                      {item.isIncluded && needsPages(item.item) && item.details && (item.details as any).pages && (
+                        <div className="text-xs text-muted mt-0.5">Pages: {String((item.details as any).pages)}</div>
                       )}
                       {item.notes && (
                         <div className="text-xs text-dim mt-0.5 italic">{item.notes}</div>
@@ -232,7 +259,10 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
         <FormField label="Item" value={form.item || ""} onChange={(v) => upd("item", v)} required placeholder="e.g. Standard Blog Posts (1000+ Words)" />
         <FormField label="Included" type="checkbox" checked={!!form.isIncluded} onChange={(v) => upd("isIncluded", v)} />
         <FormField label="Deliverables / Frequency" value={form.deliverables || ""} onChange={(v) => upd("deliverables", v)} placeholder="e.g. 8 per year, 2 per week, 3 campaigns" />
-        <FormField label="Completion Target" value={form.completionTarget || ""} onChange={(v) => upd("completionTarget", v)} placeholder="e.g. 02/28/2025 or Ongoing" />
+        <FormField label="Target Date" value={form.completionTarget || ""} onChange={(v) => upd("completionTarget", v)} placeholder="e.g. 04/15/2026 or Ongoing" />
+        {needsPages(form.item || "") && (
+          <FormField label="Pages Included" type="textarea" value={(form.details as any)?.pages || ""} onChange={(v) => upd("details", { ...(form.details || {}), pages: v })} placeholder="e.g. Home, About, Services, Contact, Blog" />
+        )}
         <FormField label="Notes" type="textarea" value={form.notes || ""} onChange={(v) => upd("notes", v)} />
       </FormDialog>
 

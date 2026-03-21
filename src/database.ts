@@ -1452,6 +1452,12 @@ Before saving, verify:
     `,
   },
   {
+    id: "040_marketing_plan_details",
+    sql: `
+      ALTER TABLE cm_marketing_plan ADD COLUMN IF NOT EXISTS details JSONB;
+    `,
+  },
+  {
     id: "038_cleanup_bad_marketing_plan_v2",
     sql: `
       -- Nuke ALL marketing plan items that don't match our known template items
