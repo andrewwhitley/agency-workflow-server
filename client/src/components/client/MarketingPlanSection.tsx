@@ -73,25 +73,25 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Auto-seed template items if none exist
+  // Auto-seed missing template items (runs after load, adds any template items not yet in DB)
+  const [seeded, setSeeded] = useState(false);
   useEffect(() => {
-    if (!loading && items.length === 0) {
-      seedTemplate();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
-
-  const seedTemplate = async () => {
+    if (loading || seeded) return;
     const existing = new Set(items.map((i) => `${i.category}::${i.item}`));
-    for (const t of TEMPLATE_ITEMS) {
-      if (existing.has(`${t.category}::${t.item}`)) continue;
-      await api(`/cm/clients/${clientId}/marketing-plan`, {
-        method: "POST",
-        body: JSON.stringify({ category: t.category, item: t.item, isIncluded: false }),
-      });
-    }
-    reload();
-  };
+    const missing = TEMPLATE_ITEMS.filter((t) => !existing.has(`${t.category}::${t.item}`));
+    if (missing.length === 0) { setSeeded(true); return; }
+    setSeeded(true);
+    (async () => {
+      for (const t of missing) {
+        await api(`/cm/clients/${clientId}/marketing-plan`, {
+          method: "POST",
+          body: JSON.stringify({ category: t.category, item: t.item, isIncluded: false }),
+        });
+      }
+      reload();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, items]);
 
   const toggleIncluded = async (item: MarketingPlanItem) => {
     try {
