@@ -404,12 +404,14 @@ async function main(): Promise<void> {
         const auth = new GoogleAuthService();
         const drive = new GoogleDriveService(auth.getClient());
         const docs = String(req.query.docs || "").split(",").filter(Boolean);
-        // Wipe content guidelines only (keep other data)
         await dbQuery("DELETE FROM cm_content_guidelines WHERE client_id = $1", [clientId]);
-        res.json({ success: true, action: "reimport started" });
-        importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
-          .then((r) => console.log("[admin] Import done:", JSON.stringify(r.summary)))
-          .catch((e) => console.error("[admin] Import failed:", e));
+        // Await the import this time to capture the result
+        try {
+          const result = await importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: false });
+          res.json({ success: true, result: result.summary, errors: result.errors });
+        } catch (e: any) {
+          res.json({ error: e.message, stack: e.stack?.substring(0, 500) });
+        }
         return;
       }
 
