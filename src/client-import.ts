@@ -124,8 +124,11 @@ brand_story, content_purpose, user_action_strategy,
 existing_collateral, use_stock_photography (bool), image_source_notes,
 marketing_guide, writing_style_guide
 
-### cm_marketing_plan
-Fields: category, item_name, description, deliverables, status, completion_percentage (int), notes
+### cm_marketing_plan (deliverables — each row is one specific deliverable, NOT a category)
+Fields: category (grouping header, e.g. "SEO", "Web Content", "Ad Management", "Social Media", "Reputation Management"),
+item (the specific deliverable name, e.g. "Google PPC", "Standard Blog Posts", "Facebook Ads"),
+description, deliverables (frequency/quantity, e.g. "8 per year", "2 per week"), notes
+IMPORTANT: Do NOT create rows where item equals the category name. Categories are just group labels.
 
 ### cm_addresses
 Fields: label, street_address, city, state, postal_code, location_type, notes, is_primary
@@ -149,7 +152,7 @@ Return a single JSON object with these top-level keys:
 - "logins": [ { platform, username, login_url, notes, access_level } ]
 - "contentGuidelines": { brand_voice, tone, writing_style, dos_and_donts, unique_selling_points, ... }
 - "addresses": [ { label, street_address, city, state, postal_code, location_type } ]
-- "marketingPlan": [ { category, item_name, description, deliverables, notes } ]
+- "marketingPlan": [ { category, item, description, deliverables, notes } ] (item is the specific deliverable, NOT the category name)
 
 CRITICAL RULES:
 - Extract EVERY piece of information you can find. Be thorough and exhaustive.
