@@ -136,15 +136,22 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
 
   if (loading) return <div className="text-sm text-muted">Loading deliverables...</div>;
 
-  // Group items by category, keeping template order
+  // Group items by category, keeping template order and deduplicating
   const itemsByCategory: Record<string, MarketingPlanItem[]> = {};
   for (const cat of CATEGORIES) {
     itemsByCategory[cat] = [];
   }
+  const seenItemKeys = new Set<string>();
   for (const item of items) {
     if (!item.item || item.item.trim() === "" || item.item.trim().toLowerCase() === item.category.trim().toLowerCase()) continue;
-    if (!itemsByCategory[item.category]) itemsByCategory[item.category] = [];
-    itemsByCategory[item.category].push(item);
+    // Deduplicate by category+item
+    const key = `${item.category.trim()}::${item.item.trim()}`.toLowerCase();
+    if (seenItemKeys.has(key)) continue;
+    seenItemKeys.add(key);
+    // Map to known category if possible
+    const cat = CATEGORIES.find((c) => c.toLowerCase() === item.category.trim().toLowerCase()) || item.category.trim();
+    if (!itemsByCategory[cat]) itemsByCategory[cat] = [];
+    itemsByCategory[cat].push(item);
   }
 
   const includedCount = items.filter((i) => i.isIncluded).length;
@@ -178,13 +185,6 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
                 <div className={cn("w-2 h-2 rounded-full", color)} />
                 <span className="text-xs font-bold text-foreground uppercase tracking-wide">{cat}</span>
                 <span className="text-[10px] text-dim">({catItems.filter((i) => i.isIncluded).length}/{catItems.length})</span>
-                <button
-                  onClick={() => { setAddingTo(addingTo === cat ? null : cat); setNewItemName(""); }}
-                  className="ml-auto text-dim hover:text-foreground transition-colors"
-                  title="Add custom item"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
               </div>
 
               {/* Items */}
@@ -256,8 +256,8 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
                 );
               })}
 
-              {/* Add custom item inline */}
-              {addingTo === cat && (
+              {/* Add custom item */}
+              {addingTo === cat ? (
                 <div className="grid grid-cols-[40px_1fr_1fr_40px] items-center px-3 py-1.5 border-b border-border/50 bg-accent/5">
                   <div />
                   <input
@@ -274,6 +274,16 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
                   </div>
                   <div />
                 </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingTo(cat); setNewItemName(""); }}
+                  className="w-full grid grid-cols-[40px_1fr_1fr_40px] items-center px-3 py-1.5 border-b border-border/50 text-dim/40 hover:text-dim hover:bg-surface-2 transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span className="text-xs">Add deliverable...</span>
+                  <div />
+                  <div />
+                </button>
               )}
             </div>
           );
