@@ -433,20 +433,41 @@ async function main(): Promise<void> {
         return;
       }
 
-      if (action === "direct-insert-guidelines") {
-        // Directly insert content guidelines to test if the DB works
-        try {
-          await dbQuery(
-            `INSERT INTO cm_content_guidelines (client_id, brand_voice, tone)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (client_id) DO UPDATE SET brand_voice = $2, tone = $3, updated_at = NOW()`,
-            [clientId, "Test brand voice", "Test tone"]
-          );
-          const check = await dbQuery("SELECT id, brand_voice, tone FROM cm_content_guidelines WHERE client_id = $1", [clientId]);
-          res.json({ success: true, row: check.rows[0] });
-        } catch (err: any) {
-          res.json({ error: err.message });
+      if (action === "extract-and-insert-guidelines") {
+        // Read docs, extract with Claude, and insert content guidelines directly
+        const { GoogleAuthService } = await import("./google-auth.js");
+        const { GoogleDriveService } = await import("./google-drive.js");
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const anthropic = new Anthropic();
+        const auth = new GoogleAuthService();
+        const drive = new GoogleDriveService(auth.getClient());
+        const docs = String(req.query.docs || "1WWj51y9UEcuGKKHoYUfYA1CV7zLVpf-SHO_efewEx3E").split(",");
+        let allContent = "";
+        for (const docId of docs) {
+          try { const c = await drive.readFile(docId.trim(), "application/vnd.google-apps.document"); allContent += c; } catch {}
+          try { const c = await drive.readFile(docId.trim(), "application/vnd.google-apps.spreadsheet"); allContent += c; } catch {}
         }
+        const resp = await anthropic.messages.create({
+          model: "claude-sonnet-4-5-20250929", max_tokens: 4096,
+          system: "Return ONLY valid JSON. No markdown fences.",
+          messages: [{ role: "user", content: `Extract content/brand guidelines from these documents. Return a JSON object with snake_case keys matching these columns: brand_voice, tone, writing_style, dos_and_donts, unique_selling_points, guarantees, competitive_advantages, brand_colors, fonts, logo_guidelines, target_audience_summary, demographics, psychographics, focus_topics, seo_keywords, content_themes, messaging_priorities, featured_testimonials, success_stories, preferred_ctas. All values must be strings (not arrays or objects). If multiple items, join with semicolons.\n\nDOCUMENTS:\n${allContent.substring(0, 15000)}` }],
+        });
+        const text = resp.content.find((b) => b.type === "text")?.text || "{}";
+        const cleaned = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+        const extracted = JSON.parse(cleaned);
+        // Insert into DB
+        const allowedFields = ["brand_voice","tone","writing_style","dos_and_donts","unique_selling_points","guarantees","competitive_advantages","brand_colors","fonts","logo_guidelines","target_audience_summary","demographics","psychographics","focus_topics","seo_keywords","content_themes","messaging_priorities","featured_testimonials","success_stories","preferred_ctas"];
+        const cols = ["client_id"]; const vals: unknown[] = [clientId]; const phs = ["$1"]; const ups: string[] = [];
+        let pi = 2;
+        for (const [k, v] of Object.entries(extracted)) {
+          const key = k.replace(/[A-Z]/g, (c: string) => `_${c.toLowerCase()}`);
+          if (!allowedFields.includes(key) || !v) continue;
+          const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+          cols.push(key); vals.push(val); phs.push(`$${pi}`); ups.push(`${key} = $${pi}`); pi++;
+        }
+        ups.push("updated_at = NOW()");
+        await dbQuery(`INSERT INTO cm_content_guidelines (${cols.join(",")}) VALUES (${phs.join(",")}) ON CONFLICT (client_id) DO UPDATE SET ${ups.join(",")}`, vals);
+        res.json({ success: true, fieldsInserted: cols.length - 1, keys: cols.slice(1) });
         return;
       }
 
