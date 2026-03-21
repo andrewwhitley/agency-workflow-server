@@ -413,7 +413,7 @@ async function main(): Promise<void> {
             SELECT MIN(id) FROM ${table} WHERE client_id = $1 GROUP BY ${key}
           )`, [clientId]
         );
-        if (r.rowCount > 0) results[table] = r.rowCount;
+        if (r.rowCount && r.rowCount > 0) results[table] = r.rowCount;
       }
 
       res.json({ success: true, clientId, deleted: results });
