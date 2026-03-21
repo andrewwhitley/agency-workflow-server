@@ -431,6 +431,23 @@ async function main(): Promise<void> {
         return;
       }
 
+      if (action === "direct-insert-guidelines") {
+        // Directly insert content guidelines to test if the DB works
+        try {
+          await dbQuery(
+            `INSERT INTO cm_content_guidelines (client_id, brand_voice, tone)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (client_id) DO UPDATE SET brand_voice = $2, tone = $3, updated_at = NOW()`,
+            [clientId, "Test brand voice", "Test tone"]
+          );
+          const check = await dbQuery("SELECT id, brand_voice, tone FROM cm_content_guidelines WHERE client_id = $1", [clientId]);
+          res.json({ success: true, row: check.rows[0] });
+        } catch (err: any) {
+          res.json({ error: err.message });
+        }
+        return;
+      }
+
       if (action === "test-extract") {
         const { GoogleAuthService } = await import("./google-auth.js");
         const { GoogleDriveService } = await import("./google-drive.js");
