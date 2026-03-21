@@ -416,8 +416,27 @@ async function main(): Promise<void> {
         if (!docs.length) { res.status(400).json({ error: "No docs" }); return; }
         res.json({ success: true, step: "import", clientId, message: "Import started" });
         importClientData(clientId, docs, drive, { generateStory: false, enrichFromWeb: true })
-          .then((r) => console.log("[admin-reimport] COMPLETE:", JSON.stringify(r.summary)))
-          .catch((e) => console.error("[admin-reimport] FAILED:", e));
+          .then((r) => console.log("[admin-reimport] COMPLETE:", JSON.stringify(r)))
+          .catch((e) => console.error("[admin-reimport] FAILED:", e?.message || e, e?.stack || ""));
+        return;
+      }
+
+      if (step === "debug") {
+        const auth = new GoogleAuthService();
+        if (!auth.isAuthenticated()) { res.status(503).json({ error: "Drive not configured" }); return; }
+        const drive = new GoogleDriveService(auth.getClient());
+        const docId = String(req.query.doc || "1h5LkdtUo355CunbFKsEbWY3SLqNGbApD1YjHv9tmxOw");
+        try {
+          const content = await drive.readFile(docId, "application/vnd.google-apps.document");
+          res.json({ success: true, docId, length: content.length, preview: content.substring(0, 500) });
+        } catch (err: any) {
+          try {
+            const content = await drive.readFile(docId, "application/vnd.google-apps.spreadsheet");
+            res.json({ success: true, docId, type: "sheet", length: content.length, preview: content.substring(0, 500) });
+          } catch (err2: any) {
+            res.json({ error: "Cannot read doc", docError: err?.message, sheetError: err2?.message });
+          }
+        }
         return;
       }
 
