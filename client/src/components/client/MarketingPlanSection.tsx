@@ -148,8 +148,11 @@ export function MarketingPlanSection({ clientId }: { clientId: number }) {
     const key = `${item.category.trim()}::${item.item.trim()}`.toLowerCase();
     if (seenItemKeys.has(key)) continue;
     seenItemKeys.add(key);
-    // Map to known category if possible
-    const cat = CATEGORIES.find((c) => c.toLowerCase() === item.category.trim().toLowerCase()) || item.category.trim();
+    // Map to known category if possible (exact match or contains)
+    const rawCat = item.category.trim().toLowerCase();
+    const cat = CATEGORIES.find((c) => c.toLowerCase() === rawCat)
+      || CATEGORIES.find((c) => rawCat.includes(c.toLowerCase()))
+      || item.category.trim();
     if (!itemsByCategory[cat]) itemsByCategory[cat] = [];
     itemsByCategory[cat].push(item);
   }
