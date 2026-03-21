@@ -426,10 +426,12 @@ async function main(): Promise<void> {
 
       if (action === "brandstory") {
         const { generateBrandStory } = await import("./brand-story-generator.js");
-        res.json({ success: true, action: "brandstory started" });
-        generateBrandStory(clientId)
-          .then(() => console.log("[admin] Brand story done"))
-          .catch((e) => console.error("[admin] Brand story failed:", e));
+        try {
+          const result = await generateBrandStory(clientId);
+          res.json({ success: true, result });
+        } catch (e: any) {
+          res.json({ error: e?.message, stack: e?.stack?.substring(0, 300) });
+        }
         return;
       }
 
