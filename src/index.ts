@@ -409,11 +409,15 @@ async function main(): Promise<void> {
         [clientId]
       );
 
-      // 2. Generate brand story
+      // 2. Generate brand story (fire-and-forget to avoid Cloudflare timeout)
       let storyResult = "skipped";
       if (req.query.story !== "false") {
-        await generateBrandStory(clientId);
-        storyResult = "generated";
+        storyResult = "started";
+        generateBrandStory(clientId).then(() => {
+          console.log(`[admin] Brand story generated for ${name}`);
+        }).catch((err) => {
+          console.error(`[admin] Brand story generation failed for ${name}:`, err);
+        });
       }
 
       res.json({
