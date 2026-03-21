@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormField } from "@/components/FormField";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 
 interface Service {
   id: number; category: string; serviceName: string; offered: boolean;
@@ -39,6 +39,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedService, setExpandedService] = useState<number | null>(null);
 
   const [svcDialogOpen, setSvcDialogOpen] = useState(false);
   const [svcForm, setSvcForm] = useState<Partial<Service>>(emptyService());
@@ -62,7 +63,6 @@ export function ServicesSection({ clientId }: { clientId: number }) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Service CRUD
   const openAddService = (parentId?: number) => {
     setSvcForm({ ...emptyService(), parentServiceId: parentId || null });
     setEditingSvcId(null);
@@ -97,7 +97,6 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setSvcPending(false);
   };
 
-  // Service Area CRUD
   const openAddSA = () => { setSaForm(emptyServiceArea()); setEditingSaId(null); setSaDialogOpen(true); };
   const openEditSA = (sa: ServiceArea) => { setSaForm({ ...sa }); setEditingSaId(sa.id); setSaDialogOpen(true); };
   const submitSA = async () => {
@@ -134,7 +133,6 @@ export function ServicesSection({ clientId }: { clientId: number }) {
 
   return (
     <div className="space-y-6">
-      {/* Services */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-foreground">Services</h3>
         <Button size="sm" variant="outline" onClick={() => openAddService()}>
@@ -146,103 +144,101 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         <div className="text-muted text-sm">No services added yet.</div>
       )}
 
-      {categories.map((cat) => (
-        <div key={cat} className="mb-6">
-          <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">{cat}</h4>
-          <div className="space-y-4">
-            {parentServices.filter((s) => s.category === cat).map((s) => {
-              const subs = services.filter((sub) => sub.parentServiceId === s.id).sort((a, b) => a.sortOrder - b.sortOrder);
+      {/* Compact service list grouped by category */}
+      {categories.map((cat) => {
+        const catServices = parentServices.filter((s) => s.category === cat);
+        return (
+          <div key={cat} className="border border-border rounded-lg overflow-hidden">
+            {/* Category header */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-surface border-b border-border">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wide">{cat}</span>
+              <span className="text-[10px] text-dim">{catServices.length} service{catServices.length !== 1 ? "s" : ""}</span>
+            </div>
+
+            {/* Service rows */}
+            {catServices.map((s) => {
+              const isExpanded = expandedService === s.id;
+              const subs = services.filter((sub) => sub.parentServiceId === s.id);
+              const hasDetails = s.description || s.descriptionLong || s.idealPatientProfile || s.differentiators || s.expectedOutcomes || s.commonConcerns || subs.length > 0;
+
               return (
-                <div key={s.id} className={cn("border border-border rounded-md p-4", !s.offered && "opacity-50")}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <span className={cn("text-sm font-semibold", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
-                      {s.duration && <span className="text-xs text-muted ml-2">({s.duration})</span>}
-                      {!s.offered && <span className="text-xs px-2 py-0.5 ml-2 rounded bg-surface-2 text-dim">Not offered</span>}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {s.price != null && <span className="text-sm font-medium text-foreground mr-2">${s.price}</span>}
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditService(s)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteSvcId(s.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                <div key={s.id} className={cn("border-b border-border/50 last:border-b-0", !s.offered && "opacity-50")}>
+                  {/* Compact row */}
+                  <div className="flex items-center px-4 py-2 hover:bg-surface-2 transition-colors">
+                    {hasDetails ? (
+                      <button onClick={() => setExpandedService(isExpanded ? null : s.id)} className="mr-2 text-dim">
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
+                    ) : (
+                      <div className="w-[22px] mr-2" />
+                    )}
+                    <span className={cn("text-sm flex-1", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
+                    {s.duration && <span className="text-xs text-dim mr-3">{s.duration}</span>}
+                    {s.price != null && <span className="text-xs font-medium text-foreground mr-3">${s.price}</span>}
+                    {!s.offered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim mr-2">Not offered</span>}
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditService(s)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => setDeleteSvcId(s.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
 
-                  {(s.descriptionLong || s.description) && <p className="text-sm text-muted mb-3">{s.descriptionLong || s.description}</p>}
-
-                  <div className="space-y-3">
-                    {s.idealPatientProfile && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-0.5">Ideal Client Profile</div>
-                        <div className="text-sm text-foreground whitespace-pre-wrap">{s.idealPatientProfile}</div>
-                      </div>
-                    )}
-                    {(s.goodFitCriteria || s.notGoodFitCriteria) && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {s.goodFitCriteria && <div className="bg-success/5 rounded-md p-3"><div className="text-xs font-medium text-success mb-1">Good Fit</div><div className="text-sm text-foreground whitespace-pre-wrap">{s.goodFitCriteria}</div></div>}
-                        {s.notGoodFitCriteria && <div className="bg-destructive/5 rounded-md p-3"><div className="text-xs font-medium text-destructive mb-1">Not a Good Fit</div><div className="text-sm text-foreground whitespace-pre-wrap">{s.notGoodFitCriteria}</div></div>}
-                      </div>
-                    )}
-                    {(s.targetAgeRange || s.targetGender || s.targetConditions || s.targetInterests) && (
-                      <div>
-                        <div className="text-xs font-medium text-dim mb-1">Target Demographics</div>
-                        <div className="flex flex-wrap gap-2">
-                          {s.targetAgeRange && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Age: {s.targetAgeRange}</span>}
-                          {s.targetGender && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">{s.targetGender}</span>}
-                          {s.targetConditions && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Conditions: {s.targetConditions}</span>}
-                          {s.targetInterests && <span className="text-xs px-2 py-1 rounded bg-surface-2 text-muted">Interests: {s.targetInterests}</span>}
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-1 ml-[22px] mr-4 border-t border-border/30 space-y-3">
+                      {(s.descriptionLong || s.description) && (
+                        <p className="text-sm text-muted">{s.descriptionLong || s.description}</p>
+                      )}
+                      {s.idealPatientProfile && (
+                        <div><div className="text-xs font-medium text-dim mb-0.5">Ideal Client</div><div className="text-sm text-foreground">{s.idealPatientProfile}</div></div>
+                      )}
+                      {s.differentiators && (
+                        <div><div className="text-xs font-medium text-dim mb-0.5">Differentiators</div><div className="text-sm text-foreground">{s.differentiators}</div></div>
+                      )}
+                      {s.expectedOutcomes && (
+                        <div><div className="text-xs font-medium text-dim mb-0.5">Expected Outcomes</div><div className="text-sm text-foreground">{s.expectedOutcomes}</div></div>
+                      )}
+                      {s.commonConcerns && (
+                        <div><div className="text-xs font-medium text-dim mb-0.5">Common Concerns</div><div className="text-sm text-foreground">{s.commonConcerns}</div></div>
+                      )}
+                      {(s.targetAgeRange || s.targetGender || s.targetConditions) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {s.targetAgeRange && <span className="text-[10px] px-2 py-0.5 rounded bg-surface-2 text-dim">Age: {s.targetAgeRange}</span>}
+                          {s.targetGender && <span className="text-[10px] px-2 py-0.5 rounded bg-surface-2 text-dim">{s.targetGender}</span>}
+                          {s.targetConditions && <span className="text-[10px] px-2 py-0.5 rounded bg-surface-2 text-dim">{s.targetConditions}</span>}
                         </div>
-                      </div>
-                    )}
-                    {s.differentiators && <div><div className="text-xs font-medium text-dim mb-0.5">Differentiators</div><div className="text-sm text-foreground whitespace-pre-wrap">{s.differentiators}</div></div>}
-                    {s.expectedOutcomes && <div><div className="text-xs font-medium text-dim mb-0.5">Expected Outcomes</div><div className="text-sm text-foreground whitespace-pre-wrap">{s.expectedOutcomes}</div></div>}
-                    {s.commonConcerns && <div><div className="text-xs font-medium text-dim mb-0.5">Common Concerns / FAQs</div><div className="text-sm text-foreground whitespace-pre-wrap">{s.commonConcerns}</div></div>}
-                    {s.serviceAreaCities && <div><div className="text-xs font-medium text-dim mb-0.5">Service Areas</div><div className="text-sm text-muted">{s.serviceAreaCities}</div></div>}
-                  </div>
-
-                  {/* Sub-services */}
-                  <div className="mt-4 pt-3 border-t border-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium text-dim">Sub-Services</div>
+                      )}
+                      {subs.length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-dim mb-1">Sub-Services</div>
+                          <div className="space-y-1 pl-3 border-l-2 border-border">
+                            {subs.map((sub) => (
+                              <div key={sub.id} className="flex items-center justify-between py-1">
+                                <div>
+                                  <span className="text-sm text-foreground">{sub.serviceName}</span>
+                                  {sub.price != null && <span className="text-xs text-dim ml-2">${sub.price}</span>}
+                                </div>
+                                <div className="flex gap-0.5">
+                                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => openEditService(sub)}><Pencil className="h-2.5 w-2.5" /></Button>
+                                  <Button size="icon" variant="ghost" className="h-5 w-5 text-destructive" onClick={() => setDeleteSvcId(sub.id)}><Trash2 className="h-2.5 w-2.5" /></Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => openAddService(s.id)}>
                         <Plus className="h-3 w-3 mr-1" /> Add Sub-Service
                       </Button>
                     </div>
-                    {subs.length > 0 ? (
-                      <div className="space-y-3 pl-3 border-l-2 border-border">
-                        {subs.map((sub) => (
-                          <div key={sub.id} className="flex items-start justify-between">
-                            <div>
-                              <span className={cn("text-sm font-medium", sub.offered ? "text-foreground" : "text-dim line-through")}>{sub.serviceName}</span>
-                              {sub.duration && <span className="text-xs text-muted ml-1">({sub.duration})</span>}
-                              {sub.price != null && <span className="text-xs text-muted ml-1">${sub.price}</span>}
-                              {(sub.descriptionLong || sub.description) && <p className="text-xs text-muted mt-0.5">{sub.descriptionLong || sub.description}</p>}
-                              {sub.idealPatientProfile && <p className="text-xs text-dim mt-0.5">Ideal for: {sub.idealPatientProfile}</p>}
-                            </div>
-                            <div className="flex gap-1 shrink-0">
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditService(sub)}>
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => setDeleteSvcId(sub.id)}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-dim pl-3">No sub-services yet.</div>
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Service Areas */}
       <div className="border-t border-border pt-6">
@@ -287,32 +283,28 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         <FormField label="Full Description" type="textarea" value={svcForm.descriptionLong || ""} onChange={(v) => upd("descriptionLong", v)} rows={4} />
         <FormField label="Ideal Client Profile" type="textarea" value={svcForm.idealPatientProfile || ""} onChange={(v) => upd("idealPatientProfile", v)} placeholder="Who is this service for?" rows={3} />
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Good Fit Criteria" type="textarea" value={svcForm.goodFitCriteria || ""} onChange={(v) => upd("goodFitCriteria", v)} placeholder="Best candidates for this service" rows={3} />
-          <FormField label="Not a Good Fit" type="textarea" value={svcForm.notGoodFitCriteria || ""} onChange={(v) => upd("notGoodFitCriteria", v)} placeholder="Who should look elsewhere" rows={3} />
+          <FormField label="Good Fit Criteria" type="textarea" value={svcForm.goodFitCriteria || ""} onChange={(v) => upd("goodFitCriteria", v)} rows={3} />
+          <FormField label="Not a Good Fit" type="textarea" value={svcForm.notGoodFitCriteria || ""} onChange={(v) => upd("notGoodFitCriteria", v)} rows={3} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Target Age Range" value={svcForm.targetAgeRange || ""} onChange={(v) => upd("targetAgeRange", v)} placeholder="e.g. 30-55" />
-          <FormField label="Target Gender" value={svcForm.targetGender || ""} onChange={(v) => upd("targetGender", v)} placeholder="e.g. Female, All" />
+          <FormField label="Target Age Range" value={svcForm.targetAgeRange || ""} onChange={(v) => upd("targetAgeRange", v)} />
+          <FormField label="Target Gender" value={svcForm.targetGender || ""} onChange={(v) => upd("targetGender", v)} />
         </div>
-        <FormField label="Target Conditions" type="textarea" value={svcForm.targetConditions || ""} onChange={(v) => upd("targetConditions", v)} placeholder="e.g. chronic pain, TMJ, hormonal imbalance" rows={2} />
-        <FormField label="Target Interests" value={svcForm.targetInterests || ""} onChange={(v) => upd("targetInterests", v)} placeholder="e.g. wellness, holistic health" />
-        <FormField label="Service Area Cities" value={svcForm.serviceAreaCities || ""} onChange={(v) => upd("serviceAreaCities", v)} placeholder="Cities this service targets specifically" />
-        <FormField label="Differentiators" type="textarea" value={svcForm.differentiators || ""} onChange={(v) => upd("differentiators", v)} placeholder="What makes this service different from competitors?" rows={3} />
-        <FormField label="Expected Outcomes" type="textarea" value={svcForm.expectedOutcomes || ""} onChange={(v) => upd("expectedOutcomes", v)} placeholder="What clients can expect" rows={3} />
-        <FormField label="Common Concerns / FAQs" type="textarea" value={svcForm.commonConcerns || ""} onChange={(v) => upd("commonConcerns", v)} placeholder="Frequently asked questions or objections" rows={3} />
+        <FormField label="Target Conditions" type="textarea" value={svcForm.targetConditions || ""} onChange={(v) => upd("targetConditions", v)} rows={2} />
+        <FormField label="Differentiators" type="textarea" value={svcForm.differentiators || ""} onChange={(v) => upd("differentiators", v)} rows={3} />
+        <FormField label="Expected Outcomes" type="textarea" value={svcForm.expectedOutcomes || ""} onChange={(v) => upd("expectedOutcomes", v)} rows={3} />
+        <FormField label="Common Concerns / FAQs" type="textarea" value={svcForm.commonConcerns || ""} onChange={(v) => upd("commonConcerns", v)} rows={3} />
         <FormField label="Notes" type="textarea" value={svcForm.notes || ""} onChange={(v) => upd("notes", v)} rows={2} />
       </FormDialog>
 
-      {/* Service Area Form Dialog */}
       <FormDialog open={saDialogOpen} onOpenChange={setSaDialogOpen}
         title={editingSaId ? "Edit Service Area" : "Add Service Area"}
         onSubmit={submitSA} isPending={saPending}>
-        <FormField label="Target Cities" type="textarea" value={saForm.targetCities || ""} onChange={(v) => updSA("targetCities", v)} placeholder="List target cities" rows={3} />
-        <FormField label="Target Counties" type="textarea" value={saForm.targetCounties || ""} onChange={(v) => updSA("targetCounties", v)} placeholder="List target counties" rows={2} />
+        <FormField label="Target Cities" type="textarea" value={saForm.targetCities || ""} onChange={(v) => updSA("targetCities", v)} rows={3} />
+        <FormField label="Target Counties" type="textarea" value={saForm.targetCounties || ""} onChange={(v) => updSA("targetCounties", v)} rows={2} />
         <FormField label="Notes" type="textarea" value={saForm.notes || ""} onChange={(v) => updSA("notes", v)} rows={2} />
       </FormDialog>
 
-      {/* Delete confirmations */}
       <ConfirmDialog open={deleteSvcId !== null} onOpenChange={() => setDeleteSvcId(null)}
         title="Delete Service" description="This will permanently delete this service and any sub-services."
         onConfirm={deleteService} isPending={svcPending} />

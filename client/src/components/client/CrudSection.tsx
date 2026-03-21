@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 
 interface CrudSectionProps<T extends { id: number }> {
   title: string;
@@ -15,11 +15,15 @@ interface CrudSectionProps<T extends { id: number }> {
   wide?: boolean;
   deleteWarning?: string;
   singularTitle?: string;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 }
 
 export function CrudSection<T extends { id: number }>({
   title, clientId, entityPath, emptyForm, renderItem, renderForm, wide, deleteWarning, singularTitle,
+  collapsible, defaultCollapsed,
 }: CrudSectionProps<T>) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
   const singular = singularTitle || title.replace(/ies$/, "y").replace(/ses$/, "ss").replace(/s$/, "");
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,13 +72,21 @@ export function CrudSection<T extends { id: number }>({
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-foreground pb-2 border-b border-border flex-1">{title}</h3>
+        {collapsible ? (
+          <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-1.5 text-sm font-semibold text-foreground pb-2 border-b border-border flex-1">
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-dim" /> : <ChevronDown className="h-3.5 w-3.5 text-dim" />}
+            {title}
+            {collapsed && items.length > 0 && <span className="text-xs text-dim font-normal ml-1">({items.length})</span>}
+          </button>
+        ) : (
+          <h3 className="text-sm font-semibold text-foreground pb-2 border-b border-border flex-1">{title}</h3>
+        )}
         <Button size="sm" variant="outline" onClick={openAdd} className="ml-3 shrink-0">
           <Plus className="h-3 w-3 mr-1" /> Add
         </Button>
       </div>
 
-      {items.length === 0 ? (
+      {!collapsed && (items.length === 0 ? (
         <div className="text-muted text-sm">No {title.toLowerCase()} added yet.</div>
       ) : (
         <div className="space-y-2">
@@ -84,7 +96,7 @@ export function CrudSection<T extends { id: number }>({
             () => setDeleteId(item.id),
           ))}
         </div>
-      )}
+      ))}
 
       <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
         title={editingId ? `Edit ${singular}` : `Add ${singular}`}
