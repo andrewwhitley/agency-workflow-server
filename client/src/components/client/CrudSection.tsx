@@ -32,6 +32,7 @@ export function CrudSection<T extends { id: number }>({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     api<T[]>(`/cm/clients/${clientId}/${entityPath}`).then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
@@ -43,15 +44,27 @@ export function CrudSection<T extends { id: number }>({
   const openEdit = (item: T) => { setForm({ ...item }); setEditingId(item.id); setDialogOpen(true); };
   const submit = async () => {
     setPending(true);
+    setError(null);
     try {
+      // Strip read-only/system fields before sending
+      const payload: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(form)) {
+        if (["id", "clientId", "createdAt", "updatedAt", "source"].includes(k)) continue;
+        if (v === undefined) continue;
+        payload[k] = v;
+      }
       if (editingId) {
-        await api(`/cm/${entityPath}/${editingId}`, { method: "PUT", body: JSON.stringify(form) });
+        await api(`/cm/${entityPath}/${editingId}`, { method: "PUT", body: JSON.stringify(payload) });
       } else {
-        await api(`/cm/clients/${clientId}/${entityPath}`, { method: "POST", body: JSON.stringify(form) });
+        await api(`/cm/clients/${clientId}/${entityPath}`, { method: "POST", body: JSON.stringify(payload) });
       }
       setDialogOpen(false);
+      setError(null);
       reload();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : "Failed to save");
+    }
     setPending(false);
   };
   const doDelete = async () => {
@@ -98,9 +111,10 @@ export function CrudSection<T extends { id: number }>({
         </div>
       ))}
 
-      <FormDialog open={dialogOpen} onOpenChange={setDialogOpen}
+      <FormDialog open={dialogOpen} onOpenChange={() => { setDialogOpen(false); setError(null); }}
         title={editingId ? `Edit ${singular}` : `Add ${singular}`}
         onSubmit={submit} isPending={pending} wide={wide}>
+        {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
         {renderForm(form, update)}
       </FormDialog>
 
