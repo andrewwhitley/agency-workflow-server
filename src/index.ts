@@ -386,58 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temp: fix service tiers
-  app.post("/api/admin/fix-svc", async (req, res) => {
-    if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    const { query: dbQuery } = await import("./database.js");
-    const clientId = 1;
-    const action = String(req.query.action || "list");
-    if (action === "list") {
-      const r = await dbQuery("SELECT id, service_name, category, tier FROM cm_services WHERE client_id = $1 ORDER BY category, sort_order", [clientId]);
-      res.json(r.rows);
-    } else if (action === "rebuild") {
-      // Nuke all and create clean consolidated services
-      await dbQuery("DELETE FROM cm_services WHERE client_id = $1", [clientId]);
-      const svcs: { cat: string; name: string; tier: string; desc: string }[] = [
-        // Primary
-        { cat: "Naturopathic Medicine", name: "Naturopathic Medicine", tier: "primary", desc: "Comprehensive naturopathic care: root-cause analysis, herbal medicine, nutrition, lifestyle counseling" },
-        { cat: "Naturopathic Medicine", name: "Functional Medicine", tier: "primary", desc: "Advanced lab testing, hormone panels, gut health analysis, personalized treatment protocols" },
-        { cat: "Naturopathic Medicine", name: "Bioidentical Hormone Replacement Therapy (BHRT)", tier: "primary", desc: "Custom hormone optimization for menopause, andropause, thyroid, and adrenal imbalances" },
-        { cat: "Acupuncture & TCM", name: "Acupuncture", tier: "primary", desc: "Traditional Chinese Medicine acupuncture for pain, stress, fertility, and whole-body healing. Includes facial acupuncture." },
-        { cat: "Acupuncture & TCM", name: "Chinese Herbal Medicine", tier: "primary", desc: "Custom herbal formulas prescribed alongside acupuncture and naturopathic care" },
-        { cat: "Medical Aesthetics", name: "Medical Aesthetics", tier: "primary", desc: "Non-toxic, minimally invasive aesthetic treatments. Includes RF Microneedling (Scarlet), AquafirmeXS medical-grade facials, PRP derma fillers, dermaplaning, buccal massage." },
-        { cat: "Medical Aesthetics", name: "Hair Restoration", tier: "primary", desc: "PRP hair restoration and DE|RIVE Exosome Hair Therapy for thinning hair and hair loss" },
-        // Secondary
-        { cat: "IV Therapy", name: "IV Nutrient Therapy", tier: "secondary", desc: "Custom IV vitamin and nutrient infusions for energy, immunity, recovery, and detoxification" },
-        { cat: "Women's Health", name: "Women's Health & Fertility", tier: "secondary", desc: "Fertility support, prenatal care, menopausal symptom management, lactation consulting" },
-        { cat: "Specialty Therapy", name: "Rife Therapy", tier: "secondary", desc: "Frequency-based therapy for chronic conditions and immune support" },
-        // Complementary
-        { cat: "Acupuncture & TCM", name: "Cupping & Moxibustion", tier: "complementary", desc: "Traditional bodywork modalities used alongside acupuncture treatments" },
-        { cat: "Acupuncture & TCM", name: "Tui Na & Shiatsu Bodywork", tier: "complementary", desc: "Chinese therapeutic massage and Japanese pressure-point bodywork" },
-        { cat: "Acupuncture & TCM", name: "TCM Dietary Therapy", tier: "complementary", desc: "Food-as-medicine guidance based on Traditional Chinese Medicine principles" },
-        { cat: "Wellness Programs", name: "Tai Chi & Qigong Workshops", tier: "complementary", desc: "Group classes and workshops for movement, breathing, and energy cultivation" },
-        { cat: "Wellness Programs", name: "Corporate Wellness Programs", tier: "complementary", desc: "On-site wellness programs for businesses including stress management and team health" },
-      ];
-      let order = 0;
-      for (const s of svcs) {
-        await dbQuery(
-          "INSERT INTO cm_services (client_id, category, service_name, tier, description, offered, sort_order) VALUES ($1,$2,$3,$4,$5,true,$6)",
-          [clientId, s.cat, s.name, s.tier, s.desc, order++]
-        );
-      }
-      res.json({ success: true, created: svcs.length });
-    } else if (action === "set-tiers") {
-      const primary = ["Acupuncture", "Naturopathic Medicine", "Bioidentical Hormone Replacement Therapy", "BHRT"];
-      const secondary = ["IV Nutrient Therapy", "Medical Aesthetics", "Functional Medicine", "PRP Therapy", "Dermal Fillers"];
-      // Everything else is complementary
-      await dbQuery(`UPDATE cm_services SET tier = 'primary' WHERE client_id = $1 AND service_name = ANY($2)`, [clientId, primary]);
-      await dbQuery(`UPDATE cm_services SET tier = 'secondary' WHERE client_id = $1 AND service_name = ANY($2)`, [clientId, secondary]);
-      await dbQuery(`UPDATE cm_services SET tier = 'complementary' WHERE client_id = $1 AND tier = 'primary' AND service_name != ALL($2) AND service_name != ALL($3)`, [clientId, primary, secondary]);
-      const r = await dbQuery("SELECT id, service_name, tier FROM cm_services WHERE client_id = $1 ORDER BY category", [clientId]);
-      res.json(r.rows);
-    }
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
