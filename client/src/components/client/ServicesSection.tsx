@@ -17,7 +17,19 @@ interface Service {
   serviceAreaCities: string | null; differentiators: string | null;
   expectedOutcomes: string | null; commonConcerns: string | null;
   parentServiceId: number | null; sortOrder: number; notes: string | null;
+  tier: string | null;
+  providerIds: number[];
 }
+
+interface TeamMember {
+  id: number; fullName: string; role: string | null;
+}
+
+const TIER_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  primary: { label: "Primary", color: "text-green-400", bg: "bg-green-500/10 text-green-400 border-green-500/20" },
+  secondary: { label: "Secondary", color: "text-blue-400", bg: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  complementary: { label: "Complementary", color: "text-dim", bg: "bg-surface-2 text-dim border-border" },
+};
 
 interface ServiceArea {
   id: number; targetCities: string | null; targetCounties: string | null; notes: string | null;
@@ -29,6 +41,7 @@ const emptyService = (): Partial<Service> => ({
   notGoodFitCriteria: "", targetAgeRange: "", targetGender: "", targetConditions: "",
   targetInterests: "", serviceAreaCities: "", differentiators: "", expectedOutcomes: "",
   commonConcerns: "", parentServiceId: null, sortOrder: 0, notes: "",
+  tier: "primary", providerIds: [],
 });
 
 const emptyServiceArea = (): Partial<ServiceArea> => ({
@@ -38,6 +51,7 @@ const emptyServiceArea = (): Partial<ServiceArea> => ({
 export function ServicesSection({ clientId }: { clientId: number }) {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedService, setExpandedService] = useState<number | null>(null);
 
@@ -57,7 +71,8 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     Promise.all([
       api<Service[]>(`/cm/clients/${clientId}/services`).catch(() => []),
       api<ServiceArea[]>(`/cm/clients/${clientId}/service-areas`).catch(() => []),
-    ]).then(([svc, sa]) => { setServices(svc); setServiceAreas(sa); })
+      api<TeamMember[]>(`/cm/clients/${clientId}/team-members`).catch(() => []),
+    ]).then(([svc, sa, tm]) => { setServices(svc); setServiceAreas(sa); setTeamMembers(tm); })
       .finally(() => setLoading(false));
   }, [clientId]);
 
@@ -173,6 +188,12 @@ export function ServicesSection({ clientId }: { clientId: number }) {
                       <div className="w-[22px] mr-2" />
                     )}
                     <span className={cn("text-sm flex-1", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
+                    {s.tier && TIER_CONFIG[s.tier] && (
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded border mr-2", TIER_CONFIG[s.tier].bg)}>{TIER_CONFIG[s.tier].label}</span>
+                    )}
+                    {s.providerIds?.length > 0 && (
+                      <span className="text-[10px] text-dim mr-2">{s.providerIds.map((id) => teamMembers.find((t) => t.id === id)?.fullName?.split(" ")[0]).filter(Boolean).join(", ")}</span>
+                    )}
                     {s.duration && <span className="text-xs text-dim mr-3">{s.duration}</span>}
                     {s.price != null && <span className="text-xs font-medium text-foreground mr-3">${s.price}</span>}
                     {!s.offered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-dim mr-2">Not offered</span>}
@@ -278,7 +299,37 @@ export function ServicesSection({ clientId }: { clientId: number }) {
           <FormField label="Duration" value={svcForm.duration || ""} onChange={(v) => upd("duration", v)} placeholder="e.g. 60 min" />
           <FormField label="Sort Order" type="number" value={svcForm.sortOrder?.toString() || "0"} onChange={(v) => upd("sortOrder", parseInt(v) || 0)} />
         </div>
-        <FormField label="Offered" type="checkbox" checked={svcForm.offered ?? true} onChange={(v) => upd("offered", v)} />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Tier" type="select" value={svcForm.tier || "primary"} onChange={(v) => upd("tier", v)}
+            options={[
+              { value: "primary", label: "Primary — Main revenue service" },
+              { value: "secondary", label: "Secondary — Supporting service" },
+              { value: "complementary", label: "Complementary — Add-on service" },
+            ]} />
+          <FormField label="Offered" type="checkbox" checked={svcForm.offered ?? true} onChange={(v) => upd("offered", v)} />
+        </div>
+        {teamMembers.length > 0 && (
+          <div>
+            <div className="text-sm font-medium mb-2">Providers</div>
+            <div className="flex flex-wrap gap-2">
+              {teamMembers.map((tm) => {
+                const selected = (svcForm.providerIds || []).includes(tm.id);
+                return (
+                  <button key={tm.id} type="button"
+                    onClick={() => {
+                      const ids = svcForm.providerIds || [];
+                      upd("providerIds", selected ? ids.filter((id) => id !== tm.id) : [...ids, tm.id]);
+                    }}
+                    className={cn("text-xs px-3 py-1.5 rounded-md border transition-colors",
+                      selected ? "bg-accent/10 border-accent text-accent" : "border-border text-dim hover:text-foreground")}
+                  >
+                    {tm.fullName}{tm.role ? ` (${tm.role})` : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <FormField label="Short Description" value={svcForm.description || ""} onChange={(v) => upd("description", v)} />
         <FormField label="Full Description" type="textarea" value={svcForm.descriptionLong || ""} onChange={(v) => upd("descriptionLong", v)} rows={4} />
         <FormField label="Ideal Client Profile" type="textarea" value={svcForm.idealPatientProfile || ""} onChange={(v) => upd("idealPatientProfile", v)} placeholder="Who is this service for?" rows={3} />

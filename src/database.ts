@@ -1465,6 +1465,13 @@ Before saving, verify:
     `,
   },
   {
+    id: "043_service_tiers_and_providers",
+    sql: `
+      ALTER TABLE cm_services ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'primary';
+      ALTER TABLE cm_services ADD COLUMN IF NOT EXISTS provider_ids JSONB DEFAULT '[]';
+    `,
+  },
+  {
     id: "041_widen_content_guideline_cols",
     sql: `
       ALTER TABLE cm_content_guidelines ALTER COLUMN writing_style TYPE TEXT;

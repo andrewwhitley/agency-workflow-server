@@ -437,7 +437,7 @@ async function mergeToDatabase(
   const allowedColumns: Record<string, string[]> = {
     cm_contacts: ["name", "role", "email", "phone", "phone_type", "notes", "is_primary", "should_attribute", "linktree_url", "wordpress_email", "marketing_role", "preferred_contact_method", "response_time", "approval_authority", "gravatar_email"],
     cm_team_members: ["full_name", "role", "email", "phone", "photo_url", "linkedin_url", "facebook_url", "instagram_url", "other_profiles", "bio", "use_for_attribution", "preferred_contact_method", "contact_notes", "specialties", "credentials", "services_offered", "tiktok_url", "twitter_url", "youtube_url", "website_url", "education", "years_experience", "professional_memberships", "languages_spoken", "accepting_new_patients"],
-    cm_services: ["category", "service_name", "offered", "price", "duration", "description", "notes"],
+    cm_services: ["category", "service_name", "offered", "price", "duration", "description", "notes", "tier", "provider_ids"],
     cm_service_areas: ["target_cities", "target_counties", "notes"],
     cm_competitors: ["rank", "company_name", "url", "usps", "description"],
     cm_differentiators: ["category", "title", "description"],

@@ -386,50 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temp fix endpoint
-  app.post("/api/admin/fix", async (req, res) => {
-    if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    try {
-      const { query: dbQuery } = await import("./database.js");
-      const clientId = 1;
-      const results: Record<string, number> = {};
-      // Dedup
-      const dedupConfigs = [
-        { table: "cm_contacts", key: "LOWER(TRIM(name))" },
-        { table: "cm_team_members", key: "LOWER(TRIM(full_name))" },
-        { table: "cm_services", key: "LOWER(TRIM(service_name)), LOWER(TRIM(category))" },
-        { table: "cm_competitors", key: "LOWER(TRIM(company_name))" },
-        { table: "cm_differentiators", key: "LOWER(TRIM(COALESCE(title,''))), LOWER(TRIM(category))" },
-        { table: "cm_buyer_personas", key: "LOWER(TRIM(persona_name))" },
-        { table: "cm_important_links", key: "LOWER(TRIM(url))" },
-        { table: "cm_addresses", key: "LOWER(TRIM(COALESCE(street_address,''))), LOWER(TRIM(COALESCE(city,'')))" },
-        { table: "cm_logins", key: "LOWER(TRIM(platform))" },
-      ];
-      for (const { table, key } of dedupConfigs) {
-        const r = await dbQuery(
-          `DELETE FROM ${table} WHERE client_id = $1 AND id NOT IN (
-            SELECT MIN(id) FROM ${table} WHERE client_id = $1 GROUP BY ${key}
-          )`, [clientId]
-        );
-        if (r.rowCount && r.rowCount > 0) results[table] = r.rowCount;
-      }
-      // Fix business_facts
-      await dbQuery("UPDATE cm_clients SET business_facts = '6 specialists, 2x winner Natural Nutmeg 10Best Awards: Nursing, Naturopathic Medicine, Acupuncture/TCM' WHERE id = $1 AND business_facts = 'BRAND_STORY_OK'", [clientId]);
-      // Test edit: try updating a team member to see error
-      let editTest = "not tested";
-      const tm = await dbQuery("SELECT id, full_name FROM cm_team_members WHERE client_id = $1 LIMIT 1", [clientId]);
-      if (tm.rows[0]) {
-        try {
-          await dbQuery("UPDATE cm_team_members SET role = 'Test Role', updated_at = NOW() WHERE id = $1 RETURNING id", [tm.rows[0].id]);
-          // Revert
-          await dbQuery("UPDATE cm_team_members SET role = NULL, updated_at = NOW() WHERE id = $1", [tm.rows[0].id]);
-          editTest = "direct SQL edit works";
-        } catch (e: any) { editTest = `SQL error: ${e.message}`; }
-      }
-      res.json({ deduped: results, editTest });
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
