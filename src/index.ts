@@ -406,6 +406,10 @@ async function main(): Promise<void> {
     } else if (action === "nuke") {
       const r = await dbQuery("DELETE FROM cm_service_areas WHERE client_id = $1 RETURNING id", [clientId]);
       res.json({ deleted: r.rowCount });
+    } else if (action === "seed") {
+      await dbQuery("INSERT INTO cm_service_areas (client_id, target_cities, target_counties, notes) VALUES ($1, $2, $3, $4)", [clientId, "Hamden, Cheshire, North Haven", "New Haven County", "Primary service area — 10-mile radius around office at 2661 Whitney Ave, Hamden"]);
+      await dbQuery("INSERT INTO cm_service_areas (client_id, target_cities, target_counties, notes) VALUES ($1, $2, $3, $4)", [clientId, "Milford and surrounding areas", "New Haven County, Fairfield County, Middlesex County", "Secondary service area — Southern CT region. Telemedicine also available."]);
+      res.json({ success: true, created: 2 });
     }
   });
 
