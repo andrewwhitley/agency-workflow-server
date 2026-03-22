@@ -386,14 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temp: remove Michael Pistoia
-  app.post("/api/admin/rm-pistoia", async (req, res) => {
-    if (req.query.token !== "rm-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    const { query: dbQuery } = await import("./database.js");
-    const r = await dbQuery("DELETE FROM cm_team_members WHERE LOWER(full_name) LIKE '%pistoia%' RETURNING id, full_name");
-    res.json({ deleted: r.rows });
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
