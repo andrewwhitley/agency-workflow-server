@@ -191,9 +191,14 @@ export function ServicesSection({ clientId }: { clientId: number }) {
               const hasDetails = s.description || s.descriptionLong || s.idealPatientProfile || s.differentiators || s.expectedOutcomes || s.commonConcerns || subs.length > 0;
 
               return (
-                <div key={s.id} className={cn("border-b border-border/50 last:border-b-0", !s.offered && "opacity-50")}>
+                <div key={s.id} className={cn(
+                  "border-b border-border/50 last:border-b-0",
+                  !s.offered && "opacity-50",
+                  s.tier === "primary" && "border-l-2 border-l-green-500",
+                  s.tier === "complementary" && "opacity-60",
+                )}>
                   {/* Compact row */}
-                  <div className="flex items-center px-4 py-2 hover:bg-surface-2 transition-colors">
+                  <div className={cn("flex items-center px-4 py-2 hover:bg-surface-2 transition-colors", s.tier === "primary" && "py-3")}>
                     {hasDetails ? (
                       <button onClick={() => setExpandedService(isExpanded ? null : s.id)} className="mr-2 text-dim">
                         {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -201,8 +206,12 @@ export function ServicesSection({ clientId }: { clientId: number }) {
                     ) : (
                       <div className="w-[22px] mr-2" />
                     )}
-                    <span className={cn("text-sm flex-1", s.offered ? "text-foreground" : "text-dim line-through")}>{s.serviceName}</span>
-                    {s.tier && TIER_CONFIG[s.tier] && (
+                    <span className={cn(
+                      "flex-1",
+                      s.offered ? "text-foreground" : "text-dim line-through",
+                      s.tier === "primary" ? "text-sm font-semibold" : "text-sm",
+                    )}>{s.serviceName}</span>
+                    {s.tier && TIER_CONFIG[s.tier] && s.tier !== "primary" && (
                       <span className={cn("text-[10px] px-1.5 py-0.5 rounded border mr-2", TIER_CONFIG[s.tier].bg)}>{TIER_CONFIG[s.tier].label}</span>
                     )}
                     {s.providerIds?.length > 0 && (

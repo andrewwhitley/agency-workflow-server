@@ -386,6 +386,27 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temp: fix service tiers
+  app.post("/api/admin/fix-svc", async (req, res) => {
+    if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    const { query: dbQuery } = await import("./database.js");
+    const clientId = 1;
+    const action = String(req.query.action || "list");
+    if (action === "list") {
+      const r = await dbQuery("SELECT id, service_name, category, tier FROM cm_services WHERE client_id = $1 ORDER BY category, sort_order", [clientId]);
+      res.json(r.rows);
+    } else if (action === "set-tiers") {
+      const primary = ["Acupuncture", "Naturopathic Medicine", "Bioidentical Hormone Replacement Therapy", "BHRT"];
+      const secondary = ["IV Nutrient Therapy", "Medical Aesthetics", "Functional Medicine", "PRP Therapy", "Dermal Fillers"];
+      // Everything else is complementary
+      await dbQuery(`UPDATE cm_services SET tier = 'primary' WHERE client_id = $1 AND service_name = ANY($2)`, [clientId, primary]);
+      await dbQuery(`UPDATE cm_services SET tier = 'secondary' WHERE client_id = $1 AND service_name = ANY($2)`, [clientId, secondary]);
+      await dbQuery(`UPDATE cm_services SET tier = 'complementary' WHERE client_id = $1 AND tier = 'primary' AND service_name != ALL($2) AND service_name != ALL($3)`, [clientId, primary, secondary]);
+      const r = await dbQuery("SELECT id, service_name, tier FROM cm_services WHERE client_id = $1 ORDER BY category", [clientId]);
+      res.json(r.rows);
+    }
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
