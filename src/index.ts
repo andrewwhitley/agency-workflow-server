@@ -386,33 +386,6 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temp: check and fix service areas
-  app.post("/api/admin/fix-sa", async (req, res) => {
-    if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    const { query: dbQuery } = await import("./database.js");
-    const clientId = 1;
-    const action = String(req.query.action || "list");
-    if (action === "list") {
-      const r = await dbQuery("SELECT * FROM cm_service_areas WHERE client_id = $1", [clientId]);
-      res.json({ count: r.rows.length, rows: r.rows });
-    } else if (action === "dedup") {
-      // Keep only one, delete the rest
-      const r = await dbQuery(
-        `DELETE FROM cm_service_areas WHERE client_id = $1 AND id NOT IN (
-          SELECT MIN(id) FROM cm_service_areas WHERE client_id = $1 GROUP BY LOWER(TRIM(COALESCE(target_cities,'')))
-        ) RETURNING id`, [clientId]
-      );
-      res.json({ deleted: r.rowCount });
-    } else if (action === "nuke") {
-      const r = await dbQuery("DELETE FROM cm_service_areas WHERE client_id = $1 RETURNING id", [clientId]);
-      res.json({ deleted: r.rowCount });
-    } else if (action === "seed") {
-      await dbQuery("INSERT INTO cm_service_areas (client_id, target_cities, target_counties, notes) VALUES ($1, $2, $3, $4)", [clientId, "Hamden, Cheshire, North Haven", "New Haven County", "Primary service area — 10-mile radius around office at 2661 Whitney Ave, Hamden"]);
-      await dbQuery("INSERT INTO cm_service_areas (client_id, target_cities, target_counties, notes) VALUES ($1, $2, $3, $4)", [clientId, "Milford and surrounding areas", "New Haven County, Fairfield County, Middlesex County", "Secondary service area — Southern CT region. Telemedicine also available."]);
-      res.json({ success: true, created: 2 });
-    }
-  });
-
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
