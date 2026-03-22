@@ -88,17 +88,31 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setEditingSvcId(s.id);
     setSvcDialogOpen(true);
   };
+  const [svcError, setSvcError] = useState<string | null>(null);
   const submitService = async () => {
     setSvcPending(true);
+    setSvcError(null);
     try {
+      // Strip system fields
+      const payload: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(svcForm)) {
+        if (["id", "clientId", "createdAt", "updatedAt", "source"].includes(k)) continue;
+        if (v === undefined) continue;
+        // JSON-stringify providerIds for JSONB column
+        if (k === "providerIds") { payload[k] = JSON.stringify(v); continue; }
+        payload[k] = v;
+      }
       if (editingSvcId) {
-        await api(`/cm/services/${editingSvcId}`, { method: "PUT", body: JSON.stringify(svcForm) });
+        await api(`/cm/services/${editingSvcId}`, { method: "PUT", body: JSON.stringify(payload) });
       } else {
-        await api(`/cm/clients/${clientId}/services`, { method: "POST", body: JSON.stringify(svcForm) });
+        await api(`/cm/clients/${clientId}/services`, { method: "POST", body: JSON.stringify(payload) });
       }
       setSvcDialogOpen(false);
       reload();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setSvcError(e instanceof Error ? e.message : "Failed to save");
+    }
     setSvcPending(false);
   };
   const deleteService = async () => {
@@ -287,9 +301,10 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       </div>
 
       {/* Service Form Dialog */}
-      <FormDialog open={svcDialogOpen} onOpenChange={setSvcDialogOpen}
+      <FormDialog open={svcDialogOpen} onOpenChange={() => { setSvcDialogOpen(false); setSvcError(null); }}
         title={editingSvcId ? "Edit Service" : (svcForm.parentServiceId ? "Add Sub-Service" : "Add Service")}
         onSubmit={submitService} isPending={svcPending} wide>
+        {svcError && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{svcError}</div>}
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Service Name" value={svcForm.serviceName || ""} onChange={(v) => upd("serviceName", v)} required />
           <FormField label="Category" value={svcForm.category || ""} onChange={(v) => upd("category", v)} required placeholder="e.g. Chiropractic, Massage" />

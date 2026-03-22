@@ -63,9 +63,7 @@ export function CrudSection<T extends { id: number }>({
       reload();
     } catch (e) {
       console.error("CrudSection save error:", e);
-      const msg = e instanceof Error ? e.message : "Failed to save";
-      setError(msg);
-      window.alert(`Save error: ${msg}\n\nPath: /cm/${entityPath}/${editingId || "new"}\nPayload keys: ${Object.keys(payload).join(", ")}`);
+      setError(e instanceof Error ? e.message : "Failed to save");
     }
     setPending(false);
   };
