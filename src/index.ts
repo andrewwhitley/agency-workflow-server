@@ -402,7 +402,8 @@ async function main(): Promise<void> {
 
     if (action === "check-result") {
       const r = await dbQuery("SELECT content_pillars IS NOT NULL as has_pillars, customer_journey IS NOT NULL as has_journey, content_plan_12mo IS NOT NULL as has_plan, sprint_plan_90day IS NOT NULL as has_sprint FROM cm_strategy WHERE client_id = $1", [clientId]);
-      res.json(r.rows[0] || { error: "no row" });
+      const bf = await dbQuery("SELECT business_facts FROM cm_clients WHERE id = $1", [clientId]);
+      res.json({ strategy: r.rows[0] || "no row", lastError: bf.rows[0]?.business_facts });
       return;
     }
 
