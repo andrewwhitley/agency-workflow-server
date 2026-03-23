@@ -709,116 +709,6 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
   );
 }
 
-// ── Visual Identity Renderer ──────────────────────────────────
-
-function extractVisualIdentity(content: string): { colors: { hex: string; name: string; usage: string }[]; fonts: { name: string; type: string }[] } {
-  const colors: { hex: string; name: string; usage: string }[] = [];
-  const fonts: { name: string; type: string }[] = [];
-  try {
-    const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const hexMatches = lines[i].match(/#[0-9A-Fa-f]{6}/g);
-      if (hexMatches) {
-        for (const hex of hexMatches) {
-          if (colors.find((c) => c.hex.toLowerCase() === hex.toLowerCase())) continue;
-          const boldMatch = lines[i].match(/\*\*(.+?)\*\*/);
-          const name = boldMatch ? boldMatch[1].replace(/[*:]/g, "").trim() : lines[i].split("(")[0].replace(/[*#\-]/g, "").trim();
-          let usage = "";
-          for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-            if (lines[j] && lines[j].toLowerCase().includes("usage:")) {
-              usage = lines[j].replace(/.*[Uu]sage:\s*/, "").trim();
-              break;
-            }
-          }
-          colors.push({ hex, name: name.substring(0, 40) || hex, usage });
-        }
-      }
-    }
-    const knownFonts = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins", "DM Sans", "Source Sans", "Merriweather"];
-    for (const line of lines) {
-      for (const fn of knownFonts) {
-        if (line.includes(fn) && !fonts.find((f) => f.name === fn)) {
-          const lower = line.toLowerCase();
-          const type = (lower.includes("heading") || lower.includes("h1") || lower.includes("title")) ? "Heading"
-            : (lower.includes("body") || lower.includes("paragraph") || lower.includes("text")) ? "Body" : "";
-          if (type) fonts.push({ name: fn, type });
-        }
-      }
-    }
-  } catch { /* ignore */ }
-  return { colors, fonts };
-}
-
-function VisualIdentityContent({ content }: { content: string }) {
-  const { colors, fonts } = extractVisualIdentity(content);
-
-  // Load Google Fonts once on mount
-  const fontUrl = fonts.length > 0
-    ? `https://fonts.googleapis.com/css2?${fonts.map((f) => `family=${f.name.replace(/ /g, "+")}:wght@400;600;700`).join("&")}&display=swap`
-    : null;
-  useEffect(() => {
-    if (!fontUrl) return;
-    // Check if already loaded
-    if (document.querySelector(`link[href="${fontUrl}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = fontUrl;
-    document.head.appendChild(link);
-  }, [fontUrl]);
-
-  const mdClasses = "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2";
-
-  return (
-    <div className="space-y-6 mt-4">
-      {colors.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-foreground mb-3">Color Palette</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {colors.map((c, i) => (
-              <div key={i} className="rounded-lg border border-border overflow-hidden bg-surface">
-                <div className="h-16" style={{ backgroundColor: c.hex }} />
-                <div className="p-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">{c.name}</span>
-                    <span className="text-[10px] font-mono text-dim">{c.hex}</span>
-                  </div>
-                  {c.usage && <div className="text-[10px] text-dim mt-1">{c.usage}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {fonts.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-foreground mb-3">Typography</h4>
-          <div className="space-y-3">
-            {fonts.map((f, i) => (
-              <div key={i} className="rounded-lg border border-border bg-surface p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-accent/10 text-accent font-semibold uppercase">{f.type}</span>
-                  <span className="text-xs text-dim">{f.name}</span>
-                </div>
-                <div style={{ fontFamily: `'${f.name}', sans-serif` }}>
-                  <div className="text-2xl font-bold text-foreground">The quick brown fox jumps</div>
-                  <div className="text-base text-foreground mt-1">over the lazy dog — 0123456789</div>
-                  <div className="text-sm text-dim mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <details className="group">
-        <summary className="text-xs font-medium text-dim cursor-pointer hover:text-foreground">View full details</summary>
-        <div className={`mt-3 text-sm text-foreground leading-relaxed ${mdClasses}`} dangerouslySetInnerHTML={{ __html: mdToHtml(content) }} />
-      </details>
-    </div>
-  );
-}
-
 // ── Brand Story Tab (full generation + editing) ───────────────
 
 const BRAND_STORY_SECTIONS = [
@@ -1060,6 +950,8 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       // Italic
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Inline color swatches next to hex codes
+      .replace(/(#[0-9A-Fa-f]{6})\b/g, '<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:$1;border:1px solid rgba(128,128,128,0.3);vertical-align:middle"></span><code style="font-size:0.85em">$1</code></span>')
       // Bullet lists
       .replace(/^- (.+)$/gm, '<li>$1</li>')
       .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
