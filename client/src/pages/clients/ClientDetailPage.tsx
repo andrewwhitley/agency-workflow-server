@@ -950,8 +950,8 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       // Italic
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      // Inline color swatches next to hex codes — float left so text wraps
-      .replace(/(#[0-9A-Fa-f]{6})\b/g, '<span style="float:left;margin:2px 12px 8px 0;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="display:block;width:80px;height:80px;border-radius:8px;background:$1;border:1px solid rgba(128,128,128,0.15);box-shadow:0 1px 4px rgba(0,0,0,0.08)"></span><code style="font-size:0.75em;color:#888">$1</code></span>')
+      // Inline color swatches next to hex codes — small square inline with text
+      .replace(/(#[0-9A-Fa-f]{6})\b/g, '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(128,128,128,0.08);padding:2px 8px 2px 2px;border-radius:6px;margin:1px 0"><span style="display:inline-block;width:24px;height:24px;border-radius:4px;background:$1;border:1px solid rgba(128,128,128,0.15);flex-shrink:0"></span><code style="font-size:0.8em;opacity:0.7">$1</code></span>')
       // Bullet lists
       .replace(/^- (.+)$/gm, '<li>$1</li>')
       .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
