@@ -441,21 +441,18 @@ export function clientManagementRouter(): Router {
   // Generate individual strategy components
   router.post("/clients/:clientId/strategy/generate", async (req, res) => {
     const clientId = parseInt(req.params.clientId);
-    const { component } = req.body; // "pillars" | "journey" | "plan" | "sprint"
-    try {
-      let result;
-      switch (component) {
-        case "pillars": result = await generateContentPillars(clientId); break;
-        case "journey": result = await generateCustomerJourney(clientId); break;
-        case "plan": result = await generateContentPlan(clientId); break;
-        case "sprint": result = await generateSprintPlan(clientId); break;
-        default: res.status(400).json({ error: "Invalid component. Use: pillars, journey, plan, sprint" }); return;
-      }
-      res.json({ success: true, component, result });
-    } catch (err) {
-      console.error(`Generate strategy ${component} error:`, err);
-      res.status(500).json({ error: `Failed to generate ${component}` });
-    }
+    const { component } = req.body;
+    const generators: Record<string, (id: number) => Promise<any>> = {
+      pillars: generateContentPillars, journey: generateCustomerJourney,
+      plan: generateContentPlan, sprint: generateSprintPlan,
+    };
+    const gen = generators[component];
+    if (!gen) { res.status(400).json({ error: "Invalid component" }); return; }
+    // Fire and forget — respond immediately, generate in background
+    res.json({ success: true, component, status: "generating" });
+    gen(clientId)
+      .then(() => console.log(`[strategy] ${component} generated for client ${clientId}`))
+      .catch((err) => console.error(`[strategy] ${component} failed for client ${clientId}:`, err));
   });
 
   // ════════════════════════════════════════════════════════

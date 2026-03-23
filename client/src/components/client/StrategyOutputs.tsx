@@ -46,6 +46,17 @@ export function StrategyOutputs({ clientId }: { clientId: number }) {
       await api(`/cm/clients/${clientId}/strategy/generate`, {
         method: "POST", body: JSON.stringify({ component }),
       });
+      // Poll for completion (generation runs in background)
+      const dbKey = COMPONENTS.find((c) => c.key === component)?.dbKey;
+      for (let i = 0; i < 24; i++) { // Poll for up to 2 minutes
+        await new Promise((r) => setTimeout(r, 5000));
+        const fresh = await api<StrategyData | null>(`/cm/clients/${clientId}/strategy`).catch(() => null);
+        if (fresh && (fresh as any)[dbKey!]) {
+          setData(fresh);
+          setGenerating(null);
+          return;
+        }
+      }
       reload();
     } catch (e) { console.error(e); }
     setGenerating(null);
