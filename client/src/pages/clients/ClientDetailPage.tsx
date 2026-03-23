@@ -709,6 +709,125 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
   );
 }
 
+// ── Visual Identity Renderer ──────────────────────────────────
+
+function VisualIdentityContent({ content }: { content: string }) {
+  // Extract colors: find all hex codes with their context
+  const colorRegex = /(#[0-9A-Fa-f]{6})\b/g;
+  const colors: { hex: string; name: string; usage: string }[] = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(colorRegex);
+    if (match) {
+      for (const hex of match) {
+        // Look for a name before the hex (e.g., "Sage Green (#87A96B)")
+        const nameMatch = lines[i].match(/\*\*(.+?)\*\*.*\(.*#[0-9A-Fa-f]{6}/);
+        const name = nameMatch ? nameMatch[1].replace(/[*:]/g, "").trim() : lines[i].split("(")[0].replace(/[*#\-]/g, "").trim();
+        // Look for usage line nearby
+        let usage = "";
+        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+          if (lines[j].toLowerCase().includes("usage:")) {
+            usage = lines[j].replace(/.*[Uu]sage:\s*/, "").trim();
+            break;
+          }
+        }
+        if (!colors.find((c) => c.hex.toLowerCase() === hex.toLowerCase())) {
+          colors.push({ hex, name: name.substring(0, 40), usage });
+        }
+      }
+    }
+  }
+
+  // Extract fonts
+  const fonts: { name: string; type: string; desc: string }[] = [];
+  const fontPatterns = [
+    { regex: /heading\s*font[:\s]*\*?\*?(.+?)\*?\*?\s*(?:or|$)/i, type: "Heading" },
+    { regex: /body\s*font[:\s]*\*?\*?(.+?)\*?\*?\s*(?:or|$)/i, type: "Body" },
+  ];
+  for (const line of lines) {
+    for (const { regex, type } of fontPatterns) {
+      const m = line.match(regex);
+      if (m && !fonts.find((f) => f.type === type)) {
+        const names = m[1].replace(/\*\*/g, "").trim();
+        fonts.push({ name: names, type, desc: "" });
+      }
+    }
+    // Also catch "Montserrat", "Lora", "Open Sans" etc mentioned with descriptions
+    const fontNames = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins"];
+    for (const fn of fontNames) {
+      if (line.includes(fn) && line.includes(":") && !fonts.find((f) => f.name.includes(fn))) {
+        const isHeading = line.toLowerCase().includes("heading") || line.toLowerCase().includes("h1");
+        const isBody = line.toLowerCase().includes("body") || line.toLowerCase().includes("paragraph");
+        if (isHeading || isBody) {
+          fonts.push({ name: fn, type: isHeading ? "Heading" : "Body", desc: "" });
+        }
+      }
+    }
+  }
+
+  // Load Google Fonts for previews
+  const fontImports = fonts.map((f) => f.name.split(" or ")[0].trim()).filter(Boolean);
+
+  return (
+    <div className="space-y-6 mt-4">
+      {/* Color Palette */}
+      {colors.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-foreground mb-3">Color Palette</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {colors.map((c, i) => (
+              <div key={i} className="rounded-lg border border-border overflow-hidden bg-surface">
+                <div className="h-16" style={{ backgroundColor: c.hex }} />
+                <div className="p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">{c.name}</span>
+                    <span className="text-[10px] font-mono text-dim">{c.hex}</span>
+                  </div>
+                  {c.usage && <div className="text-[10px] text-dim mt-1">{c.usage}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Typography */}
+      {fonts.length > 0 && (
+        <div>
+          {fontImports.length > 0 && (
+            <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?${fontImports.map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`).join("&")}&display=swap`} />
+          )}
+          <h4 className="text-sm font-semibold text-foreground mb-3">Typography</h4>
+          <div className="space-y-3">
+            {fonts.map((f, i) => {
+              const fontFamily = f.name.split(" or ")[0].trim();
+              return (
+                <div key={i} className="rounded-lg border border-border bg-surface p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-accent/10 text-accent font-semibold uppercase">{f.type}</span>
+                    <span className="text-xs text-dim">{f.name}</span>
+                  </div>
+                  <div style={{ fontFamily: `'${fontFamily}', sans-serif` }}>
+                    <div className="text-2xl font-bold text-foreground">The quick brown fox jumps</div>
+                    <div className="text-base text-foreground mt-1">over the lazy dog — 0123456789</div>
+                    <div className="text-sm text-dim mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Full content as markdown (for the reasoning and details) */}
+      <details className="group">
+        <summary className="text-xs font-medium text-dim cursor-pointer hover:text-foreground">View full details</summary>
+        <div className="mt-3 text-sm text-foreground leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(content) }} />
+      </details>
+    </div>
+  );
+}
+
 // ── Brand Story Tab (full generation + editing) ───────────────
 
 const BRAND_STORY_SECTIONS = [
@@ -978,12 +1097,79 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
     const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
     let sectionNum = 0;
+    // Extract colors and fonts from Visual Identity content for PDF rendering
+    const buildVisualIdentityPdf = (content: string): string => {
+      const hexRegex = /#[0-9A-Fa-f]{6}/g;
+      const contentLines = content.split("\n");
+      const pdfColors: { hex: string; name: string; usage: string }[] = [];
+      for (let i = 0; i < contentLines.length; i++) {
+        const hexMatches = contentLines[i].match(hexRegex);
+        if (hexMatches) {
+          for (const hex of hexMatches) {
+            const nm = contentLines[i].match(/\*\*(.+?)\*\*/);
+            const name = nm ? nm[1].replace(/[*:]/g, "").trim() : contentLines[i].split("(")[0].replace(/[*#\-]/g, "").trim();
+            let usage = "";
+            for (let j = i + 1; j < Math.min(i + 5, contentLines.length); j++) {
+              if (contentLines[j].toLowerCase().includes("usage:")) { usage = contentLines[j].replace(/.*[Uu]sage:\s*/, "").trim(); break; }
+            }
+            if (!pdfColors.find((c) => c.hex.toLowerCase() === hex.toLowerCase())) {
+              pdfColors.push({ hex, name: name.substring(0, 40), usage });
+            }
+          }
+        }
+      }
+      const pdfFonts: { name: string; type: string }[] = [];
+      const fontNames = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins", "Sacramento", "Dancing Script"];
+      for (const line of contentLines) {
+        if (line.toLowerCase().includes("heading") && line.includes(":")) {
+          for (const fn of fontNames) { if (line.includes(fn) && !pdfFonts.find((f) => f.name === fn)) pdfFonts.push({ name: fn, type: "Heading" }); }
+        }
+        if (line.toLowerCase().includes("body") && line.includes(":")) {
+          for (const fn of fontNames) { if (line.includes(fn) && !pdfFonts.find((f) => f.name === fn)) pdfFonts.push({ name: fn, type: "Body" }); }
+        }
+      }
+
+      let html = "";
+      if (pdfColors.length > 0) {
+        html += `<div style="margin-bottom:28px"><h3 style="font-family:'Playfair Display',serif;font-size:14pt;color:#1a1a1a;margin-bottom:16px">Color Palette</h3><div style="display:flex;flex-wrap:wrap;gap:16px">`;
+        for (const c of pdfColors) {
+          html += `<div style="width:160px;border-radius:8px;border:1px solid #e5e5e5;overflow:hidden">
+            <div style="height:60px;background:${c.hex}"></div>
+            <div style="padding:8px 10px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:9pt;font-weight:600;color:#333">${c.name}</span>
+                <span style="font-size:8pt;font-family:monospace;color:#999">${c.hex}</span>
+              </div>
+              ${c.usage ? `<div style="font-size:7.5pt;color:#888;margin-top:4px">${c.usage}</div>` : ""}
+            </div></div>`;
+        }
+        html += `</div></div>`;
+      }
+      if (pdfFonts.length > 0) {
+        const fontImport = pdfFonts.map((f) => `family=${f.name.replace(/ /g, "+")}:wght@400;600;700`).join("&");
+        html += `<style>@import url('https://fonts.googleapis.com/css2?${fontImport}&display=swap');</style>`;
+        html += `<div style="margin-bottom:28px"><h3 style="font-family:'Playfair Display',serif;font-size:14pt;color:#1a1a1a;margin-bottom:16px">Typography</h3><div style="display:flex;flex-wrap:wrap;gap:16px">`;
+        for (const f of pdfFonts) {
+          html += `<div style="flex:1;min-width:220px;border-radius:8px;border:1px solid #e5e5e5;padding:16px">
+            <div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:${primary};margin-bottom:8px">${f.type} — ${f.name}</div>
+            <div style="font-family:'${f.name}',sans-serif;font-size:20pt;font-weight:700;color:#1a1a1a">The quick brown fox</div>
+            <div style="font-family:'${f.name}',sans-serif;font-size:12pt;color:#555;margin-top:4px">jumps over the lazy dog — 0123456789</div>
+            <div style="font-family:'${f.name}',sans-serif;font-size:9pt;color:#999;margin-top:4px">ABCDEFGHIJKLM abcdefghijklm</div>
+          </div>`;
+        }
+        html += `</div></div>`;
+      }
+      // Add the rest of the content as rendered markdown
+      html += mdToHtml(content);
+      return html;
+    };
+
     const sectionsHtml = BRAND_STORY_SECTIONS.map((def) => {
       const sd = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
       if (!sd?.content) return "";
       sectionNum++;
       const num = String(sectionNum).padStart(2, "0");
-      const rendered = mdToHtml(sd.content);
+      const rendered = def.key === "visualIdentitySection" ? buildVisualIdentityPdf(sd.content) : mdToHtml(sd.content);
       return `<div class="section-page"><div class="section-header-bar"><div class="section-number">${num}</div><div class="section-meta"><span class="section-cat">${def.framework}</span><h2 class="section-title">${sd.title || def.title}</h2></div></div><div class="section-body">${rendered}</div></div>`;
     }).filter(Boolean).join("");
 
@@ -1451,7 +1637,11 @@ ${sectionsHtml}
                     </div>
                   ) : (
                     <>
-                      <div className="text-sm text-foreground mt-4 leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(sectionData.content) }} />
+                      {def.key === "visualIdentitySection" ? (
+                        <VisualIdentityContent content={sectionData.content} />
+                      ) : (
+                        <div className="text-sm text-foreground mt-4 leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(sectionData.content) }} />
+                      )}
                       <div className="border-t border-border mt-4 pt-4 flex items-center gap-2 flex-wrap">
                         <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingSection(def.key); setEditContent(sectionData.content); }}>
                           <Pencil className="h-3 w-3 mr-1" /> Edit
