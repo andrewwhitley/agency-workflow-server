@@ -711,11 +711,9 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
 
 // ── Visual Identity Renderer ──────────────────────────────────
 
-function VisualIdentityContent({ content }: { content: string }) {
-  // Safely extract hex colors from content
+function extractVisualIdentity(content: string): { colors: { hex: string; name: string; usage: string }[]; fonts: { name: string; type: string }[] } {
   const colors: { hex: string; name: string; usage: string }[] = [];
   const fonts: { name: string; type: string }[] = [];
-
   try {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
@@ -736,8 +734,6 @@ function VisualIdentityContent({ content }: { content: string }) {
         }
       }
     }
-
-    // Extract font names
     const knownFonts = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins", "DM Sans", "Source Sans", "Merriweather"];
     for (const line of lines) {
       for (const fn of knownFonts) {
@@ -749,18 +745,26 @@ function VisualIdentityContent({ content }: { content: string }) {
         }
       }
     }
-  } catch { /* parsing failed, just show markdown */ }
+  } catch { /* ignore */ }
+  return { colors, fonts };
+}
 
-  // Load fonts via useEffect to avoid SSR issues
+function VisualIdentityContent({ content }: { content: string }) {
+  const { colors, fonts } = extractVisualIdentity(content);
+
+  // Load Google Fonts once on mount
+  const fontUrl = fonts.length > 0
+    ? `https://fonts.googleapis.com/css2?${fonts.map((f) => `family=${f.name.replace(/ /g, "+")}:wght@400;600;700`).join("&")}&display=swap`
+    : null;
   useEffect(() => {
-    if (fonts.length === 0) return;
-    const families = fonts.map((f) => `family=${f.name.replace(/ /g, "+")}:wght@400;600;700`).join("&");
+    if (!fontUrl) return;
+    // Check if already loaded
+    if (document.querySelector(`link[href="${fontUrl}"]`)) return;
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+    link.href = fontUrl;
     document.head.appendChild(link);
-    return () => { document.head.removeChild(link); };
-  }, []);
+  }, [fontUrl]);
 
   const mdClasses = "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2";
 
