@@ -712,65 +712,60 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
 // ── Visual Identity Renderer ──────────────────────────────────
 
 function VisualIdentityContent({ content }: { content: string }) {
-  // Extract colors: find all hex codes with their context
-  const colorRegex = /(#[0-9A-Fa-f]{6})\b/g;
+  // Safely extract hex colors from content
   const colors: { hex: string; name: string; usage: string }[] = [];
-  const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(colorRegex);
-    if (match) {
-      for (const hex of match) {
-        // Look for a name before the hex (e.g., "Sage Green (#87A96B)")
-        const nameMatch = lines[i].match(/\*\*(.+?)\*\*.*\(.*#[0-9A-Fa-f]{6}/);
-        const name = nameMatch ? nameMatch[1].replace(/[*:]/g, "").trim() : lines[i].split("(")[0].replace(/[*#\-]/g, "").trim();
-        // Look for usage line nearby
-        let usage = "";
-        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
-          if (lines[j].toLowerCase().includes("usage:")) {
-            usage = lines[j].replace(/.*[Uu]sage:\s*/, "").trim();
-            break;
+  const fonts: { name: string; type: string }[] = [];
+
+  try {
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const hexMatches = lines[i].match(/#[0-9A-Fa-f]{6}/g);
+      if (hexMatches) {
+        for (const hex of hexMatches) {
+          if (colors.find((c) => c.hex.toLowerCase() === hex.toLowerCase())) continue;
+          const boldMatch = lines[i].match(/\*\*(.+?)\*\*/);
+          const name = boldMatch ? boldMatch[1].replace(/[*:]/g, "").trim() : lines[i].split("(")[0].replace(/[*#\-]/g, "").trim();
+          let usage = "";
+          for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+            if (lines[j] && lines[j].toLowerCase().includes("usage:")) {
+              usage = lines[j].replace(/.*[Uu]sage:\s*/, "").trim();
+              break;
+            }
           }
-        }
-        if (!colors.find((c) => c.hex.toLowerCase() === hex.toLowerCase())) {
-          colors.push({ hex, name: name.substring(0, 40), usage });
+          colors.push({ hex, name: name.substring(0, 40) || hex, usage });
         }
       }
     }
-  }
 
-  // Extract fonts
-  const fonts: { name: string; type: string; desc: string }[] = [];
-  const fontPatterns = [
-    { regex: /heading\s*font[:\s]*\*?\*?(.+?)\*?\*?\s*(?:or|$)/i, type: "Heading" },
-    { regex: /body\s*font[:\s]*\*?\*?(.+?)\*?\*?\s*(?:or|$)/i, type: "Body" },
-  ];
-  for (const line of lines) {
-    for (const { regex, type } of fontPatterns) {
-      const m = line.match(regex);
-      if (m && !fonts.find((f) => f.type === type)) {
-        const names = m[1].replace(/\*\*/g, "").trim();
-        fonts.push({ name: names, type, desc: "" });
-      }
-    }
-    // Also catch "Montserrat", "Lora", "Open Sans" etc mentioned with descriptions
-    const fontNames = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins"];
-    for (const fn of fontNames) {
-      if (line.includes(fn) && line.includes(":") && !fonts.find((f) => f.name.includes(fn))) {
-        const isHeading = line.toLowerCase().includes("heading") || line.toLowerCase().includes("h1");
-        const isBody = line.toLowerCase().includes("body") || line.toLowerCase().includes("paragraph");
-        if (isHeading || isBody) {
-          fonts.push({ name: fn, type: isHeading ? "Heading" : "Body", desc: "" });
+    // Extract font names
+    const knownFonts = ["Montserrat", "Lora", "Open Sans", "Crimson Text", "Playfair Display", "Inter", "Raleway", "Poppins", "DM Sans", "Source Sans", "Merriweather"];
+    for (const line of lines) {
+      for (const fn of knownFonts) {
+        if (line.includes(fn) && !fonts.find((f) => f.name === fn)) {
+          const lower = line.toLowerCase();
+          const type = (lower.includes("heading") || lower.includes("h1") || lower.includes("title")) ? "Heading"
+            : (lower.includes("body") || lower.includes("paragraph") || lower.includes("text")) ? "Body" : "";
+          if (type) fonts.push({ name: fn, type });
         }
       }
     }
-  }
+  } catch { /* parsing failed, just show markdown */ }
 
-  // Load Google Fonts for previews
-  const fontImports = fonts.map((f) => f.name.split(" or ")[0].trim()).filter(Boolean);
+  // Load fonts via useEffect to avoid SSR issues
+  useEffect(() => {
+    if (fonts.length === 0) return;
+    const families = fonts.map((f) => `family=${f.name.replace(/ /g, "+")}:wght@400;600;700`).join("&");
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+    document.head.appendChild(link);
+    return () => { document.head.removeChild(link); };
+  }, []);
+
+  const mdClasses = "[&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2";
 
   return (
     <div className="space-y-6 mt-4">
-      {/* Color Palette */}
       {colors.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-foreground mb-3">Color Palette</h4>
@@ -791,38 +786,30 @@ function VisualIdentityContent({ content }: { content: string }) {
         </div>
       )}
 
-      {/* Typography */}
       {fonts.length > 0 && (
         <div>
-          {fontImports.length > 0 && (
-            <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?${fontImports.map((f) => `family=${f.replace(/ /g, "+")}:wght@400;600;700`).join("&")}&display=swap`} />
-          )}
           <h4 className="text-sm font-semibold text-foreground mb-3">Typography</h4>
           <div className="space-y-3">
-            {fonts.map((f, i) => {
-              const fontFamily = f.name.split(" or ")[0].trim();
-              return (
-                <div key={i} className="rounded-lg border border-border bg-surface p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-accent/10 text-accent font-semibold uppercase">{f.type}</span>
-                    <span className="text-xs text-dim">{f.name}</span>
-                  </div>
-                  <div style={{ fontFamily: `'${fontFamily}', sans-serif` }}>
-                    <div className="text-2xl font-bold text-foreground">The quick brown fox jumps</div>
-                    <div className="text-base text-foreground mt-1">over the lazy dog — 0123456789</div>
-                    <div className="text-sm text-dim mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</div>
-                  </div>
+            {fonts.map((f, i) => (
+              <div key={i} className="rounded-lg border border-border bg-surface p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-accent/10 text-accent font-semibold uppercase">{f.type}</span>
+                  <span className="text-xs text-dim">{f.name}</span>
                 </div>
-              );
-            })}
+                <div style={{ fontFamily: `'${f.name}', sans-serif` }}>
+                  <div className="text-2xl font-bold text-foreground">The quick brown fox jumps</div>
+                  <div className="text-base text-foreground mt-1">over the lazy dog — 0123456789</div>
+                  <div className="text-sm text-dim mt-1">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Full content as markdown (for the reasoning and details) */}
       <details className="group">
         <summary className="text-xs font-medium text-dim cursor-pointer hover:text-foreground">View full details</summary>
-        <div className="mt-3 text-sm text-foreground leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(content) }} />
+        <div className={`mt-3 text-sm text-foreground leading-relaxed ${mdClasses}`} dangerouslySetInnerHTML={{ __html: mdToHtml(content) }} />
       </details>
     </div>
   );
