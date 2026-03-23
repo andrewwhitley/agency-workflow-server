@@ -93,12 +93,34 @@ async function gatherStrategyContext(clientId: number): Promise<string> {
 async function callClaude(system: string, prompt: string): Promise<string> {
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 8192,
+    max_tokens: 16384,
     system,
     messages: [{ role: "user", content: prompt }],
   });
   const text = response.content.find((b) => b.type === "text")?.text ?? "{}";
-  return text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+  let cleaned = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+  // Try to fix truncated JSON by closing open brackets/braces
+  try { JSON.parse(cleaned); } catch {
+    // Count unmatched brackets
+    let braces = 0, brackets = 0;
+    let inString = false, escape = false;
+    for (const ch of cleaned) {
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === "{") braces++;
+      if (ch === "}") braces--;
+      if (ch === "[") brackets++;
+      if (ch === "]") brackets--;
+    }
+    // If we're inside a string, close it
+    if (inString) cleaned += '"';
+    // Close any open brackets/braces
+    for (let i = 0; i < brackets; i++) cleaned += "]";
+    for (let i = 0; i < braces; i++) cleaned += "}";
+  }
+  return cleaned;
 }
 
 // ── Content Pillars ──────────────────────────────────────
@@ -131,7 +153,7 @@ Return JSON with this structure:
   ]
 }
 
-Create 4-5 pillars with 8-12 topics each. Be specific to THIS business — use their actual services, location, and differentiators. Topics should be realistic content pieces their team would create.
+Create 4-5 pillars with 6-8 topics each. Keep briefs to 1 sentence. Be specific to THIS business — use their actual services, location, and differentiators. Topics should be realistic content pieces their team would create.
 
 BUSINESS PROFILE:
 ${context}`
