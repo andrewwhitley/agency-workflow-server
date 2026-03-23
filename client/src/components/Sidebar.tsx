@@ -26,20 +26,8 @@ const navSections = [
     ],
   },
   {
-    label: "SEO",
+    label: "Tools",
     items: [
-      { to: "/seo", label: "SEO Dashboard", icon: Globe },
-      { to: "/seo/keywords", label: "Keyword Tracker", icon: TrendingUp },
-      { to: "/seo/gaps", label: "Content Gaps", icon: Radar },
-      { to: "/seo/audit", label: "Technical Audit", icon: FileSearch },
-      { to: "/seo/serp", label: "SERP Analysis", icon: Search },
-      { to: "/seo/research", label: "Keyword Research", icon: Lightbulb },
-    ],
-  },
-  {
-    label: "Content",
-    items: [
-      { to: "/content", label: "Content Manager", icon: PenTool },
       { to: "/guides", label: "Marketing Guides", icon: FileText },
       { to: "/workbooks", label: "Workbooks", icon: BookOpen },
       { to: "/agents", label: "AI Agents", icon: Bot },

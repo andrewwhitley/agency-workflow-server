@@ -19,6 +19,8 @@ import { CrudSection, CrudItem } from "@/components/client/CrudSection";
 import { FormField } from "@/components/FormField";
 import { IntakeResponsesSection } from "@/components/client/IntakeResponsesSection";
 import { MarketIntelSection } from "@/components/client/MarketIntelSection";
+import { ClientSeoTab } from "@/components/client/ClientSeoTab";
+import { ClientContentTab } from "@/components/client/ClientContentTab";
 import { StrategyOutputs } from "@/components/client/StrategyOutputs";
 
 // ── Types ────────────────────────────────────
@@ -115,7 +117,7 @@ interface HealthEntry { id: number; departmentName: string; status: string; note
 
 // ── Tabs ─────────────────────────────────────
 
-const TABS = ["info", "services", "campaigns", "deliverables", "content-guide", "health", "brand-story"] as const;
+const TABS = ["info", "services", "seo", "content", "campaigns", "deliverables", "content-guide", "health", "brand-story"] as const;
 type Tab = typeof TABS[number];
 
 export function ClientDetailPage() {
@@ -158,13 +160,15 @@ export function ClientDetailPage() {
           <button key={t} onClick={() => setTab(t)}
             className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors capitalize whitespace-nowrap",
               tab === t ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground")}>
-            {t === "content-guide" ? "Strategy" : t === "brand-story" ? "Brand Story" : t.replace(/-/g, " ")}
+            {t === "content-guide" ? "Strategy" : t === "brand-story" ? "Brand Story" : t === "seo" ? "SEO" : t === "content" ? "Content" : t.replace(/-/g, " ")}
           </button>
         ))}
       </div>
 
       {tab === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
       {tab === "services" && <ServicesSection clientId={client.id} />}
+      {tab === "seo" && <ClientSeoTab clientSlug={client.slug} clientDomain={(client.domain || client.companyWebsite || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")} />}
+      {tab === "content" && <ClientContentTab clientSlug={client.slug} />}
       {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
       {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
       {tab === "content-guide" && (
