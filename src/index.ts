@@ -386,6 +386,28 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temp: test strategy generation
+  app.post("/api/admin/test-strat", async (req, res) => {
+    if (req.query.token !== "strat-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    try {
+      const { query: dbQuery } = await import("./database.js");
+      const comp = String(req.query.comp || "pillars");
+      const clientId = 1;
+      // First check if table exists
+      const tableCheck = await dbQuery("SELECT to_regclass('cm_strategy') as exists");
+      if (!tableCheck.rows[0]?.exists) { res.json({ error: "cm_strategy table does not exist — migration 044 may not have run" }); return; }
+      // Try generating
+      const { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } = await import("./strategy-generator.js");
+      const generators: Record<string, Function> = { pillars: generateContentPillars, journey: generateCustomerJourney, plan: generateContentPlan, sprint: generateSprintPlan };
+      const gen = generators[comp];
+      if (!gen) { res.json({ error: `Unknown component: ${comp}` }); return; }
+      const result = await gen(clientId);
+      res.json({ success: true, comp, resultKeys: Object.keys(result) });
+    } catch (err: any) {
+      res.json({ error: err.message, stack: err.stack?.substring(0, 300) });
+    }
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
