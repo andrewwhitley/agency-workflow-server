@@ -386,6 +386,24 @@ async function main(): Promise<void> {
     });
   }
 
+  // Temp: dedup differentiators + buyer personas
+  app.post("/api/admin/dedup-content", async (req, res) => {
+    if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
+    const { query: dbQuery } = await import("./database.js");
+    const clientId = 1;
+    const r1 = await dbQuery(
+      `DELETE FROM cm_differentiators WHERE client_id = $1 AND id NOT IN (
+        SELECT MIN(id) FROM cm_differentiators WHERE client_id = $1 GROUP BY LOWER(TRIM(COALESCE(title,''))), LOWER(TRIM(category))
+      ) RETURNING id`, [clientId]
+    );
+    const r2 = await dbQuery(
+      `DELETE FROM cm_buyer_personas WHERE client_id = $1 AND id NOT IN (
+        SELECT MIN(id) FROM cm_buyer_personas WHERE client_id = $1 GROUP BY LOWER(TRIM(persona_name))
+      ) RETURNING id`, [clientId]
+    );
+    res.json({ differentiators_deleted: r1.rowCount, personas_deleted: r2.rowCount });
+  });
+
   // Protect all /api routes except /api/auth/me and /api/public/*
   app.use("/api", requireAuth);
 
