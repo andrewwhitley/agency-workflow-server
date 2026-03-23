@@ -386,22 +386,33 @@ async function main(): Promise<void> {
     });
   }
 
-  // Temp: dedup differentiators + buyer personas
-  app.post("/api/admin/dedup-content", async (req, res) => {
+  // Temp: list + rebuild differentiators
+  app.post("/api/admin/fix-diff", async (req, res) => {
     if (req.query.token !== "fix-2026") { res.status(403).json({ error: "Forbidden" }); return; }
     const { query: dbQuery } = await import("./database.js");
     const clientId = 1;
-    const r1 = await dbQuery(
-      `DELETE FROM cm_differentiators WHERE client_id = $1 AND id NOT IN (
-        SELECT MIN(id) FROM cm_differentiators WHERE client_id = $1 GROUP BY LOWER(TRIM(COALESCE(title,''))), LOWER(TRIM(category))
-      ) RETURNING id`, [clientId]
-    );
-    const r2 = await dbQuery(
-      `DELETE FROM cm_buyer_personas WHERE client_id = $1 AND id NOT IN (
-        SELECT MIN(id) FROM cm_buyer_personas WHERE client_id = $1 GROUP BY LOWER(TRIM(persona_name))
-      ) RETURNING id`, [clientId]
-    );
-    res.json({ differentiators_deleted: r1.rowCount, personas_deleted: r2.rowCount });
+    const action = String(req.query.action || "list");
+    if (action === "list") {
+      const r = await dbQuery("SELECT id, category, title, LEFT(description, 80) as desc_preview FROM cm_differentiators WHERE client_id = $1 ORDER BY category", [clientId]);
+      res.json({ count: r.rows.length, rows: r.rows });
+    } else if (action === "rebuild") {
+      await dbQuery("DELETE FROM cm_differentiators WHERE client_id = $1", [clientId]);
+      const diffs: { cat: string; title: string; desc: string }[] = [
+        { cat: "Approach", title: "Integrative East-West Medicine", desc: "Unique blend of Traditional Chinese Medicine with modern functional and naturopathic medicine under one roof" },
+        { cat: "Approach", title: "Root-Cause Focus", desc: "Every treatment plan starts with finding the root cause — not masking symptoms with medications" },
+        { cat: "Approach", title: "Non-Toxic Philosophy", desc: "All aesthetic treatments are minimally invasive and free of harsh chemicals — safe, gentle, results-driven" },
+        { cat: "Approach", title: "Whole-Person Care", desc: "Treatments address mind, body, and spirit — internal health enhances external results" },
+        { cat: "Service", title: "Comprehensive Service Range", desc: "Acupuncture, naturopathic medicine, BHRT, IV therapy, medical aesthetics, and hair restoration all in one practice" },
+        { cat: "Service", title: "Personalized Treatment Plans", desc: "Every patient receives a custom protocol tailored to their unique health profile, goals, and lifestyle" },
+        { cat: "Experience", title: "Award-Winning Practice", desc: "2x Natural Nutmeg 10Best Awards winner in Nursing, Naturopathic Medicine, and Acupuncture/TCM" },
+        { cat: "Experience", title: "Multi-Disciplinary Team", desc: "6 specialists across naturopathic medicine, acupuncture, aesthetics, and women's health" },
+        { cat: "Location", title: "Convenient Hamden Location", desc: "Centrally located at 2661 Whitney Ave, Hamden — serving the greater New Haven area with telemedicine options" },
+      ];
+      for (const d of diffs) {
+        await dbQuery("INSERT INTO cm_differentiators (client_id, category, title, description) VALUES ($1,$2,$3,$4)", [clientId, d.cat, d.title, d.desc]);
+      }
+      res.json({ success: true, created: diffs.length });
+    }
   });
 
   // Protect all /api routes except /api/auth/me and /api/public/*
