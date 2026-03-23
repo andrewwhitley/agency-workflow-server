@@ -940,11 +940,40 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const expandAll = () => setExpandedSections(new Set(BRAND_STORY_SECTIONS.map((s) => s.key)));
   const collapseAll = () => setExpandedSections(new Set());
 
+  // Simple markdown to HTML converter
+  const mdToHtml = (md: string): string => {
+    return md
+      // Headers
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      // Bold
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      // Italic
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // Bullet lists
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+      // Numbered lists
+      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      // Paragraphs (double newlines)
+      .replace(/\n\n+/g, '</p><p>')
+      // Single newlines within text (not after block elements)
+      .replace(/([^>])\n([^<])/g, '$1<br>$2')
+      // Wrap in paragraph
+      .replace(/^(?!<)/, '<p>')
+      .replace(/(?!>)$/, '</p>')
+      // Clean up empty paragraphs
+      .replace(/<p>\s*<\/p>/g, '')
+      .replace(/<p>\s*(<[hul])/g, '$1')
+      .replace(/(<\/[hul][^>]*>)\s*<\/p>/g, '$1');
+  };
+
   const handleExportPDF = () => {
     if (!story) return;
     const brandColorsParsed = brandColors ? parseColorString(brandColors) : [];
     const primary = brandColorsParsed.length > 0 ? brandColorsParsed[0].hex : "#c9a96e";
     const accent = brandColorsParsed.length > 1 ? brandColorsParsed[1].hex : "#4a90d9";
+    const dark = brandColorsParsed.length > 2 ? brandColorsParsed[2].hex : "#1a1f2e";
     const clientInfo = data?.client;
     const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
@@ -954,7 +983,8 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       if (!sd?.content) return "";
       sectionNum++;
       const num = String(sectionNum).padStart(2, "0");
-      return `<div class="section-page"><div class="section-header-bar"><div class="section-number">${num}</div><div class="section-meta"><span class="section-cat">${def.framework}</span><h2 class="section-title">${sd.title || def.title}</h2></div></div><div class="section-body"><pre style="white-space:pre-wrap;font-family:inherit;margin:0">${sd.content.replace(/</g, "&lt;")}</pre></div></div>`;
+      const rendered = mdToHtml(sd.content);
+      return `<div class="section-page"><div class="section-header-bar"><div class="section-number">${num}</div><div class="section-meta"><span class="section-cat">${def.framework}</span><h2 class="section-title">${sd.title || def.title}</h2></div></div><div class="section-body">${rendered}</div></div>`;
     }).filter(Boolean).join("");
 
     let tocNum = 0;
@@ -977,38 +1007,76 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${clientName} — Brand Story</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
-@page{size:A4;margin:0}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',sans-serif;font-size:10pt;line-height:1.75;color:#d4d4d8;background:#0c0c14;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(160deg,#0c0c14 0%,#131320 35%,#0f1628 65%,#0c0c14 100%);padding:60px 50px;page-break-after:always;position:relative}
-.cover h1{font-family:'Playfair Display',serif;font-size:38pt;font-weight:700;color:#fff;line-height:1.15;margin-bottom:8px}
-.cover-eyebrow{font-size:8pt;font-weight:600;letter-spacing:.25em;text-transform:uppercase;color:${primary};margin-bottom:16px}
-.cover-rule{width:50px;height:3px;background:${primary};border-radius:2px;margin:18px auto}
-.cover-subtitle{font-size:12pt;font-weight:300;color:rgba(255,255,255,.55);letter-spacing:.04em}
-.ci-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 28px;margin-top:32px;padding:18px 24px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
-.ci{display:flex;flex-direction:column;align-items:center}.ci-label{font-size:6pt;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:${primary};opacity:.8;margin-bottom:3px}.ci-value{font-size:9pt;font-weight:500;color:rgba(255,255,255,.85)}
-.sw-row{display:flex;justify-content:center;gap:20px;margin-top:28px}.sw{display:flex;flex-direction:column;align-items:center;gap:4px}.sw-dot{width:32px;height:32px;border-radius:50%}.sw-name{font-size:7pt;font-weight:600;color:rgba(255,255,255,.7)}.sw-hex{font-size:6pt;font-family:monospace;color:rgba(255,255,255,.35)}
-.cover-date{margin-top:28px;font-size:8pt;color:rgba(255,255,255,.3)}
-.toc-page{padding:50px;page-break-after:always;background:#0c0c14;min-height:100vh}
-.toc-page h2{font-family:'Playfair Display',serif;font-size:22pt;font-weight:700;color:#fff;margin-bottom:6px}
-.toc-rule{width:40px;height:2px;background:${primary};border-radius:1px;margin-bottom:28px}
-.toc-table{width:100%;border-collapse:collapse}.toc-table tr{border-bottom:1px solid rgba(255,255,255,.04)}
-.toc-num{width:30px;padding:10px 0;font-size:9pt;font-weight:700;color:${primary}}.toc-title{padding:10px 0;font-size:10pt;font-weight:500;color:#e4e4e7}.toc-cat{text-align:right;padding:10px 0;font-size:7pt;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35)}
-.section-page{padding:44px 50px 36px;background:#0c0c14;page-break-inside:avoid}.section-page+.section-page{border-top:1px solid rgba(255,255,255,.04)}
-.section-header-bar{display:flex;align-items:flex-start;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.06)}
-.section-number{font-family:'Playfair Display',serif;font-size:30pt;font-weight:700;color:${primary};line-height:1;opacity:.25;min-width:40px}
-.section-meta{flex:1}.section-cat{display:inline-block;font-size:6pt;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${primary};background:${primary}18;padding:2px 8px;border-radius:3px;margin-bottom:4px}
-.section-title{font-family:'Playfair Display',serif;font-size:20pt;font-weight:700;color:#fff;line-height:1.3;margin-top:2px}
-.section-body{font-size:10pt;line-height:1.8;color:#a1a1aa}
-.doc-footer{text-align:center;padding:24px 50px;font-size:7pt;color:rgba(255,255,255,.2);border-top:1px solid rgba(255,255,255,.04)}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700&display=swap');
+@page{size:A4;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;font-size:10.5pt;line-height:1.8;color:#2d2d2d;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* Cover */
+.cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;background:linear-gradient(160deg,#fafafa 0%,#f5f5f5 50%,#fafafa 100%);padding:60px 50px;page-break-after:always;border-bottom:4px solid ${primary}}
+.cover h1{font-family:'Playfair Display',serif;font-size:42pt;font-weight:700;color:#1a1a1a;line-height:1.15;margin-bottom:8px}
+.cover-eyebrow{font-size:9pt;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:${primary};margin-bottom:20px}
+.cover-rule{width:60px;height:3px;background:${primary};border-radius:2px;margin:20px auto}
+.cover-subtitle{font-size:13pt;font-weight:300;color:#666;letter-spacing:.04em}
+.ci-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:12px 32px;margin-top:36px;padding:20px 28px;border-radius:8px;background:#fff;border:1px solid #e5e5e5;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.ci{display:flex;flex-direction:column;align-items:center}
+.ci-label{font-size:6.5pt;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:${primary};margin-bottom:3px}
+.ci-value{font-size:9.5pt;font-weight:500;color:#333}
+.sw-row{display:flex;justify-content:center;gap:24px;margin-top:32px}
+.sw{display:flex;flex-direction:column;align-items:center;gap:6px}
+.sw-dot{width:44px;height:44px;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.12);border:2px solid #fff}
+.sw-name{font-size:7.5pt;font-weight:600;color:#555}
+.sw-hex{font-size:6.5pt;font-family:'SF Mono',Consolas,monospace;color:#999}
+.cover-date{margin-top:32px;font-size:8.5pt;color:#aaa}
+
+/* TOC */
+.toc-page{padding:60px 50px;page-break-after:always;min-height:100vh}
+.toc-page h2{font-family:'Playfair Display',serif;font-size:24pt;font-weight:700;color:#1a1a1a;margin-bottom:8px}
+.toc-rule{width:40px;height:2.5px;background:${primary};border-radius:1px;margin-bottom:32px}
+.toc-table{width:100%;border-collapse:collapse}
+.toc-table tr{border-bottom:1px solid #eee}
+.toc-num{width:36px;padding:12px 0;font-size:10pt;font-weight:700;color:${primary}}
+.toc-title{padding:12px 0;font-size:10.5pt;font-weight:500;color:#333}
+.toc-cat{text-align:right;padding:12px 0;font-size:7pt;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#aaa}
+
+/* Sections */
+.section-page{padding:48px 50px 40px;page-break-inside:avoid}
+.section-page+.section-page{border-top:1px solid #eee}
+.section-header-bar{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #f0f0f0}
+.section-number{font-family:'Playfair Display',serif;font-size:36pt;font-weight:700;color:${primary};line-height:1;opacity:.2;min-width:44px}
+.section-meta{flex:1}
+.section-cat{display:inline-block;font-size:6.5pt;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:${primary};background:${primary}12;padding:3px 10px;border-radius:3px;margin-bottom:6px}
+.section-title{font-family:'Playfair Display',serif;font-size:22pt;font-weight:700;color:#1a1a1a;line-height:1.3;margin-top:2px}
+
+/* Section body — rendered markdown */
+.section-body{font-size:10.5pt;line-height:1.85;color:#444}
+.section-body p{margin-bottom:12px}
+.section-body h3{font-family:'Playfair Display',serif;font-size:13pt;font-weight:700;color:#1a1a1a;margin:20px 0 8px;padding-top:8px;border-top:1px solid #f0f0f0}
+.section-body h4{font-size:11pt;font-weight:700;color:#333;margin:16px 0 6px}
+.section-body strong{color:#1a1a1a;font-weight:600}
+.section-body em{color:#666;font-style:italic}
+.section-body ul{margin:8px 0 16px 0;padding-left:20px;list-style:none}
+.section-body ul li{position:relative;padding-left:16px;margin-bottom:6px}
+.section-body ul li::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:${primary};opacity:.6}
+.section-body ol{margin:8px 0 16px 0;padding-left:24px}
+.section-body ol li{margin-bottom:6px}
+
+/* Footer */
+.doc-footer{text-align:center;padding:28px 50px;font-size:7.5pt;color:#bbb;border-top:1px solid #eee}
+.doc-footer span{color:${primary}}
 </style></head><body>
-<div class="cover"><div class="cover-inner">
-<div class="cover-eyebrow">Brand Story Guide</div><h1>${clientName}</h1><div class="cover-rule"></div>
+<div class="cover">
+<div class="cover-eyebrow">Brand Story Guide</div>
+<h1>${clientName}</h1>
+<div class="cover-rule"></div>
 <div class="cover-subtitle">A comprehensive brand narrative and marketing framework</div>
-<div class="ci-grid">${infoGrid}</div><div class="sw-row">${swatchHtml}</div>
-<div class="cover-date">Prepared ${dateStr}</div></div></div>
+<div class="ci-grid">${infoGrid}</div>
+${swatchHtml ? `<div class="sw-row">${swatchHtml}</div>` : ""}
+<div class="cover-date">Prepared ${dateStr}</div>
+</div>
 <div class="toc-page"><h2>Contents</h2><div class="toc-rule"></div><table class="toc-table">${tocItems}</table></div>
 ${sectionsHtml}
-<div class="doc-footer">Confidential — Prepared exclusively for ${clientName} · ${dateStr}</div>
+<div class="doc-footer">Confidential — Prepared exclusively for <span>${clientName}</span> · ${dateStr}</div>
 </body></html>`;
 
     const blob = new Blob([html], { type: "text/html" });
