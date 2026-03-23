@@ -1458,6 +1458,21 @@ Before saving, verify:
     `,
   },
   {
+    id: "044_strategy_outputs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS cm_strategy (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE UNIQUE,
+        content_pillars JSONB,
+        customer_journey JSONB,
+        content_plan_12mo JSONB,
+        sprint_plan_90day JSONB,
+        generated_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  },
+  {
     id: "042_brand_story_unique_client",
     sql: `
       -- brand_story_generator uses ON CONFLICT (client_id) but no unique constraint exists

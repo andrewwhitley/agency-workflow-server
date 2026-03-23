@@ -9,6 +9,7 @@
 import { Router } from "express";
 import { query } from "./database.js";
 import { DataForSEOService } from "./dataforseo.js";
+import { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } from "./strategy-generator.js";
 import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { GoogleDriveService } from "./google-drive.js";
@@ -422,6 +423,38 @@ export function clientManagementRouter(): Router {
     } catch (err) {
       console.error("Market intel error:", err);
       res.status(500).json({ error: "Failed to fetch market intelligence" });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  STRATEGY GENERATION
+  // ════════════════════════════════════════════════════════
+
+  // Get all strategy outputs
+  router.get("/clients/:clientId/strategy", async (req, res) => {
+    try {
+      const { rows } = await query("SELECT * FROM cm_strategy WHERE client_id = $1", [req.params.clientId]);
+      res.json(rows[0] ? toCamel(rows[0]) : null);
+    } catch (err) { console.error("Get strategy error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Generate individual strategy components
+  router.post("/clients/:clientId/strategy/generate", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { component } = req.body; // "pillars" | "journey" | "plan" | "sprint"
+    try {
+      let result;
+      switch (component) {
+        case "pillars": result = await generateContentPillars(clientId); break;
+        case "journey": result = await generateCustomerJourney(clientId); break;
+        case "plan": result = await generateContentPlan(clientId); break;
+        case "sprint": result = await generateSprintPlan(clientId); break;
+        default: res.status(400).json({ error: "Invalid component. Use: pillars, journey, plan, sprint" }); return;
+      }
+      res.json({ success: true, component, result });
+    } catch (err) {
+      console.error(`Generate strategy ${component} error:`, err);
+      res.status(500).json({ error: `Failed to generate ${component}` });
     }
   });
 

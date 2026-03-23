@@ -19,6 +19,7 @@ import { CrudSection, CrudItem } from "@/components/client/CrudSection";
 import { FormField } from "@/components/FormField";
 import { IntakeResponsesSection } from "@/components/client/IntakeResponsesSection";
 import { MarketIntelSection } from "@/components/client/MarketIntelSection";
+import { StrategyOutputs } from "@/components/client/StrategyOutputs";
 
 // ── Types ────────────────────────────────────
 
@@ -224,6 +225,12 @@ export function ClientDetailPage() {
                 </>)}
               />
             </div>
+          </div>
+
+          {/* Strategy Outputs */}
+          <div>
+            <h3 className="text-xs font-bold text-dim uppercase tracking-wider mb-3">Strategy & Planning</h3>
+            <StrategyOutputs clientId={client.id} />
           </div>
 
           {/* Target Audience */}
