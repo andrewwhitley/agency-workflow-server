@@ -950,8 +950,8 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       // Italic
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      // Inline color chip next to hex codes
-      .replace(/(#[0-9A-Fa-f]{6})\b/g, '<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:$1;border:1px solid rgba(128,128,128,0.2);vertical-align:middle"></span><code style="font-size:0.85em">$1</code></span>')
+      // Color swatches float left next to hex codes
+      .replace(/(#[0-9A-Fa-f]{6})\b/g, '<span style="float:left;margin:4px 16px 12px 0;display:flex;flex-direction:column;align-items:center;gap:3px;clear:left"><span style="display:block;width:80px;height:80px;border-radius:8px;background:$1;border:1px solid rgba(128,128,128,0.15);box-shadow:0 1px 4px rgba(0,0,0,0.08)"></span><code style="font-size:0.75em;opacity:0.7">$1</code></span>')
       // Bullet lists
       .replace(/^- (.+)$/gm, '<li>$1</li>')
       .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
@@ -1521,38 +1521,7 @@ ${sectionsHtml}
                     </div>
                   ) : (
                     <>
-                      {/* Large color palette for Visual Identity section */}
-                      {def.key === "visualIdentitySection" && (() => {
-                        const hexes: { hex: string; name: string }[] = [];
-                        try {
-                          const lines = sectionData.content.split("\n");
-                          for (const line of lines) {
-                            const m = line.match(/#[0-9A-Fa-f]{6}/g);
-                            if (m) for (const hex of m) {
-                              if (!hexes.find((h) => h.hex.toLowerCase() === hex.toLowerCase())) {
-                                const bold = line.match(/\*\*(.+?)\*\*/);
-                                const name = bold ? bold[1].replace(/[*:]/g, "").trim() : hex;
-                                hexes.push({ hex, name: name.substring(0, 30) });
-                              }
-                            }
-                          }
-                        } catch {}
-                        if (hexes.length === 0) return null;
-                        return (
-                          <div className="mt-4 mb-2 flex flex-wrap gap-3">
-                            {hexes.map((c, i) => (
-                              <div key={i} className="rounded-lg border border-border overflow-hidden bg-surface" style={{ width: 120 }}>
-                                <div style={{ height: 80, background: c.hex }} />
-                                <div className="px-2 py-1.5 text-center">
-                                  <div className="text-[10px] font-semibold text-foreground truncate">{c.name}</div>
-                                  <div className="text-[9px] font-mono text-dim">{c.hex}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                      <div className="text-sm text-foreground mt-4 leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(sectionData.content) }} />
+                      <div className="text-sm text-foreground mt-4 leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:clear-left [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(sectionData.content) }} />
                       <div className="border-t border-border mt-4 pt-4 flex items-center gap-2 flex-wrap">
                         <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingSection(def.key); setEditContent(sectionData.content); }}>
                           <Pencil className="h-3 w-3 mr-1" /> Edit
