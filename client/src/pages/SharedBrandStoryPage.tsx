@@ -36,6 +36,24 @@ function parseColors(str: string | null): { hex: string }[] {
   return matches ? matches.map((hex) => ({ hex })) : [];
 }
 
+const mdToHtml = (md: string): string => {
+  return md
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n+/g, '</p><p>')
+    .replace(/([^>])\n([^<])/g, '$1<br>$2')
+    .replace(/^(?!<)/, '<p>')
+    .replace(/(?!>)$/, '</p>')
+    .replace(/<p>\s*<\/p>/g, '')
+    .replace(/<p>\s*(<[hul])/g, '$1')
+    .replace(/(<\/[hul][^>]*>)\s*<\/p>/g, '$1');
+};
+
 export function SharedBrandStoryPage() {
   const { token } = useParams<{ token: string }>();
   const [data, setData] = useState<BrandStoryData | null>(null);
@@ -187,7 +205,7 @@ export function SharedBrandStoryPage() {
               </div>
               <div className="p-4 space-y-3">
                 {contentStr ? (
-                  <div className="text-sm text-[#1a1f2e] whitespace-pre-wrap leading-relaxed">{contentStr}</div>
+                  <div className="text-sm text-[#1a1f2e] leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(contentStr) }} />
                 ) : entries.map(([k, v]) => (
                   <div key={k}>
                     <div className="text-xs font-semibold text-[#5a6478] capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</div>

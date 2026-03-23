@@ -1155,6 +1155,9 @@ ${sectionsHtml}
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Brand Colors */}
+              {brandColors && <ColorSwatches colorStr={brandColors} />}
+
               <div className="flex items-center gap-2 flex-wrap">
                 <Button size="sm" variant="outline" onClick={handleGenerateScript} disabled={generatingScript}>
                   {generatingScript ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate
@@ -1448,7 +1451,7 @@ ${sectionsHtml}
                     </div>
                   ) : (
                     <>
-                      <div className="text-sm text-foreground whitespace-pre-wrap mt-4 leading-relaxed">{sectionData.content}</div>
+                      <div className="text-sm text-foreground mt-4 leading-relaxed [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-foreground [&_h3]:mt-4 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:text-foreground [&_h4]:mt-3 [&_h4]:mb-1 [&_strong]:text-foreground [&_strong]:font-semibold [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1 [&_p]:mb-2" dangerouslySetInnerHTML={{ __html: mdToHtml(sectionData.content) }} />
                       <div className="border-t border-border mt-4 pt-4 flex items-center gap-2 flex-wrap">
                         <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setEditingSection(def.key); setEditContent(sectionData.content); }}>
                           <Pencil className="h-3 w-3 mr-1" /> Edit
