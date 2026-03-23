@@ -8,6 +8,7 @@
 
 import { Router } from "express";
 import { query } from "./database.js";
+import { DataForSEOService } from "./dataforseo.js";
 import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { GoogleDriveService } from "./google-drive.js";
@@ -390,6 +391,37 @@ export function clientManagementRouter(): Router {
     } catch (err) {
       console.error("Import client data error:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : "Import failed" });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  MARKET INTELLIGENCE (DataForSEO)
+  // ════════════════════════════════════════════════════════
+
+  router.get("/clients/:clientId/market-intel", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    try {
+      // Get client domain
+      const clientRes = await query("SELECT company_website, domain FROM cm_clients WHERE id = $1", [clientId]);
+      if (!clientRes.rows[0]) { res.status(404).json({ error: "Client not found" }); return; }
+      let domain = clientRes.rows[0].domain || clientRes.rows[0].company_website || "";
+      domain = domain.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+      if (!domain) { res.json({ error: "No domain configured for this client" }); return; }
+
+      const seo = new DataForSEOService();
+      if (!seo.isAuthenticated()) { res.json({ error: "DataForSEO not configured" }); return; }
+
+      // Pull all three in parallel
+      const [overview, keywords, competitors] = await Promise.all([
+        seo.getDomainOverview(domain).catch(() => null),
+        seo.getDomainRankedKeywords(domain, undefined, 30).catch(() => []),
+        seo.getDomainCompetitors(domain, undefined, 10).catch(() => []),
+      ]);
+
+      res.json({ domain, overview, keywords, competitors });
+    } catch (err) {
+      console.error("Market intel error:", err);
+      res.status(500).json({ error: "Failed to fetch market intelligence" });
     }
   });
 

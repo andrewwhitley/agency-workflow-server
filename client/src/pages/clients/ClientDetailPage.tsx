@@ -18,6 +18,7 @@ import { ContentGuideSection } from "@/components/client/ContentGuideSection";
 import { CrudSection, CrudItem } from "@/components/client/CrudSection";
 import { FormField } from "@/components/FormField";
 import { IntakeResponsesSection } from "@/components/client/IntakeResponsesSection";
+import { MarketIntelSection } from "@/components/client/MarketIntelSection";
 
 // ── Types ────────────────────────────────────
 
@@ -156,7 +157,7 @@ export function ClientDetailPage() {
           <button key={t} onClick={() => setTab(t)}
             className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors capitalize whitespace-nowrap",
               tab === t ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground")}>
-            {t.replace(/-/g, " ")}
+            {t === "content-guide" ? "Strategy" : t === "brand-story" ? "Brand Story" : t.replace(/-/g, " ")}
           </button>
         ))}
       </div>
@@ -166,55 +167,97 @@ export function ClientDetailPage() {
       {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
       {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
       {tab === "content-guide" && (
-        <div className="space-y-8">
-          <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
-          <ImportDocumentsSection clientId={client.id} onComplete={() => {}} />
-          <ContentGuideSection clientId={client.id} />
-          {/* Differentiators */}
-          <CrudSection<Differentiator> title="Differentiators" clientId={client.id} entityPath="differentiators"
-            emptyForm={() => ({ category: "", title: "", description: "" } as Partial<Differentiator>)}
-            renderItem={(d, onEdit, onDelete) => (
-              <CrudItem onEdit={onEdit} onDelete={onDelete}>
-                <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim mr-2">{d.category}</span>
-                {d.title && <span className="text-sm font-medium text-foreground">{d.title}: </span>}
-                <span className="text-sm text-muted">{d.description}</span>
-              </CrudItem>
-            )}
-            renderForm={(form, upd) => (<>
-              <FormField label="Category" value={form.category || ""} onChange={(v) => upd("category", v)} required />
-              <FormField label="Title" value={form.title || ""} onChange={(v) => upd("title", v)} />
-              <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} required />
-            </>)}
-          />
-          {/* Buyer Personas */}
-          <CrudSection<BuyerPersona> title="Buyer Personas" clientId={client.id} entityPath="buyer-personas" wide
-            emptyForm={() => ({ personaName: "", age: null, gender: "", location: "", familyStatus: "", educationLevel: "", occupation: "", incomeLevel: "", communicationChannels: "", needsDescription: "", painPoints: "", gains: "", buyingFactors: "" } as Partial<BuyerPersona>)}
-            renderItem={(p, onEdit, onDelete) => (
-              <CrudItem onEdit={onEdit} onDelete={onDelete}>
-                <div className="text-sm font-medium text-foreground">{p.personaName}</div>
-                <div className="text-xs text-muted">{[p.age && `Age: ${p.age}`, p.gender, p.occupation].filter(Boolean).join(" | ")}</div>
-                {p.painPoints && <div className="text-xs text-dim mt-1">Pain Points: {p.painPoints}</div>}
-              </CrudItem>
-            )}
-            renderForm={(form, upd) => (<>
-              <FormField label="Persona Name" value={form.personaName || ""} onChange={(v) => upd("personaName", v)} required />
-              <div className="grid grid-cols-3 gap-4">
-                <FormField label="Age" type="number" value={form.age?.toString() || ""} onChange={(v) => upd("age", v ? parseInt(v) : null)} />
-                <FormField label="Gender" value={form.gender || ""} onChange={(v) => upd("gender", v)} />
-                <FormField label="Location" value={form.location || ""} onChange={(v) => upd("location", v)} />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <FormField label="Family Status" value={form.familyStatus || ""} onChange={(v) => upd("familyStatus", v)} />
-                <FormField label="Education Level" value={form.educationLevel || ""} onChange={(v) => upd("educationLevel", v)} />
-                <FormField label="Income Level" value={form.incomeLevel || ""} onChange={(v) => upd("incomeLevel", v)} />
-              </div>
-              <FormField label="Occupation" value={form.occupation || ""} onChange={(v) => upd("occupation", v)} />
-              <FormField label="Needs" type="textarea" value={form.needsDescription || ""} onChange={(v) => upd("needsDescription", v)} />
-              <FormField label="Pain Points" type="textarea" value={form.painPoints || ""} onChange={(v) => upd("painPoints", v)} />
-              <FormField label="Gains" type="textarea" value={form.gains || ""} onChange={(v) => upd("gains", v)} />
-              <FormField label="Buying Factors" type="textarea" value={form.buyingFactors || ""} onChange={(v) => upd("buyingFactors", v)} />
-            </>)}
-          />
+        <div className="space-y-10">
+          {/* Data Sources */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-dim uppercase tracking-wider">Data Sources</h3>
+            <ImportDocumentsSection clientId={client.id} onComplete={() => {}} />
+            <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
+          </div>
+
+          {/* Market Intelligence */}
+          <div>
+            <h3 className="text-xs font-bold text-dim uppercase tracking-wider mb-3">Market Intelligence</h3>
+            <MarketIntelSection clientId={client.id} />
+            <div className="mt-4">
+              <CrudSection<Competitor> title="Known Competitors" clientId={client.id} entityPath="competitors" collapsible
+                emptyForm={() => ({ companyName: "", url: "", usps: "", description: "", rank: null } as Partial<Competitor>)}
+                renderItem={(c, onEdit, onDelete) => (
+                  <CrudItem onEdit={onEdit} onDelete={onDelete}>
+                    <div className="flex items-center gap-2">
+                      {c.rank && <span className="text-xs font-bold text-dim">#{c.rank}</span>}
+                      <span className="text-sm font-medium text-foreground">{c.companyName}</span>
+                      {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{c.url}</a>}
+                    </div>
+                    {c.usps && <div className="text-xs text-muted mt-0.5">USPs: {c.usps}</div>}
+                  </CrudItem>
+                )}
+                renderForm={(form, upd) => (<>
+                  <FormField label="Company Name" value={form.companyName || ""} onChange={(v) => upd("companyName", v)} required />
+                  <FormField label="Website URL" value={form.url || ""} onChange={(v) => upd("url", v)} />
+                  <FormField label="Rank" type="number" value={form.rank?.toString() || ""} onChange={(v) => upd("rank", v ? parseInt(v) : null)} />
+                  <FormField label="USPs" type="textarea" value={form.usps || ""} onChange={(v) => upd("usps", v)} />
+                  <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} />
+                </>)}
+              />
+            </div>
+          </div>
+
+          {/* Brand Foundation */}
+          <div>
+            <h3 className="text-xs font-bold text-dim uppercase tracking-wider mb-3">Brand Foundation</h3>
+            <div className="space-y-4">
+              <ContentGuideSection clientId={client.id} />
+              <CrudSection<Differentiator> title="Differentiators" clientId={client.id} entityPath="differentiators" collapsible
+                emptyForm={() => ({ category: "", title: "", description: "" } as Partial<Differentiator>)}
+                renderItem={(d, onEdit, onDelete) => (
+                  <CrudItem onEdit={onEdit} onDelete={onDelete}>
+                    <span className="text-xs px-2 py-0.5 rounded bg-surface text-dim mr-2">{d.category}</span>
+                    {d.title && <span className="text-sm font-medium text-foreground">{d.title}: </span>}
+                    <span className="text-sm text-muted">{d.description}</span>
+                  </CrudItem>
+                )}
+                renderForm={(form, upd) => (<>
+                  <FormField label="Category" value={form.category || ""} onChange={(v) => upd("category", v)} required />
+                  <FormField label="Title" value={form.title || ""} onChange={(v) => upd("title", v)} />
+                  <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} required />
+                </>)}
+              />
+            </div>
+          </div>
+
+          {/* Target Audience */}
+          <div>
+            <h3 className="text-xs font-bold text-dim uppercase tracking-wider mb-3">Target Audience</h3>
+            <CrudSection<BuyerPersona> title="Buyer Personas" clientId={client.id} entityPath="buyer-personas" wide
+              emptyForm={() => ({ personaName: "", age: null, gender: "", location: "", familyStatus: "", educationLevel: "", occupation: "", incomeLevel: "", communicationChannels: "", needsDescription: "", painPoints: "", gains: "", buyingFactors: "" } as Partial<BuyerPersona>)}
+              renderItem={(p, onEdit, onDelete) => (
+                <CrudItem onEdit={onEdit} onDelete={onDelete}>
+                  <div className="text-sm font-medium text-foreground">{p.personaName}</div>
+                  <div className="text-xs text-muted">{[p.age && `Age: ${p.age}`, p.gender, p.occupation].filter(Boolean).join(" | ")}</div>
+                  {p.painPoints && <div className="text-xs text-dim mt-1">Pain Points: {p.painPoints}</div>}
+                </CrudItem>
+              )}
+              renderForm={(form, upd) => (<>
+                <FormField label="Persona Name" value={form.personaName || ""} onChange={(v) => upd("personaName", v)} required />
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField label="Age" type="number" value={form.age?.toString() || ""} onChange={(v) => upd("age", v ? parseInt(v) : null)} />
+                  <FormField label="Gender" value={form.gender || ""} onChange={(v) => upd("gender", v)} />
+                  <FormField label="Location" value={form.location || ""} onChange={(v) => upd("location", v)} />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField label="Family Status" value={form.familyStatus || ""} onChange={(v) => upd("familyStatus", v)} />
+                  <FormField label="Education Level" value={form.educationLevel || ""} onChange={(v) => upd("educationLevel", v)} />
+                  <FormField label="Income Level" value={form.incomeLevel || ""} onChange={(v) => upd("incomeLevel", v)} />
+                </div>
+                <FormField label="Occupation" value={form.occupation || ""} onChange={(v) => upd("occupation", v)} />
+                <FormField label="Needs" type="textarea" value={form.needsDescription || ""} onChange={(v) => upd("needsDescription", v)} />
+                <FormField label="Pain Points" type="textarea" value={form.painPoints || ""} onChange={(v) => upd("painPoints", v)} />
+                <FormField label="Gains" type="textarea" value={form.gains || ""} onChange={(v) => upd("gains", v)} />
+                <FormField label="Buying Factors" type="textarea" value={form.buyingFactors || ""} onChange={(v) => upd("buyingFactors", v)} />
+              </>)}
+            />
+          </div>
         </div>
       )}
       {tab === "health" && <HealthTab clientId={client.id} />}
@@ -469,28 +512,6 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
             <FormField label="Use for Attribution" type="checkbox" checked={!!form.useForAttribution} onChange={(v) => upd("useForAttribution", v)} />
             <FormField label="Accepting New Clients" type="checkbox" checked={form.acceptingNewPatients !== false} onChange={(v) => upd("acceptingNewPatients", v)} />
           </div>
-        </>)}
-      />
-
-      {/* Competitors */}
-      <CrudSection<Competitor> title="Competitors" clientId={client.id} entityPath="competitors"
-        emptyForm={() => ({ companyName: "", url: "", usps: "", description: "", rank: null } as Partial<Competitor>)}
-        renderItem={(c, onEdit, onDelete) => (
-          <CrudItem onEdit={onEdit} onDelete={onDelete}>
-            <div className="flex items-center gap-2">
-              {c.rank && <span className="text-xs font-bold text-dim">#{c.rank}</span>}
-              <span className="text-sm font-medium text-foreground">{c.companyName}</span>
-              {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">{c.url}</a>}
-            </div>
-            {c.usps && <div className="text-xs text-muted mt-0.5">USPs: {c.usps}</div>}
-          </CrudItem>
-        )}
-        renderForm={(form, upd) => (<>
-          <FormField label="Company Name" value={form.companyName || ""} onChange={(v) => upd("companyName", v)} required />
-          <FormField label="Website URL" value={form.url || ""} onChange={(v) => upd("url", v)} />
-          <FormField label="Rank" type="number" value={form.rank?.toString() || ""} onChange={(v) => upd("rank", v ? parseInt(v) : null)} />
-          <FormField label="USPs" type="textarea" value={form.usps || ""} onChange={(v) => upd("usps", v)} />
-          <FormField label="Description" type="textarea" value={form.description || ""} onChange={(v) => upd("description", v)} />
         </>)}
       />
 
