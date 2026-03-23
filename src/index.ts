@@ -389,23 +389,32 @@ async function main(): Promise<void> {
   // Temp: test strategy generation
   app.post("/api/admin/test-strat", async (req, res) => {
     if (req.query.token !== "strat-2026") { res.status(403).json({ error: "Forbidden" }); return; }
-    try {
-      const { query: dbQuery } = await import("./database.js");
-      const comp = String(req.query.comp || "pillars");
-      const clientId = 1;
-      // First check if table exists
+    const { query: dbQuery } = await import("./database.js");
+    const comp = String(req.query.comp || "pillars");
+    const clientId = 1;
+    const action = String(req.query.action || "generate");
+
+    if (action === "check-table") {
       const tableCheck = await dbQuery("SELECT to_regclass('cm_strategy') as exists");
-      if (!tableCheck.rows[0]?.exists) { res.json({ error: "cm_strategy table does not exist — migration 044 may not have run" }); return; }
-      // Try generating
-      const { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } = await import("./strategy-generator.js");
-      const generators: Record<string, Function> = { pillars: generateContentPillars, journey: generateCustomerJourney, plan: generateContentPlan, sprint: generateSprintPlan };
-      const gen = generators[comp];
-      if (!gen) { res.json({ error: `Unknown component: ${comp}` }); return; }
-      const result = await gen(clientId);
-      res.json({ success: true, comp, resultKeys: Object.keys(result) });
-    } catch (err: any) {
-      res.json({ error: err.message, stack: err.stack?.substring(0, 300) });
+      res.json({ tableExists: !!tableCheck.rows[0]?.exists });
+      return;
     }
+
+    if (action === "check-result") {
+      const r = await dbQuery("SELECT content_pillars IS NOT NULL as has_pillars, customer_journey IS NOT NULL as has_journey, content_plan_12mo IS NOT NULL as has_plan, sprint_plan_90day IS NOT NULL as has_sprint FROM cm_strategy WHERE client_id = $1", [clientId]);
+      res.json(r.rows[0] || { error: "no row" });
+      return;
+    }
+
+    // Fire and forget
+    const { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } = await import("./strategy-generator.js");
+    const generators: Record<string, Function> = { pillars: generateContentPillars, journey: generateCustomerJourney, plan: generateContentPlan, sprint: generateSprintPlan };
+    const gen = generators[comp];
+    if (!gen) { res.json({ error: `Unknown: ${comp}` }); return; }
+    res.json({ success: true, message: `${comp} generation started` });
+    gen(clientId)
+      .then(() => dbQuery("UPDATE cm_clients SET business_facts = $2 WHERE id = $1", [clientId, `STRAT_${comp}_OK`]))
+      .catch((e: any) => dbQuery("UPDATE cm_clients SET business_facts = $2 WHERE id = $1", [clientId, `STRAT_${comp}_ERR: ${e?.message?.substring(0, 200)}`]));
   });
 
   // Protect all /api routes except /api/auth/me and /api/public/*
