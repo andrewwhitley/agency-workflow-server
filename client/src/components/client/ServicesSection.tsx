@@ -316,7 +316,29 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         {svcError && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{svcError}</div>}
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Service Name" value={svcForm.serviceName || ""} onChange={(v) => upd("serviceName", v)} required />
-          <FormField label="Category" value={svcForm.category || ""} onChange={(v) => upd("category", v)} required placeholder="e.g. Chiropractic, Massage" />
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Category</label>
+            <div className="flex gap-2">
+              <select
+                value={svcForm.category || ""}
+                onChange={(e) => upd("category", e.target.value)}
+                className="flex-1 h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground"
+              >
+                <option value="">— Select category —</option>
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="__new__">+ New category...</option>
+              </select>
+            </div>
+            {svcForm.category === "__new__" && (
+              <input
+                value=""
+                onChange={(e) => upd("category", e.target.value)}
+                placeholder="Type new category name"
+                className="mt-1.5 w-full h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                autoFocus
+              />
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <FormField label="Price" type="number" value={svcForm.price?.toString() || ""} onChange={(v) => upd("price", v ? parseFloat(v) : null)} />
