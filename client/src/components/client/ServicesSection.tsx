@@ -98,8 +98,8 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       for (const [k, v] of Object.entries(svcForm)) {
         if (["id", "clientId", "createdAt", "updatedAt", "source"].includes(k)) continue;
         if (v === undefined) continue;
-        // JSON-stringify providerIds for JSONB column
-        if (k === "providerIds") { payload[k] = JSON.stringify(v); continue; }
+        // providerIds is JSONB — send as array, node-pg handles it
+        if (k === "providerIds") { payload[k] = v; continue; }
         payload[k] = v;
       }
       if (editingSvcId) {
