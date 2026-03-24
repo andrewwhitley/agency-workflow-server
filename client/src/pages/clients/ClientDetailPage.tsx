@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -117,14 +117,16 @@ interface HealthEntry { id: number; departmentName: string; status: string; note
 
 // ── Tabs ─────────────────────────────────────
 
-const TABS = ["info", "services", "seo", "content", "campaigns", "deliverables", "content-guide", "health", "brand-story"] as const;
-type Tab = typeof TABS[number];
+// Section is now driven by URL: /clients/:slug/:section
+const VALID_SECTIONS = ["info", "services", "seo", "content", "campaigns", "deliverables", "strategy", "health", "brand-story"] as const;
+type Section = typeof VALID_SECTIONS[number];
 
 export function ClientDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, section: urlSection } = useParams<{ slug: string; section?: string }>();
+  const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("info");
+  const section: Section = (VALID_SECTIONS.includes(urlSection as Section) ? urlSection : "info") as Section;
 
   useEffect(() => {
     if (!slug) return;
@@ -155,23 +157,13 @@ export function ClientDetailPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors capitalize whitespace-nowrap",
-              tab === t ? "border-accent text-accent" : "border-transparent text-muted hover:text-foreground")}>
-            {t === "content-guide" ? "Strategy" : t === "brand-story" ? "Brand Story" : t === "seo" ? "SEO" : t === "content" ? "Content" : t.replace(/-/g, " ")}
-          </button>
-        ))}
-      </div>
-
-      {tab === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
-      {tab === "services" && <ServicesSection clientId={client.id} />}
-      {tab === "seo" && <ClientSeoTab clientSlug={client.slug} clientDomain={(client.domain || client.companyWebsite || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")} />}
-      {tab === "content" && <ClientContentTab clientSlug={client.slug} />}
-      {tab === "campaigns" && <CampaignsSection clientId={client.id} />}
-      {tab === "deliverables" && <MarketingPlanSection clientId={client.id} />}
-      {tab === "content-guide" && (
+      {section === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
+      {section === "services" && <ServicesSection clientId={client.id} />}
+      {section === "seo" && <ClientSeoTab clientSlug={client.slug} clientDomain={(client.domain || client.companyWebsite || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")} />}
+      {section === "content" && <ClientContentTab clientSlug={client.slug} />}
+      {section === "campaigns" && <CampaignsSection clientId={client.id} />}
+      {section === "deliverables" && <MarketingPlanSection clientId={client.id} />}
+      {section === "strategy" && (
         <div className="space-y-10">
           {/* Data Sources */}
           <div className="space-y-3">
@@ -271,8 +263,8 @@ export function ClientDetailPage() {
           </div>
         </div>
       )}
-      {tab === "health" && <HealthTab clientId={client.id} />}
-      {tab === "brand-story" && (
+      {section === "health" && <HealthTab clientId={client.id} />}
+      {section === "brand-story" && (
         <BrandStoryTab clientId={client.id} clientName={client.companyName} />
       )}
     </div>

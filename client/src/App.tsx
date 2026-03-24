@@ -47,6 +47,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/clients" element={<ClientsListPage />} />
         <Route path="/clients/:slug" element={<ClientDetailPage />} />
+        <Route path="/clients/:slug/:section" element={<ClientDetailPage />} />
         {/* Campaigns & Deliverables are now in the client detail page */}
         <Route path="/team" element={<AgencyTeamPage />} />
         <Route path="/weekly-check-in" element={<WeeklyCheckInPage />} />

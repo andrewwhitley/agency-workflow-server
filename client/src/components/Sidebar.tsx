@@ -1,13 +1,18 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   LayoutDashboard, Workflow, Clock, Bot, CheckSquare, Brain,
-  HardDrive, Users, FileText, PenTool, BookOpen, MessageCircle,
+  HardDrive, Users, FileText, BookOpen, MessageCircle,
   Target, BarChart3, AlertCircle, Calendar, UserCheck, Megaphone,
-  Globe, TrendingUp, Radar, FileSearch, Search, Lightbulb,
   Building2, Heart, Crosshair, ClipboardList,
+  // Client-specific icons
+  Info, Briefcase, Globe, PenTool, Megaphone as Campaign,
+  ListChecks, Compass, Activity, BookOpen as BrandStory,
+  ArrowLeft,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 interface User {
   name: string;
@@ -15,7 +20,9 @@ interface User {
   picture: string;
 }
 
-const navSections = [
+// ── Global Navigation ────────────────────────
+
+const globalSections = [
   {
     label: "Overview",
     items: [
@@ -72,18 +79,86 @@ const salesSection = {
   ],
 };
 
+// ── Client Navigation ────────────────────────
+
+function getClientSections(slug: string) {
+  const base = `/clients/${slug}`;
+  return [
+    {
+      label: "Client",
+      items: [
+        { to: base, label: "Overview", icon: Info, end: true },
+        { to: `${base}/services`, label: "Services", icon: Briefcase },
+      ],
+    },
+    {
+      label: "Marketing",
+      items: [
+        { to: `${base}/seo`, label: "SEO", icon: Globe },
+        { to: `${base}/content`, label: "Content", icon: PenTool },
+        { to: `${base}/campaigns`, label: "Campaigns", icon: Campaign },
+        { to: `${base}/deliverables`, label: "Deliverables", icon: ListChecks },
+      ],
+    },
+    {
+      label: "Strategy",
+      items: [
+        { to: `${base}/strategy`, label: "Strategy Hub", icon: Compass },
+        { to: `${base}/brand-story`, label: "Brand Story", icon: BrandStory },
+      ],
+    },
+    {
+      label: "Health",
+      items: [
+        { to: `${base}/health`, label: "Traffic Light", icon: Activity },
+      ],
+    },
+  ];
+}
+
 export function Sidebar({ user }: { user: User | null }) {
   const { isAdmin } = useIsAdmin();
-  const sections = isAdmin ? [...navSections, salesSection] : navSections;
+  const location = useLocation();
+  const [clientName, setClientName] = useState<string | null>(null);
+
+  // Detect if we're inside a client
+  const clientMatch = location.pathname.match(/^\/clients\/([^/]+)/);
+  const clientSlug = clientMatch ? clientMatch[1] : null;
+  const isInClient = !!clientSlug;
+
+  // Fetch client name when inside a client
+  useEffect(() => {
+    if (!clientSlug) { setClientName(null); return; }
+    api<{ companyName: string }>(`/cm/clients/${clientSlug}`)
+      .then((c) => setClientName(c.companyName))
+      .catch(() => setClientName(clientSlug));
+  }, [clientSlug]);
+
+  const sections = isInClient
+    ? getClientSections(clientSlug!)
+    : isAdmin ? [...globalSections, salesSection] : globalSections;
 
   return (
     <aside className="flex flex-col bg-surface border-r border-border h-screen sticky top-0 overflow-y-auto">
-      {/* Logo */}
+      {/* Header */}
       <div className="p-5 border-b border-border">
-        <h1 className="text-lg font-semibold text-foreground">
-          Agency Command Center
-        </h1>
-        <p className="text-xs text-dim mt-0.5">AI Marketing Team</p>
+        {isInClient ? (
+          <>
+            <NavLink to="/clients" className="flex items-center gap-1.5 text-xs text-dim hover:text-foreground transition-colors mb-2">
+              <ArrowLeft className="h-3 w-3" /> All Clients
+            </NavLink>
+            <h1 className="text-lg font-semibold text-foreground truncate">
+              {clientName || clientSlug}
+            </h1>
+          </>
+        ) : (
+          <>
+            <h1 className="text-lg font-semibold text-foreground">
+              Agency Command Center
+            </h1>
+            <p className="text-xs text-dim mt-0.5">AI Marketing Team</p>
+          </>
+        )}
       </div>
 
       {/* Navigation */}
@@ -98,6 +173,7 @@ export function Sidebar({ user }: { user: User | null }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  end={(item as any).end}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
@@ -114,30 +190,19 @@ export function Sidebar({ user }: { user: User | null }) {
             </div>
           </div>
         ))}
-
       </nav>
 
       {/* User */}
       {user && (
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3">
-            <img
-              src={user.picture}
-              alt=""
-              className="w-8 h-8 rounded-full"
-              referrerPolicy="no-referrer"
-            />
+            <img src={user.picture} alt="" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
             <div className="min-w-0">
-              <div className="text-sm font-medium text-foreground truncate">
-                {user.name}
-              </div>
+              <div className="text-sm font-medium text-foreground truncate">{user.name}</div>
               <div className="text-xs text-dim truncate">{user.email}</div>
             </div>
           </div>
-          <a
-            href="/auth/logout"
-            className="block mt-2 text-xs text-dim hover:text-foreground transition-colors"
-          >
+          <a href="/auth/logout" className="block mt-2 text-xs text-dim hover:text-foreground transition-colors">
             Sign out
           </a>
         </div>
