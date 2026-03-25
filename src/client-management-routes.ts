@@ -441,8 +441,8 @@ export function clientManagementRouter(): Router {
   // Generate individual strategy components
   router.post("/clients/:clientId/strategy/generate", async (req, res) => {
     const clientId = parseInt(req.params.clientId);
-    const { component } = req.body;
-    const generators: Record<string, (id: number) => Promise<any>> = {
+    const { component, guidance } = req.body;
+    const generators: Record<string, (id: number, guidance?: string) => Promise<any>> = {
       pillars: generateContentPillars, journey: generateCustomerJourney,
       plan: generateContentPlan, sprint: generateSprintPlan,
     };
@@ -450,9 +450,30 @@ export function clientManagementRouter(): Router {
     if (!gen) { res.status(400).json({ error: "Invalid component" }); return; }
     // Fire and forget — respond immediately, generate in background
     res.json({ success: true, component, status: "generating" });
-    gen(clientId)
+    gen(clientId, guidance || undefined)
       .then(() => console.log(`[strategy] ${component} generated for client ${clientId}`))
       .catch((err) => console.error(`[strategy] ${component} failed for client ${clientId}:`, err));
+  });
+
+  // Update individual strategy component (manual edits)
+  router.put("/clients/:clientId/strategy/:component", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { component } = req.params;
+    const columnMap: Record<string, string> = {
+      pillars: "content_pillars", journey: "customer_journey",
+      plan: "content_plan_12mo", sprint: "sprint_plan_90day",
+    };
+    const column = columnMap[component];
+    if (!column) { res.status(400).json({ error: "Invalid component" }); return; }
+    try {
+      await query(
+        `INSERT INTO cm_strategy (client_id, ${column}, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (client_id) DO UPDATE SET ${column} = $2, updated_at = NOW()`,
+        [clientId, JSON.stringify(req.body.data)]
+      );
+      res.json({ success: true });
+    } catch (err) { console.error("Update strategy error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
   // ════════════════════════════════════════════════════════

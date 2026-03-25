@@ -37,9 +37,28 @@ async function gatherStrategyContext(clientId: number): Promise<string> {
   if (client.location) parts.push(`Location: ${client.location}`);
 
   if (servicesRes.rows.length > 0) {
-    parts.push("\n## Services");
-    for (const s of servicesRes.rows) {
-      parts.push(`- [${s.tier?.toUpperCase() || "PRIMARY"}] ${s.service_name} (${s.category}): ${s.description || ""}`);
+    const primary = servicesRes.rows.filter((s: any) => s.tier === "primary");
+    const secondary = servicesRes.rows.filter((s: any) => s.tier === "secondary");
+    const complementary = servicesRes.rows.filter((s: any) => s.tier === "complementary");
+    const other = servicesRes.rows.filter((s: any) => !s.tier || !["primary", "secondary", "complementary"].includes(s.tier));
+
+    if (primary.length > 0) {
+      parts.push("\n## Primary Services (FOCUS — build content pillars and strategy around these)");
+      for (const s of primary) {
+        parts.push(`- ${s.service_name} (${s.category}): ${s.description || ""}`);
+      }
+    }
+    if (secondary.length > 0) {
+      parts.push("\n## Secondary Services (supporting — include where relevant)");
+      for (const s of secondary) {
+        parts.push(`- ${s.service_name} (${s.category}): ${s.description || ""}`);
+      }
+    }
+    if (complementary.length > 0 || other.length > 0) {
+      parts.push("\n## Complementary Services (minor — reference only when natural)");
+      for (const s of [...complementary, ...other]) {
+        parts.push(`- ${s.service_name} (${s.category}): ${s.description || ""}`);
+      }
     }
   }
 
@@ -125,13 +144,13 @@ async function callClaude(system: string, prompt: string): Promise<string> {
 
 // ── Content Pillars ──────────────────────────────────────
 
-export async function generateContentPillars(clientId: number): Promise<Record<string, unknown>> {
+export async function generateContentPillars(clientId: number, guidance?: string): Promise<Record<string, unknown>> {
   const context = await gatherStrategyContext(clientId);
 
   const result = await callClaude(
     "You are a content strategist. Return ONLY valid JSON.",
     `Based on this business profile, create a content pillar strategy.
-
+${guidance ? `\nADDITIONAL GUIDANCE FROM THE USER:\n${guidance}\n` : ""}
 Return JSON with this structure:
 {
   "pillars": [
@@ -153,7 +172,7 @@ Return JSON with this structure:
   ]
 }
 
-Create 4-5 pillars with 6-8 topics each. Keep briefs to 1 sentence. Be specific to THIS business — use their actual services, location, and differentiators. Topics should be realistic content pieces their team would create.
+Create 4-5 pillars with 6-8 topics each. Keep briefs to 1 sentence. Be specific to THIS business — use their actual services, location, and differentiators. Topics should be realistic content pieces their team would create. PRIMARY SERVICES should be the foundation of your pillar strategy — at least 2-3 pillars should directly map to primary services. Secondary services can support pillars but should not be the main focus.
 
 BUSINESS PROFILE:
 ${context}`
@@ -173,13 +192,13 @@ ${context}`
 
 // ── Customer Journey Map ─────────────────────────────────
 
-export async function generateCustomerJourney(clientId: number): Promise<Record<string, unknown>> {
+export async function generateCustomerJourney(clientId: number, guidance?: string): Promise<Record<string, unknown>> {
   const context = await gatherStrategyContext(clientId);
 
   const result = await callClaude(
     "You are a customer experience strategist. Return ONLY valid JSON.",
     `Based on this business profile, map the complete customer journey.
-
+${guidance ? `\nADDITIONAL GUIDANCE FROM THE USER:\n${guidance}\n` : ""}
 Return JSON with this structure:
 {
   "stages": [
@@ -221,7 +240,7 @@ ${context}`
 
 // ── 12-Month Content Plan ────────────────────────────────
 
-export async function generateContentPlan(clientId: number): Promise<Record<string, unknown>> {
+export async function generateContentPlan(clientId: number, guidance?: string): Promise<Record<string, unknown>> {
   const context = await gatherStrategyContext(clientId);
 
   // Also load content pillars if they exist
@@ -231,7 +250,7 @@ export async function generateContentPlan(clientId: number): Promise<Record<stri
   const result = await callClaude(
     "You are a marketing director creating an annual content plan. Return ONLY valid JSON.",
     `Based on this business profile${pillars ? " and existing content pillars" : ""}, create a 12-month content plan.
-
+${guidance ? `\nADDITIONAL GUIDANCE FROM THE USER:\n${guidance}\n` : ""}
 Return JSON with this structure:
 {
   "quarters": [
@@ -295,13 +314,13 @@ ${pillars ? `\nCONTENT PILLARS:\n${JSON.stringify(pillars, null, 2)}` : ""}`
 
 // ── 90-Day Sprint Plan ───────────────────────────────────
 
-export async function generateSprintPlan(clientId: number): Promise<Record<string, unknown>> {
+export async function generateSprintPlan(clientId: number, guidance?: string): Promise<Record<string, unknown>> {
   const context = await gatherStrategyContext(clientId);
 
   const result = await callClaude(
     "You are a marketing project manager creating an implementation sprint. Return ONLY valid JSON.",
     `Based on this business profile, create a 90-day implementation sprint plan. This is the first 3 months of working with this client — what gets done, week by week.
-
+${guidance ? `\nADDITIONAL GUIDANCE FROM THE USER:\n${guidance}\n` : ""}
 Return JSON with this structure:
 {
   "weeks": [
