@@ -845,6 +845,12 @@ async function main(): Promise<void> {
       catch (err: any) { res.status(500).json({ error: err.message || "Failed to get runs" }); }
     });
 
+    app.post("/api/sales/rescore", requireSalesAdmin as any, async (_req, res) => {
+      try {
+        res.json(await enrichmentService.rescoreAll());
+      } catch (err: any) { res.status(500).json({ error: err.message || "Re-score failed" }); }
+    });
+
     app.post("/api/sales/export", requireSalesAdmin as any, async (req, res) => {
       try {
         const { sheetId, tier } = req.body;

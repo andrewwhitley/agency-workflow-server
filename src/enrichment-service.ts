@@ -80,9 +80,12 @@ export interface Prospect {
   has_lead_capture: boolean | null;
   lead_capture_types: any | null;
   provider_details: any | null;
-  // Additional signals
+  // Additional signals — GBP
   gbp_rating: number | null;
   gbp_review_count: number | null;
+  gbp_category: string | null;
+  gbp_has_hours: boolean | null;
+  gbp_has_website_link: boolean | null;
   social_active: any | null;
   competitor_count: number | null;
   contact_quality: string | null;
@@ -284,74 +287,92 @@ function calculateScores(p: Partial<Prospect>): {
   const scores: Record<string, number> = {};
   const angles: string[] = [];
 
-  // ── Size score (max 40) — "Can they afford $5k/mo marketing?" ──
-  // 3 tiers: Startup/solo (low), Small clinic 2-4 providers (mid), Established $1M+/5+ providers (full)
-  // Either revenue OR provider count can qualify — whichever is higher.
+  // ══════════════════════════════════════════════════════════════
+  // SIZE (max 30) — "Can they afford $5k/mo marketing?"
+  // ══════════════════════════════════════════════════════════════
   let sizeScore = 0;
 
-  // Parse revenue to a number
   const revRaw = (p.estimated_revenue || p.revenue_range || "").replace(/[^0-9.]/g, "");
   const revNum = revRaw ? parseFloat(revRaw) : 0;
-  // Handle formatted values like "$3,000,000" → 3000000, "3M" already stripped to "3"
-  const revNormalized = revNum < 1000 ? revNum * 1000000 : revNum; // if someone wrote "3" meaning $3M
+  const revNormalized = revNum < 1000 ? revNum * 1000000 : revNum;
 
-  // Revenue score
   let revScore = 0;
-  if (revNormalized >= 1000000) revScore = 40;        // $1M+ → full points, established clinic
-  else if (revNormalized >= 500000) revScore = 30;     // $500k-$1M → strong small clinic
-  else if (revNormalized >= 250000) revScore = 20;     // $250k-$500k → small clinic
-  else if (revNormalized > 0) revScore = 10;           // Under $250k → startup
+  if (revNormalized >= 1000000) revScore = 30;
+  else if (revNormalized >= 500000) revScore = 22;
+  else if (revNormalized >= 250000) revScore = 15;
+  else if (revNormalized > 0) revScore = 8;
 
-  // Provider count score
   let provScore = 0;
   const providerCount = p.provider_count || 0;
-  if (providerCount >= 5) provScore = 40;              // 5+ providers → full points
-  else if (providerCount >= 3) provScore = 30;         // 3-4 → strong small clinic
-  else if (providerCount >= 2) provScore = 20;         // 2 → small clinic
-  else if (providerCount >= 1) provScore = 10;         // Solo
+  if (providerCount >= 5) provScore = 30;
+  else if (providerCount >= 3) provScore = 22;
+  else if (providerCount >= 2) provScore = 15;
+  else if (providerCount >= 1) provScore = 8;
 
-  // Employee count as fallback proxy when revenue and providers unknown
   let empScore = 0;
   const empRaw = (p.employee_count || "").replace(/[^0-9]/g, "");
   const empNum = empRaw ? parseInt(empRaw) : 0;
-  if (empNum >= 20) empScore = 35;       // 20+ employees → likely $1M+ practice
-  else if (empNum >= 10) empScore = 25;  // 10-19 → mid-size
-  else if (empNum >= 5) empScore = 15;   // 5-9 → small clinic
-  else if (empNum >= 2) empScore = 8;    // 2-4 → very small
+  if (empNum >= 20) empScore = 26;
+  else if (empNum >= 10) empScore = 19;
+  else if (empNum >= 5) empScore = 12;
+  else if (empNum >= 2) empScore = 6;
 
-  // Take the best signal
   sizeScore = Math.max(revScore, provScore, empScore);
 
-  // Multi-location bonus (additive, but don't exceed max)
   const locationCount = p.location_count || 1;
   if (locationCount >= 2) {
     angles.push(`Multi-location practice (${locationCount} locations)`);
   }
 
-  scores.size = Math.min(40, sizeScore);
+  scores.size = Math.min(30, sizeScore);
 
-  // ── Website opportunity (max 15) — "Can we help their web presence?" ────
+  // ══════════════════════════════════════════════════════════════
+  // WEBSITE OPPORTUNITY (max 20) — "How much can we improve their web presence?"
+  // Platform (0-5), Quality (0-4), Load time (0-2), No booking (0-3), No chatbot (0-3), No CTAs/forms (0-3)
+  // ══════════════════════════════════════════════════════════════
   let websiteScore = 0;
   const platform = (p.website_platform || "").toLowerCase();
-  if (!platform || platform === "wix" || platform === "squarespace" || platform === "google sites" || platform === "godaddy" || platform === "weebly") {
-    websiteScore += 7;
-    angles.push("Website redesign opportunity — weak or outdated platform");
+  const weakPlatforms = ["wix", "squarespace", "google sites", "godaddy", "weebly"];
+  if (!platform || weakPlatforms.includes(platform)) {
+    websiteScore += 5;
+    angles.push(`Website redesign opportunity${platform ? ` — on ${platform}` : " — no detectable platform"}`);
   } else if (platform === "wordpress") {
-    websiteScore += 2;
+    websiteScore += 1;
   }
 
   const qualityScore = p.website_quality_score ?? p.onpage_score ?? null;
   if (qualityScore !== null) {
-    if (qualityScore < 40) { websiteScore += 5; angles.push("Low website quality score"); }
-    else if (qualityScore < 60) websiteScore += 3;
+    if (qualityScore < 40) { websiteScore += 4; angles.push(`Low website quality score (${Math.round(qualityScore)}/100)`); }
+    else if (qualityScore < 60) websiteScore += 2;
     else if (qualityScore < 80) websiteScore += 1;
   }
 
   const loadTime = p.website_load_time ?? null;
-  if (loadTime !== null && loadTime > 4) { websiteScore += 3; }
-  scores.website = Math.min(15, websiteScore);
+  if (loadTime !== null && loadTime > 4) { websiteScore += 2; angles.push(`Slow website (${loadTime.toFixed(1)}s load time)`); }
 
-  // ── SEO opportunity (max 20) — "Can we grow their search traffic?" ────
+  // No online booking = opportunity
+  if (p.has_booking_widget === false) {
+    websiteScore += 3;
+    angles.push("No online booking — patients can't self-schedule");
+  }
+
+  // No chatbot = opportunity
+  if (p.has_chatbot === false) {
+    websiteScore += 3;
+    angles.push("No chat widget — missing 24/7 lead capture");
+  }
+
+  // No lead capture / CTAs / forms
+  if (p.has_lead_capture === false) {
+    websiteScore += 3;
+    angles.push("No lead capture forms or CTAs — visitors have no conversion path");
+  }
+
+  scores.website = Math.min(20, websiteScore);
+
+  // ══════════════════════════════════════════════════════════════
+  // SEO OPPORTUNITY (max 20) — "Can we grow their search traffic?"
+  // ══════════════════════════════════════════════════════════════
   let seoScore = 0;
   const traffic = p.organic_traffic ?? null;
   if (traffic !== null) {
@@ -359,12 +380,12 @@ function calculateScores(p: Partial<Prospect>): {
     else if (traffic < 500) { seoScore += 5; angles.push("Low organic traffic — room to grow significantly"); }
     else if (traffic < 2000) seoScore += 3;
   } else {
-    seoScore += 4; // Unknown traffic — assume moderate opportunity
+    seoScore += 4;
   }
 
   const rankings = p.page1_rankings;
   const rankingCount = Array.isArray(rankings) ? rankings.length : (typeof rankings === "string" ? JSON.parse(rankings || "[]").length : 0);
-  if (rankingCount === 0) { seoScore += 8; }
+  if (rankingCount === 0) seoScore += 8;
   else if (rankingCount < 5) seoScore += 5;
   else if (rankingCount < 15) seoScore += 2;
 
@@ -373,36 +394,100 @@ function calculateScores(p: Partial<Prospect>): {
   else if (domainRank < 30) seoScore += 2;
   scores.seo = Math.min(20, seoScore);
 
-  // ── Active ad investment (max 10) — "Are they already spending on growth?" ────
+  // ══════════════════════════════════════════════════════════════
+  // ADS (max 10) — "Are they investing in paid growth?"
+  // FB pixel (0-3), Google Ads conversion tag (0-4), Other networks (0-3)
+  // ══════════════════════════════════════════════════════════════
   let adsScore = 0;
-  if (p.has_fb_pixel && p.has_google_pixel) {
-    adsScore += 10;
-    angles.push("Running both FB + Google ads — active growth investment");
-  } else if (p.has_fb_pixel || p.has_google_pixel) {
-    adsScore += 6;
-    angles.push("Running paid ads on one channel");
+  if (p.has_google_pixel) {
+    adsScore += 4;
+    angles.push("Running Google Ads — actively investing in paid search");
   }
-  // No pixels = 0 — neutral, not negative. It's an opportunity but doesn't increase score.
+  if (p.has_fb_pixel) {
+    adsScore += 3;
+    angles.push("Running Facebook Ads — investing in social advertising");
+  }
+  // Other ad networks (TikTok, Bing, LinkedIn) = bonus
+  const otherNets = typeof p.has_other_ad_networks === "string" ? JSON.parse(p.has_other_ad_networks || "[]") : (p.has_other_ad_networks || []);
+  if (Array.isArray(otherNets) && otherNets.length > 0) {
+    adsScore += Math.min(3, otherNets.length * 2);
+  }
   scores.ads = Math.min(10, adsScore);
 
-  // ── Established & reputable (max 10) — reviews + rating combined ────
-  let establishedScore = 0;
+  // ══════════════════════════════════════════════════════════════
+  // REPUTATION (max 10) — "Established & reputable?"
+  // Reviews+rating (0-7), GBP completeness: hours+category+website (0-3)
+  // ══════════════════════════════════════════════════════════════
+  let reputationScore = 0;
   const reviewCount = p.gbp_review_count || 0;
   const rating = p.gbp_rating || 0;
-  if (reviewCount >= 100 && rating >= 4.5) { establishedScore = 10; }
-  else if (reviewCount >= 50 && rating >= 4.0) { establishedScore = 7; }
-  else if (reviewCount >= 20) { establishedScore = 5; }
-  else if (reviewCount >= 5) { establishedScore = 2; }
-  scores.established = establishedScore;
+  if (reviewCount >= 100 && rating >= 4.5) reputationScore = 7;
+  else if (reviewCount >= 50 && rating >= 4.0) reputationScore = 5;
+  else if (reviewCount >= 20) reputationScore = 4;
+  else if (reviewCount >= 5) reputationScore = 2;
 
-  // ── Contact quality (max 5) — "Can we actually reach them?" ────
+  // GBP completeness bonus
+  let gbpCompleteness = 0;
+  if (p.gbp_has_hours) gbpCompleteness++;
+  if (p.gbp_category) gbpCompleteness++;
+  if (p.gbp_has_website_link) gbpCompleteness++;
+  reputationScore += gbpCompleteness; // 0-3 pts
+
+  // Note GBP gaps as angles
+  if (reviewCount < 20) angles.push(`Low GBP review count (${reviewCount}) — reputation management opportunity`);
+  if (!p.gbp_has_hours) angles.push("GBP missing business hours");
+  if (!p.gbp_has_website_link) angles.push("GBP missing website link");
+
+  scores.reputation = Math.min(10, reputationScore);
+
+  // ══════════════════════════════════════════════════════════════
+  // CONTACT QUALITY (max 10) — "Can we actually reach the decision maker?"
+  // Has email (0-2), Personal email (0-2), Company domain (0-2), Direct phone (0-2), LinkedIn (0-2)
+  // ══════════════════════════════════════════════════════════════
   let contactScore = 0;
-  if (p.contact_email) contactScore += 2;
-  if (p.contact_phone) contactScore += 2;
-  if (p.contact_linkedin) contactScore += 1;
-  scores.contact = Math.min(5, contactScore);
+  const email = (p.contact_email || "").toLowerCase().trim();
+  if (email) {
+    contactScore += 1; // has any email
 
-  const total = scores.size + scores.website + scores.seo + scores.ads + scores.established + scores.contact;
+    // Personal vs generic — generic prefixes reduce value
+    const genericPrefixes = ["info@", "office@", "contact@", "admin@", "hello@", "support@", "help@", "reception@", "front@", "team@"];
+    const isGeneric = genericPrefixes.some(prefix => email.startsWith(prefix));
+    if (!isGeneric) {
+      contactScore += 2; // personal/named email
+    } else {
+      angles.push("Only generic email (info@/office@) — need to find decision-maker email");
+    }
+
+    // Company domain vs free email
+    const freeDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com", "me.com", "live.com", "msn.com", "comcast.net", "att.net", "verizon.net"];
+    const emailDomain = email.split("@")[1] || "";
+    if (emailDomain && !freeDomains.includes(emailDomain)) {
+      contactScore += 2; // professional company domain
+    } else if (emailDomain) {
+      contactScore += 1; // free email is better than nothing
+      angles.push(`Using free email (${emailDomain}) — may not have professional email infrastructure`);
+    }
+  } else {
+    angles.push("No contact email found — outreach will require research");
+  }
+
+  // Phone
+  const phone = (p.contact_phone || "").trim();
+  if (phone) {
+    contactScore += 2;
+  }
+
+  // LinkedIn
+  if (p.contact_linkedin) {
+    contactScore += 1;
+  }
+
+  scores.contact = Math.min(10, contactScore);
+
+  // ══════════════════════════════════════════════════════════════
+  // TOTAL & TIER
+  // ══════════════════════════════════════════════════════════════
+  const total = scores.size + scores.website + scores.seo + scores.ads + scores.reputation + scores.contact;
 
   let tier: string;
   if (total >= 70) tier = "dream";
@@ -410,14 +495,11 @@ function calculateScores(p: Partial<Prospect>): {
   else if (total >= 30) tier = "maybe";
   else tier = "unqualified";
 
-  // Keep only top 3-4 sales angles
-  const topAngles = angles.slice(0, 4);
-
   return {
     pillar_scores: scores,
     total_score: total,
     qualification_tier: tier,
-    sales_angles: topAngles,
+    sales_angles: angles.slice(0, 8), // keep more angles for outreach notes
   };
 }
 
@@ -1352,6 +1434,9 @@ ${content}`,
             const best = listings[0];
             updates.gbp_rating = best.rating || null;
             updates.gbp_review_count = best.reviewCount || null;
+            updates.gbp_category = best.category || null;
+            updates.gbp_has_hours = !!(best.workHours && Object.keys(best.workHours).length > 0);
+            updates.gbp_has_website_link = !!best.url;
           }
           cost += 0.01;
         } catch {
@@ -1394,6 +1479,31 @@ ${content}`,
     }
   }
 
+  // ── Re-score all enriched prospects ──────────────────────────
+
+  async rescoreAll(): Promise<{ updated: number; tiers: Record<string, number> }> {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      "SELECT * FROM enrichment_prospects WHERE enrichment_status = 'completed'"
+    );
+
+    let updated = 0;
+    const tiers: Record<string, number> = { dream: 0, good: 0, maybe: 0, unqualified: 0 };
+
+    for (const row of rows) {
+      const scoring = calculateScores(row);
+      await pool.query(`
+        UPDATE enrichment_prospects
+        SET pillar_scores = $2, total_score = $3, qualification_tier = $4, sales_angles = $5, updated_at = NOW()
+        WHERE id = $1
+      `, [row.id, JSON.stringify(scoring.pillar_scores), scoring.total_score, scoring.qualification_tier, JSON.stringify(scoring.sales_angles)]);
+      tiers[scoring.qualification_tier] = (tiers[scoring.qualification_tier] || 0) + 1;
+      updated++;
+    }
+
+    return { updated, tiers };
+  }
+
   // ── Export to Google Sheet ─────────────────────────────────
 
   async exportToSheet(sheetId: string, filters?: { tier?: string }): Promise<{ exported: number; file?: string }> {
@@ -1414,35 +1524,56 @@ ${content}`,
     if (rows.length === 0) return { exported: 0 };
 
     const headers = [
-      "Company Name", "Domain", "City", "State", "Specialty",
-      "Total Score", "Tier", "Size Score", "Website Score", "SEO Score", "Ads Score", "AI Score",
-      "Website Platform", "Organic Traffic", "Organic Keywords", "Domain Rank",
-      "Has FB Pixel", "Has Google Pixel", "Has Chatbot", "Chatbot Provider",
-      "CRM Platform", "Has Booking", "Booking Provider", "Has Lead Capture",
-      "GBP Rating", "GBP Reviews", "Provider Count", "Employee Count",
-      "Top Services", "Provider Details",
-      "Sales Angles", "Contact Name", "Contact Email", "Contact Phone", "Contact LinkedIn",
-      "Website", "GMB Link",
+      // Core identification
+      "Score", "Tier", "Company", "Specialty", "Website", "City", "State",
+      // Size signals
+      "Est. Revenue", "Coldlytics Revenue", "Employees", "Providers", "Provider Names",
+      // Contact info
+      "Contact Name", "Contact Title", "Contact Email", "Contact Phone", "Contact LinkedIn",
+      // Services
+      "Services",
+      // Pillar scores
+      "Size Score", "SEO Score", "Website Score", "Ads Score", "Reputation Score", "Contact Score",
+      // SEO details
+      "Organic Traffic", "Organic Keywords", "Domain Rank",
+      // Website details
+      "Platform", "Quality Score", "Load Time",
+      "Has Booking", "Booking Provider", "Has Chatbot", "Chatbot Provider", "Has Lead Capture", "CRM",
+      // Ads details
+      "Has FB Pixel", "Has Google Pixel", "Other Ad Networks",
+      // GBP details
+      "GBP Rating", "GBP Reviews", "GBP Category", "GBP Has Hours", "GBP Has Website",
+      // Outreach
+      "Outreach Notes", "GMB Link",
     ];
 
     const dataRows = rows.map((r) => {
       const pillarScores = typeof r.pillar_scores === "string" ? JSON.parse(r.pillar_scores) : (r.pillar_scores || {});
       const salesAngles = typeof r.sales_angles === "string" ? JSON.parse(r.sales_angles) : (r.sales_angles || []);
+      const otherNets = typeof r.has_other_ad_networks === "string" ? JSON.parse(r.has_other_ad_networks || "[]") : (r.has_other_ad_networks || []);
+      const services = Array.isArray(r.top_services) ? r.top_services.join("; ") : (r.top_services || "");
+      const providerDetails = Array.isArray(r.provider_details) ? r.provider_details.join("; ") : (typeof r.provider_details === "string" ? r.provider_details : "");
+
+      // Build detailed outreach notes from sales angles + key signals
+      const notes: string[] = [...salesAngles];
+      if (providerDetails) notes.push(`Providers: ${providerDetails}`);
+      if (services) notes.push(`Services: ${services}`);
+
       return [
-        r.company_name, r.domain, r.city, r.state, r.specialty,
-        r.total_score, r.qualification_tier,
-        pillarScores.size || 0, pillarScores.website || 0, pillarScores.seo || 0, pillarScores.ads || 0, pillarScores.ai_automation || 0,
-        r.website_platform, r.organic_traffic, r.organic_keywords, r.domain_rank,
+        r.total_score, r.qualification_tier, r.company_name, r.specialty, r.website, r.city, r.state,
+        r.estimated_revenue, r.revenue_range, r.employee_count, r.provider_count, providerDetails,
+        r.contact_name, r.contact_title, r.contact_email, r.contact_phone, r.contact_linkedin,
+        services,
+        pillarScores.size || 0, pillarScores.seo || 0, pillarScores.website || 0, pillarScores.ads || 0, pillarScores.reputation || 0, pillarScores.contact || 0,
+        r.organic_traffic, r.organic_keywords, r.domain_rank,
+        r.website_platform, r.website_quality_score, r.website_load_time,
+        r.has_booking_widget ? "Yes" : "No", r.booking_provider || "",
+        r.has_chatbot ? "Yes" : "No", r.chatbot_provider || "",
+        r.has_lead_capture ? "Yes" : "No", r.crm_platform || "",
         r.has_fb_pixel ? "Yes" : "No", r.has_google_pixel ? "Yes" : "No",
-        r.has_chatbot ? "Yes" : "No", r.chatbot_provider,
-        r.crm_platform, r.has_booking_widget ? "Yes" : "No", r.booking_provider,
-        r.has_lead_capture ? "Yes" : "No",
-        r.gbp_rating, r.gbp_review_count, r.provider_count, r.employee_count,
-        Array.isArray(r.top_services) ? r.top_services.join("; ") : (r.top_services || ""),
-        Array.isArray(r.provider_details) ? r.provider_details.join("; ") : (r.provider_details || ""),
-        salesAngles.join("; "),
-        r.contact_name, r.contact_email, r.contact_phone, r.contact_linkedin,
-        r.website, r.gmb_link,
+        Array.isArray(otherNets) ? otherNets.join(", ") : "",
+        r.gbp_rating, r.gbp_review_count, r.gbp_category || "", r.gbp_has_hours ? "Yes" : "No", r.gbp_has_website_link ? "Yes" : "No",
+        notes.join(" | "), r.gmb_link,
       ];
     });
 

@@ -1530,6 +1530,14 @@ Before saving, verify:
       ALTER TABLE cm_important_links ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'manual';
     `,
   },
+  {
+    id: "045_enrichment_gbp_completeness",
+    sql: `
+      ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS gbp_category TEXT;
+      ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS gbp_has_hours BOOLEAN;
+      ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS gbp_has_website_link BOOLEAN;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
