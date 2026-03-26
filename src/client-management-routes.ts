@@ -161,7 +161,7 @@ export function clientManagementRouter(): Router {
       const values: unknown[] = [];
       let i = 1;
       for (const [key, val] of Object.entries(b)) {
-        if (key === "id" || key === "clientId" || key === "createdAt" || val === undefined) continue;
+        if (key === "id" || key === "clientId" || key === "createdAt" || key === "updatedAt" || val === undefined) continue;
         const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
         fields.push(`${snakeKey} = $${i++}`);
         values.push(val);
@@ -366,6 +366,100 @@ export function clientManagementRouter(): Router {
       const { rows } = await query("UPDATE cm_brand_story SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *", [status, req.params.id]);
       res.json(rows[0] ? toCamel(rows[0]) : null);
     } catch (err) { console.error("Update status error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  POPULATE SERVICE FROM BRAND STORY
+  // ════════════════════════════════════════════════════════
+
+  router.post("/clients/:clientId/services/populate-from-brand-story", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { serviceName, category } = req.body;
+    if (!serviceName) { res.status(400).json({ error: "serviceName is required" }); return; }
+
+    try {
+      // Fetch brand story
+      const { rows: storyRows } = await query(
+        "SELECT hero_section, problem_section, guide_section, plan_section, success_section, failure_section FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
+        [clientId]
+      );
+      if (!storyRows[0]) { res.status(404).json({ error: "No brand story found. Generate a brand story first." }); return; }
+
+      // Fetch client info for context
+      const { rows: clientRows } = await query(
+        "SELECT company_name, industry, location FROM cm_clients WHERE id = $1", [clientId]
+      );
+      const client = clientRows[0] || {};
+      const story = storyRows[0];
+
+      // Build context from brand story sections
+      const sections: string[] = [];
+      const sectionNames: Record<string, string> = {
+        hero_section: "Your Customer",
+        problem_section: "The Problem You Solve",
+        guide_section: "Why You (Your Authority)",
+        plan_section: "Your Process",
+        success_section: "The Transformation",
+        failure_section: "What's at Stake",
+      };
+      for (const [col, title] of Object.entries(sectionNames)) {
+        const data = story[col];
+        if (data) {
+          const content = typeof data === "string" ? data : (data.content || JSON.stringify(data));
+          sections.push(`### ${title}\n${content}`);
+        }
+      }
+
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const anthropic = new Anthropic();
+
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: `You are helping a marketing agency populate service details for one specific service, based on the company's existing Brand Story.
+
+## Company
+- Name: ${client.company_name || "Unknown"}
+- Industry: ${client.industry || "Unknown"}
+- Location: ${client.location || "Unknown"}
+
+## Brand Story
+${sections.join("\n\n")}
+
+## Service to Populate
+- Service Name: ${serviceName}
+- Category: ${category || "General"}
+
+Based on the brand story above, generate service-specific content for "${serviceName}". Adapt the brand story themes to focus specifically on this service. Be specific and practical, not generic.
+
+Return a JSON object with these fields:
+{
+  "description": "One-sentence summary of the service (under 150 chars)",
+  "descriptionLong": "2-3 paragraph detailed description of this service, what it involves, who it helps",
+  "idealPatientProfile": "Who is the ideal client for THIS specific service? Demographics, situations, needs",
+  "goodFitCriteria": "Bullet-pointed list of signs someone is a good fit for this service",
+  "notGoodFitCriteria": "Bullet-pointed list of signs this service isn't the right fit",
+  "differentiators": "What makes this company's version of this service unique vs competitors",
+  "expectedOutcomes": "Specific results/outcomes clients can expect from this service",
+  "commonConcerns": "Common questions, objections, or concerns prospects have about this service and how to address them"
+}
+
+Return ONLY the JSON object, no markdown fences.`
+        }],
+      });
+
+      const text = response.content[0].type === "text" ? response.content[0].text : "";
+      // Parse JSON — strip markdown fences if present
+      const cleaned = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```$/m, "").trim();
+      const fields = JSON.parse(cleaned);
+
+      res.json(fields);
+    } catch (err) {
+      console.error("Populate from brand story error:", err);
+      res.status(500).json({ error: "Failed to populate service from brand story" });
+    }
   });
 
   // ════════════════════════════════════════════════════════

@@ -2,10 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormField } from "@/components/FormField";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, GripVertical, Sparkles } from "lucide-react";
 
 interface Service {
   id: number; category: string; serviceName: string; offered: boolean;
@@ -55,11 +56,22 @@ export function ServicesSection({ clientId }: { clientId: number }) {
   const [loading, setLoading] = useState(true);
   const [expandedService, setExpandedService] = useState<number | null>(null);
 
+  // Category management state
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editCategoryValue, setEditCategoryValue] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryValue, setNewCategoryValue] = useState("");
+  const [deleteCategoryName, setDeleteCategoryName] = useState<string | null>(null);
+  const [categoryPending, setCategoryPending] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+
   const [svcDialogOpen, setSvcDialogOpen] = useState(false);
   const [svcForm, setSvcForm] = useState<Partial<Service>>(emptyService());
   const [editingSvcId, setEditingSvcId] = useState<number | null>(null);
   const [deleteSvcId, setDeleteSvcId] = useState<number | null>(null);
   const [svcPending, setSvcPending] = useState(false);
+  const [populatePending, setPopulatePending] = useState(false);
+  const [populateError, setPopulateError] = useState<string | null>(null);
 
   const [saDialogOpen, setSaDialogOpen] = useState(false);
   const [saForm, setSaForm] = useState<Partial<ServiceArea>>(emptyServiceArea());
@@ -78,8 +90,8 @@ export function ServicesSection({ clientId }: { clientId: number }) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const openAddService = (parentId?: number) => {
-    setSvcForm({ ...emptyService(), parentServiceId: parentId || null });
+  const openAddService = (parentId?: number, category?: string) => {
+    setSvcForm({ ...emptyService(), parentServiceId: parentId || null, category: category || "" });
     setEditingSvcId(null);
     setSvcDialogOpen(true);
   };
@@ -93,12 +105,10 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setSvcPending(true);
     setSvcError(null);
     try {
-      // Strip system fields
       const payload: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(svcForm)) {
         if (["id", "clientId", "createdAt", "updatedAt", "source"].includes(k)) continue;
         if (v === undefined) continue;
-        // providerIds is JSONB — send as array, node-pg handles it
         if (k === "providerIds") { payload[k] = v; continue; }
         payload[k] = v;
       }
@@ -125,6 +135,88 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     } catch (e) { console.error(e); }
     setSvcPending(false);
   };
+
+  const populateFromBrandStory = async () => {
+    if (!svcForm.serviceName?.trim()) {
+      setPopulateError("Enter a service name first");
+      return;
+    }
+    setPopulatePending(true);
+    setPopulateError(null);
+    try {
+      const fields = await api<Record<string, string>>(`/cm/clients/${clientId}/services/populate-from-brand-story`, {
+        method: "POST",
+        body: JSON.stringify({ serviceName: svcForm.serviceName, category: svcForm.category }),
+      });
+      // Only fill empty fields — don't overwrite existing content
+      setSvcForm((prev) => {
+        const updated = { ...prev };
+        for (const [key, val] of Object.entries(fields)) {
+          if (val && !(prev as Record<string, unknown>)[key]) {
+            (updated as Record<string, unknown>)[key] = val;
+          }
+        }
+        return updated;
+      });
+    } catch (e) {
+      console.error(e);
+      setPopulateError(e instanceof Error ? e.message : "Failed to populate");
+    }
+    setPopulatePending(false);
+  };
+
+  // Category operations — rename updates all services in that category
+  const renameCategory = async (oldName: string, newName: string) => {
+    if (!newName.trim() || newName.trim() === oldName) {
+      setEditingCategory(null);
+      return;
+    }
+    setCategoryPending(true);
+    try {
+      const toUpdate = services.filter((s) => s.category === oldName);
+      await Promise.all(toUpdate.map((s) =>
+        api(`/cm/services/${s.id}`, { method: "PUT", body: JSON.stringify({ category: newName.trim() }) })
+      ));
+      setEditingCategory(null);
+      reload();
+    } catch (e) { console.error(e); }
+    setCategoryPending(false);
+  };
+
+  const addCategory = async () => {
+    if (!newCategoryValue.trim()) { setAddingCategory(false); return; }
+    // Create a placeholder service so the category exists
+    // Actually, just let the user add services to it — we'll show empty categories
+    setAddingCategory(false);
+    // We'll track empty categories in local state until a service is added
+    setEmptyCategories((prev) => [...prev, newCategoryValue.trim()]);
+    setNewCategoryValue("");
+  };
+
+  const deleteCategory = async (catName: string) => {
+    const catServices = services.filter((s) => s.category === catName);
+    if (catServices.length > 0) {
+      // Delete all services in this category
+      setCategoryPending(true);
+      try {
+        // Also delete sub-services whose parent is in this category
+        const parentIds = new Set(catServices.map((s) => s.id));
+        const subsToDelete = services.filter((s) => s.parentServiceId && parentIds.has(s.parentServiceId));
+        const allToDelete = [...catServices, ...subsToDelete];
+        await Promise.all(allToDelete.map((s) =>
+          api(`/cm/services/${s.id}`, { method: "DELETE" })
+        ));
+        reload();
+      } catch (e) { console.error(e); }
+      setCategoryPending(false);
+    }
+    // Remove from empty categories if it was there
+    setEmptyCategories((prev) => prev.filter((c) => c !== catName));
+    setDeleteCategoryName(null);
+  };
+
+  // Track categories that have been added but have no services yet
+  const [emptyCategories, setEmptyCategories] = useState<string[]>([]);
 
   const openAddSA = () => { setSaForm(emptyServiceArea()); setEditingSaId(null); setSaDialogOpen(true); };
   const openEditSA = (sa: ServiceArea) => { setSaForm({ ...sa }); setEditingSaId(sa.id); setSaDialogOpen(true); };
@@ -155,13 +247,116 @@ export function ServicesSection({ clientId }: { clientId: number }) {
   if (loading) return <div className="text-sm text-muted">Loading services...</div>;
 
   const parentServices = services.filter((s) => !s.parentServiceId).sort((a, b) => a.sortOrder - b.sortOrder);
-  const categories = [...new Set(parentServices.map((s) => s.category))];
+  const serviceCategories = [...new Set(parentServices.map((s) => s.category))];
+  // Merge in empty categories (added but no services yet), dedup
+  const allCategories = [...new Set([...serviceCategories, ...emptyCategories])];
 
   const upd = (field: string, val: unknown) => setSvcForm((p) => ({ ...p, [field]: val }));
   const updSA = (field: string, val: unknown) => setSaForm((p) => ({ ...p, [field]: val }));
 
+  const deleteCatServiceCount = deleteCategoryName
+    ? services.filter((s) => s.category === deleteCategoryName).length
+    + services.filter((s) => {
+        const parent = services.find((p) => p.id === s.parentServiceId);
+        return parent && parent.category === deleteCategoryName;
+      }).length
+    : 0;
+
   return (
     <div className="space-y-6">
+      {/* ═══ Service Categories Section ═══ */}
+      <div className="border border-border rounded-lg overflow-hidden">
+        <div
+          className="flex items-center justify-between px-4 py-2.5 bg-surface cursor-pointer hover:bg-surface-2 transition-colors"
+          onClick={() => setShowCategoryManager(!showCategoryManager)}
+        >
+          <div className="flex items-center gap-2">
+            {showCategoryManager ? <ChevronDown className="h-3.5 w-3.5 text-dim" /> : <ChevronRight className="h-3.5 w-3.5 text-dim" />}
+            <h3 className="text-sm font-semibold text-foreground">Service Categories</h3>
+            <span className="text-[10px] text-dim">{allCategories.length} categor{allCategories.length !== 1 ? "ies" : "y"}</span>
+          </div>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setAddingCategory(true); setShowCategoryManager(true); setNewCategoryValue(""); }}>
+            <Plus className="h-3 w-3 mr-1" /> Add Category
+          </Button>
+        </div>
+
+        {showCategoryManager && (
+          <div className="border-t border-border">
+            {allCategories.length === 0 && !addingCategory && (
+              <div className="px-4 py-3 text-sm text-muted">No categories yet. Add a category to get started.</div>
+            )}
+
+            {allCategories.map((cat) => {
+              const catServiceCount = services.filter((s) => s.category === cat && !s.parentServiceId).length;
+              const isEditing = editingCategory === cat;
+
+              return (
+                <div key={cat} className="flex items-center gap-2 px-4 py-2 border-b border-border/50 last:border-b-0 hover:bg-surface-2/50">
+                  <GripVertical className="h-3.5 w-3.5 text-dim/40 shrink-0" />
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        value={editCategoryValue}
+                        onChange={(e) => setEditCategoryValue(e.target.value)}
+                        className="h-7 text-sm flex-1"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameCategory(cat, editCategoryValue);
+                          if (e.key === "Escape") setEditingCategory(null);
+                        }}
+                        disabled={categoryPending}
+                      />
+                      <Button size="icon" variant="ghost" className="h-6 w-6 text-green-400" onClick={() => renameCategory(cat, editCategoryValue)} disabled={categoryPending}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingCategory(null)} disabled={categoryPending}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-sm font-medium text-foreground flex-1">{cat}</span>
+                      <span className="text-[10px] text-dim mr-2">{catServiceCount} service{catServiceCount !== 1 ? "s" : ""}</span>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingCategory(cat); setEditCategoryValue(cat); }}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => setDeleteCategoryName(cat)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Add new category inline */}
+            {addingCategory && (
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50 last:border-b-0 bg-surface-2/30">
+                <GripVertical className="h-3.5 w-3.5 text-dim/40 shrink-0" />
+                <Input
+                  value={newCategoryValue}
+                  onChange={(e) => setNewCategoryValue(e.target.value)}
+                  placeholder="New category name"
+                  className="h-7 text-sm flex-1"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addCategory();
+                    if (e.key === "Escape") { setAddingCategory(false); setNewCategoryValue(""); }
+                  }}
+                />
+                <Button size="icon" variant="ghost" className="h-6 w-6 text-green-400" onClick={addCategory}>
+                  <Check className="h-3 w-3" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setAddingCategory(false); setNewCategoryValue(""); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Services by Category ═══ */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-foreground">Services</h3>
         <Button size="sm" variant="outline" onClick={() => openAddService()}>
@@ -169,12 +364,12 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         </Button>
       </div>
 
-      {categories.length === 0 && services.length === 0 && (
-        <div className="text-muted text-sm">No services added yet.</div>
+      {allCategories.length === 0 && services.length === 0 && (
+        <div className="text-muted text-sm">No services added yet. Start by adding a service category above.</div>
       )}
 
       {/* Compact service list grouped by category */}
-      {categories.map((cat) => {
+      {allCategories.map((cat) => {
         const catServices = parentServices.filter((s) => s.category === cat);
         return (
           <div key={cat} className="border border-border rounded-lg overflow-hidden">
@@ -182,7 +377,15 @@ export function ServicesSection({ clientId }: { clientId: number }) {
             <div className="flex items-center gap-2 px-4 py-2 bg-surface border-b border-border">
               <span className="text-xs font-bold text-foreground uppercase tracking-wide">{cat}</span>
               <span className="text-[10px] text-dim">{catServices.length} service{catServices.length !== 1 ? "s" : ""}</span>
+              <div className="flex-1" />
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-dim hover:text-foreground" onClick={() => openAddService(undefined, cat)}>
+                <Plus className="h-3 w-3 mr-0.5" /> Add
+              </Button>
             </div>
+
+            {catServices.length === 0 && (
+              <div className="px-4 py-3 text-sm text-muted italic">No services in this category yet.</div>
+            )}
 
             {/* Service rows */}
             {catServices.map((s) => {
@@ -272,7 +475,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
                           </div>
                         </div>
                       )}
-                      <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => openAddService(s.id)}>
+                      <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => openAddService(s.id, cat)}>
                         <Plus className="h-3 w-3 mr-1" /> Add Sub-Service
                       </Button>
                     </div>
@@ -314,31 +517,29 @@ export function ServicesSection({ clientId }: { clientId: number }) {
         title={editingSvcId ? "Edit Service" : (svcForm.parentServiceId ? "Add Sub-Service" : "Add Service")}
         onSubmit={submitService} isPending={svcPending} wide>
         {svcError && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{svcError}</div>}
+        {populateError && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{populateError}</div>}
+
+        {/* Populate from Brand Story */}
+        <div className="flex items-center gap-3 p-3 bg-surface-2/50 rounded-lg border border-border/50">
+          <div className="flex-1">
+            <div className="text-xs font-medium text-foreground">Auto-populate from Brand Story</div>
+            <div className="text-[10px] text-dim">Fill description, ideal client, differentiators, and more from your brand story — adapted for this service</div>
+          </div>
+          <Button type="button" size="sm" variant="outline" className="shrink-0 gap-1.5"
+            onClick={populateFromBrandStory} disabled={populatePending || !svcForm.serviceName?.trim()}>
+            <Sparkles className="h-3 w-3" />
+            {populatePending ? "Generating..." : "Populate"}
+          </Button>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Service Name" value={svcForm.serviceName || ""} onChange={(v) => upd("serviceName", v)} required />
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">Category</label>
-            <div className="flex gap-2">
-              <select
-                value={svcForm.category || ""}
-                onChange={(e) => upd("category", e.target.value)}
-                className="flex-1 h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground"
-              >
-                <option value="">— Select category —</option>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-                <option value="__new__">+ New category...</option>
-              </select>
-            </div>
-            {svcForm.category === "__new__" && (
-              <input
-                value=""
-                onChange={(e) => upd("category", e.target.value)}
-                placeholder="Type new category name"
-                className="mt-1.5 w-full h-9 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                autoFocus
-              />
-            )}
-          </div>
+          <FormField label="Category" type="select" value={svcForm.category || ""} onChange={(v) => upd("category", v)}
+            options={[
+              { value: "", label: "— Select category —" },
+              ...allCategories.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         </div>
         <div className="grid grid-cols-3 gap-4">
           <FormField label="Price" type="number" value={svcForm.price?.toString() || ""} onChange={(v) => upd("price", v ? parseFloat(v) : null)} />
@@ -408,6 +609,13 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       <ConfirmDialog open={deleteSaId !== null} onOpenChange={() => setDeleteSaId(null)}
         title="Delete Service Area" description="This will permanently delete this service area."
         onConfirm={deleteSA} isPending={saPending} />
+      <ConfirmDialog open={deleteCategoryName !== null} onOpenChange={() => setDeleteCategoryName(null)}
+        title="Delete Category"
+        description={deleteCatServiceCount > 0
+          ? `This will permanently delete the "${deleteCategoryName}" category and all ${deleteCatServiceCount} service${deleteCatServiceCount !== 1 ? "s" : ""} within it.`
+          : `Delete the "${deleteCategoryName}" category?`}
+        onConfirm={() => deleteCategoryName && deleteCategory(deleteCategoryName)}
+        isPending={categoryPending} />
     </div>
   );
 }
