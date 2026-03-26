@@ -102,7 +102,18 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setSvcDialogOpen(true);
   };
   const openEditService = (s: Service) => {
-    setSvcForm({ ...s });
+    // Ensure all string fields default to "" and providerIds to [] to prevent render crashes
+    const safe: Partial<Service> = { ...s };
+    for (const key of Object.keys(safe) as (keyof Service)[]) {
+      if (safe[key] === null || safe[key] === undefined) {
+        if (key === "providerIds") {
+          (safe as Record<string, unknown>)[key] = [];
+        } else if (key !== "id" && key !== "parentServiceId" && key !== "sortOrder" && key !== "price" && key !== "offered") {
+          (safe as Record<string, unknown>)[key] = "";
+        }
+      }
+    }
+    setSvcForm(safe);
     setEditingSvcId(s.id);
     setSvcDialogOpen(true);
   };
