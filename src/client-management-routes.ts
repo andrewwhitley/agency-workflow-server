@@ -92,6 +92,7 @@ export function clientManagementRouter(): Router {
         "number_of_customers_period", "desired_new_clients_period",
         "estimated_annual_revenue_period", "target_revenue_period",
         "current_marketing_spend_period", "current_ads_spend_period",
+        "service_category_order",
       ];
       for (const [key, val] of Object.entries(b)) {
         const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);

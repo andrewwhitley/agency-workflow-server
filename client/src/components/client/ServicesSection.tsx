@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormField } from "@/components/FormField";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, GripVertical, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, ArrowUp, ArrowDown, Sparkles } from "lucide-react";
 
 interface Service {
   id: number; category: string; serviceName: string; offered: boolean;
@@ -53,6 +53,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [savedCategoryOrder, setSavedCategoryOrder] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedService, setExpandedService] = useState<number | null>(null);
 
@@ -84,8 +85,13 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       api<Service[]>(`/cm/clients/${clientId}/services`).catch(() => []),
       api<ServiceArea[]>(`/cm/clients/${clientId}/service-areas`).catch(() => []),
       api<TeamMember[]>(`/cm/clients/${clientId}/team-members`).catch(() => []),
-    ]).then(([svc, sa, tm]) => { setServices(svc); setServiceAreas(sa); setTeamMembers(tm); })
-      .finally(() => setLoading(false));
+      api<{ serviceCategoryOrder?: string[] }>(`/cm/clients/${clientId}`).catch(() => ({})),
+    ]).then(([svc, sa, tm, clientData]) => {
+      setServices(svc);
+      setServiceAreas(sa);
+      setTeamMembers(tm);
+      setSavedCategoryOrder(clientData?.serviceCategoryOrder || []);
+    }).finally(() => setLoading(false));
   }, [clientId]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -183,23 +189,41 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setCategoryPending(false);
   };
 
+  const saveCategoryOrder = async (order: string[]) => {
+    setSavedCategoryOrder(order);
+    try {
+      await api(`/cm/clients/${clientId}`, {
+        method: "PUT",
+        body: JSON.stringify({ serviceCategoryOrder: JSON.stringify(order) }),
+      });
+    } catch (e) { console.error("Failed to save category order:", e); }
+  };
+
   const addCategory = async () => {
     if (!newCategoryValue.trim()) { setAddingCategory(false); return; }
-    // Create a placeholder service so the category exists
-    // Actually, just let the user add services to it — we'll show empty categories
     setAddingCategory(false);
-    // We'll track empty categories in local state until a service is added
     setEmptyCategories((prev) => [...prev, newCategoryValue.trim()]);
+    // Also persist the new category in the order
+    const newOrder = [...savedCategoryOrder, newCategoryValue.trim()];
+    await saveCategoryOrder(newOrder);
     setNewCategoryValue("");
+  };
+
+  const moveCategory = async (catName: string, direction: "up" | "down") => {
+    const currentOrder = [...allCategories];
+    const idx = currentOrder.indexOf(catName);
+    if (idx < 0) return;
+    const newIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= currentOrder.length) return;
+    [currentOrder[idx], currentOrder[newIdx]] = [currentOrder[newIdx], currentOrder[idx]];
+    await saveCategoryOrder(currentOrder);
   };
 
   const deleteCategory = async (catName: string) => {
     const catServices = services.filter((s) => s.category === catName);
     if (catServices.length > 0) {
-      // Delete all services in this category
       setCategoryPending(true);
       try {
-        // Also delete sub-services whose parent is in this category
         const parentIds = new Set(catServices.map((s) => s.id));
         const subsToDelete = services.filter((s) => s.parentServiceId && parentIds.has(s.parentServiceId));
         const allToDelete = [...catServices, ...subsToDelete];
@@ -210,8 +234,10 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       } catch (e) { console.error(e); }
       setCategoryPending(false);
     }
-    // Remove from empty categories if it was there
     setEmptyCategories((prev) => prev.filter((c) => c !== catName));
+    // Remove from saved order
+    const newOrder = savedCategoryOrder.filter((c) => c !== catName);
+    await saveCategoryOrder(newOrder);
     setDeleteCategoryName(null);
   };
 
@@ -248,8 +274,17 @@ export function ServicesSection({ clientId }: { clientId: number }) {
 
   const parentServices = services.filter((s) => !s.parentServiceId).sort((a, b) => a.sortOrder - b.sortOrder);
   const serviceCategories = [...new Set(parentServices.map((s) => s.category))];
-  // Merge in empty categories (added but no services yet), dedup
-  const allCategories = [...new Set([...serviceCategories, ...emptyCategories])];
+  // Merge in empty categories, dedup, then sort by saved order
+  const unorderedCategories = [...new Set([...serviceCategories, ...emptyCategories])];
+  const allCategories = unorderedCategories.sort((a, b) => {
+    const aIdx = savedCategoryOrder.indexOf(a);
+    const bIdx = savedCategoryOrder.indexOf(b);
+    // Categories in savedOrder come first in their saved position; unsaved ones go to end
+    if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+    if (aIdx >= 0) return -1;
+    if (bIdx >= 0) return 1;
+    return 0;
+  });
 
   const upd = (field: string, val: unknown) => setSvcForm((p) => ({ ...p, [field]: val }));
   const updSA = (field: string, val: unknown) => setSaForm((p) => ({ ...p, [field]: val }));
@@ -286,13 +321,22 @@ export function ServicesSection({ clientId }: { clientId: number }) {
               <div className="px-4 py-3 text-sm text-muted">No categories yet. Add a category to get started.</div>
             )}
 
-            {allCategories.map((cat) => {
+            {allCategories.map((cat, catIdx) => {
               const catServiceCount = services.filter((s) => s.category === cat && !s.parentServiceId).length;
               const isEditing = editingCategory === cat;
 
               return (
-                <div key={cat} className="flex items-center gap-2 px-4 py-2 border-b border-border/50 last:border-b-0 hover:bg-surface-2/50">
-                  <GripVertical className="h-3.5 w-3.5 text-dim/40 shrink-0" />
+                <div key={cat} className="flex items-center gap-1 px-4 py-2 border-b border-border/50 last:border-b-0 hover:bg-surface-2/50">
+                  <div className="flex flex-col shrink-0 mr-1">
+                    <Button size="icon" variant="ghost" className="h-4 w-4" onClick={() => moveCategory(cat, "up")}
+                      disabled={categoryPending || catIdx === 0}>
+                      <ArrowUp className="h-2.5 w-2.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-4 w-4" onClick={() => moveCategory(cat, "down")}
+                      disabled={categoryPending || catIdx === allCategories.length - 1}>
+                      <ArrowDown className="h-2.5 w-2.5" />
+                    </Button>
+                  </div>
                   {isEditing ? (
                     <div className="flex items-center gap-2 flex-1">
                       <Input
@@ -332,7 +376,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
             {/* Add new category inline */}
             {addingCategory && (
               <div className="flex items-center gap-2 px-4 py-2 border-b border-border/50 last:border-b-0 bg-surface-2/30">
-                <GripVertical className="h-3.5 w-3.5 text-dim/40 shrink-0" />
+                <div className="w-4 shrink-0" />
                 <Input
                   value={newCategoryValue}
                   onChange={(e) => setNewCategoryValue(e.target.value)}

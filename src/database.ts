@@ -1531,6 +1531,12 @@ Before saving, verify:
     `,
   },
   {
+    id: "046_service_category_order",
+    sql: `
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS service_category_order JSONB DEFAULT '[]';
+    `,
+  },
+  {
     id: "045_enrichment_gbp_completeness",
     sql: `
       ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS gbp_category TEXT;
