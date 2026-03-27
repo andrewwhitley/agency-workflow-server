@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Component, type ReactNode, type ErrorInfo } from "react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,28 @@ interface ServiceArea {
   id: number; targetCities: string | null; targetCounties: string | null; notes: string | null;
 }
 
+// Safe string helper — ensures null/undefined/non-string values don't crash inputs
+const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+// Error boundary to catch render crashes and show the error instead of blanking the page
+class ServiceErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("ServicesSection crash:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+          <div className="text-sm font-medium text-destructive mb-1">Services section crashed</div>
+          <pre className="text-xs text-destructive/80 whitespace-pre-wrap">{this.state.error.message}</pre>
+          <button onClick={() => this.setState({ error: null })} className="mt-2 text-xs text-accent underline">Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const emptyService = (): Partial<Service> => ({
   category: "", serviceName: "", offered: true, price: null, duration: "",
   description: "", descriptionLong: "", idealPatientProfile: "", goodFitCriteria: "",
@@ -50,6 +72,10 @@ const emptyServiceArea = (): Partial<ServiceArea> => ({
 });
 
 export function ServicesSection({ clientId }: { clientId: number }) {
+  return <ServiceErrorBoundary><ServicesSectionInner clientId={clientId} /></ServiceErrorBoundary>;
+}
+
+function ServicesSectionInner({ clientId }: { clientId: number }) {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -90,7 +116,8 @@ export function ServicesSection({ clientId }: { clientId: number }) {
       setServices(svc);
       setServiceAreas(sa);
       setTeamMembers(tm);
-      setSavedCategoryOrder(clientData?.serviceCategoryOrder || []);
+      const rawOrder = clientData?.serviceCategoryOrder;
+      setSavedCategoryOrder(Array.isArray(rawOrder) ? rawOrder : []);
     }).finally(() => setLoading(false));
   }, [clientId]);
 
@@ -102,18 +129,10 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     setSvcDialogOpen(true);
   };
   const openEditService = (s: Service) => {
-    // Ensure all string fields default to "" and providerIds to [] to prevent render crashes
-    const safe: Partial<Service> = { ...s };
-    for (const key of Object.keys(safe) as (keyof Service)[]) {
-      if (safe[key] === null || safe[key] === undefined) {
-        if (key === "providerIds") {
-          (safe as Record<string, unknown>)[key] = [];
-        } else if (key !== "id" && key !== "parentServiceId" && key !== "sortOrder" && key !== "price" && key !== "offered") {
-          (safe as Record<string, unknown>)[key] = "";
-        }
-      }
-    }
-    setSvcForm(safe);
+    setSvcForm({
+      ...s,
+      providerIds: s.providerIds ?? [],
+    });
     setEditingSvcId(s.id);
     setSvcDialogOpen(true);
   };
@@ -205,7 +224,7 @@ export function ServicesSection({ clientId }: { clientId: number }) {
     try {
       await api(`/cm/clients/${clientId}`, {
         method: "PUT",
-        body: JSON.stringify({ serviceCategoryOrder: JSON.stringify(order) }),
+        body: JSON.stringify({ serviceCategoryOrder: order }),
       });
     } catch (e) { console.error("Failed to save category order:", e); }
   };
