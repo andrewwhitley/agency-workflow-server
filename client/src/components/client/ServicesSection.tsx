@@ -129,9 +129,10 @@ function ServicesSectionInner({ clientId }: { clientId: number }) {
     setSvcDialogOpen(true);
   };
   const openEditService = (s: Service) => {
+    const pIds = s.providerIds;
     setSvcForm({
       ...s,
-      providerIds: s.providerIds ?? [],
+      providerIds: Array.isArray(pIds) ? pIds : typeof pIds === "string" ? JSON.parse(pIds) : [],
     });
     setEditingSvcId(s.id);
     setSvcDialogOpen(true);
@@ -491,7 +492,7 @@ function ServicesSectionInner({ clientId }: { clientId: number }) {
                     {s.tier && TIER_CONFIG[s.tier] && s.tier !== "primary" && (
                       <span className={cn("text-[10px] px-1.5 py-0.5 rounded border mr-2", TIER_CONFIG[s.tier].bg)}>{TIER_CONFIG[s.tier].label}</span>
                     )}
-                    {s.providerIds?.length > 0 && (
+                    {Array.isArray(s.providerIds) && s.providerIds.length > 0 && (
                       <span className="text-[10px] text-dim mr-2">{s.providerIds.map((id) => teamMembers.find((t) => t.id === id)?.fullName?.split(" ")[0]).filter(Boolean).join(", ")}</span>
                     )}
                     {s.duration && <span className="text-xs text-dim mr-3">{s.duration}</span>}
@@ -634,11 +635,11 @@ function ServicesSectionInner({ clientId }: { clientId: number }) {
             <div className="text-sm font-medium mb-2">Providers</div>
             <div className="flex flex-wrap gap-2">
               {teamMembers.map((tm) => {
-                const selected = (svcForm.providerIds || []).includes(tm.id);
+                const ids = Array.isArray(svcForm.providerIds) ? svcForm.providerIds : [];
+                const selected = ids.includes(tm.id);
                 return (
                   <button key={tm.id} type="button"
                     onClick={() => {
-                      const ids = svcForm.providerIds || [];
                       upd("providerIds", selected ? ids.filter((id) => id !== tm.id) : [...ids, tm.id]);
                     }}
                     className={cn("text-xs px-3 py-1.5 rounded-md border transition-colors",
