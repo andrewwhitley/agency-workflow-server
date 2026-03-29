@@ -867,6 +867,7 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [outline, setOutline] = useState<Record<string, string> | null>(null);
   const [outlineDirty, setOutlineDirty] = useState(false);
   const [savingOutline, setSavingOutline] = useState(false);
+  const [showResearchFlow, setShowResearchFlow] = useState(false);
 
   const reload = useCallback(() => {
     api<BrandStoryData>(`/cm/clients/${clientId}/brand-story`).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
@@ -945,6 +946,7 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST", signal: controller.signal });
       clearTimeout(timeout);
       setStatusMsg("Brand story generated!");
+      setShowResearchFlow(false);
       reload();
       setTimeout(() => setStatusMsg(null), 4000);
     } catch (e) {
@@ -1501,7 +1503,7 @@ ${sectionsHtml}
       )}
 
       {/* ═══ FULL BRAND STORY VIEW ═══ */}
-      {viewMode === "full" && !hasFullStory && (
+      {viewMode === "full" && (!hasFullStory || showResearchFlow) && (
         <div className="space-y-6">
           {/* Step indicator */}
           <div className="flex items-center gap-3 text-sm">
@@ -1520,6 +1522,13 @@ ${sectionsHtml}
               <Wand2 className="h-3.5 w-3.5" /> 3. Generate
             </div>
           </div>
+
+          {/* Back to existing story button */}
+          {hasFullStory && showResearchFlow && (
+            <Button size="sm" variant="ghost" onClick={() => setShowResearchFlow(false)}>
+              ← Back to existing brand story
+            </Button>
+          )}
 
           {/* Step 1: Research from URL */}
           {!outline && (
@@ -1637,6 +1646,9 @@ ${sectionsHtml}
             <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-3 w-3 mr-1" /> Export PDF</Button>
             <Button size="sm" variant="outline" onClick={handleRegenerateAll} disabled={generating}>
               {generating ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Regenerate All
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowResearchFlow(true)}>
+              <Search className="h-3 w-3 mr-1" /> Re-research & Rebuild
             </Button>
           </div>
 
