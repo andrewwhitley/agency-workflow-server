@@ -190,10 +190,7 @@ export function OnboardingPage() {
             <Field label="Location"><Input value={form.location} onChange={(e) => upd("location", e.target.value)} placeholder="City, State" /></Field>
             <Field label="Business Type"><Input value={form.businessType} onChange={(e) => upd("businessType", e.target.value)} /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Website"><Input value={form.companyWebsite} onChange={(e) => upd("companyWebsite", e.target.value)} /></Field>
-            <Field label="Domain"><Input value={form.domain} onChange={(e) => upd("domain", e.target.value)} placeholder="example.com" /></Field>
-          </div>
+          <Field label="Website"><Input value={form.companyWebsite} onChange={(e) => upd("companyWebsite", e.target.value)} placeholder="https://example.com" /></Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Phone"><Input value={form.companyPhone} onChange={(e) => upd("companyPhone", e.target.value)} /></Field>
             <Field label="Email"><Input value={form.companyEmail} onChange={(e) => upd("companyEmail", e.target.value)} /></Field>

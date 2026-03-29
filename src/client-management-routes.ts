@@ -10,7 +10,7 @@ import { Router } from "express";
 import { query } from "./database.js";
 import { DataForSEOService } from "./dataforseo.js";
 import { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } from "./strategy-generator.js";
-import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection } from "./brand-story-generator.js";
+import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection, researchOutlineFromUrl, RESEARCH_OUTLINE_FIELDS } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
@@ -49,15 +49,23 @@ export function clientManagementRouter(): Router {
     } catch (err) { console.error("Get client error:", err); res.status(500).json({ error: "Failed to get client" }); }
   });
 
+  // Derive clean domain from a website URL
+  const deriveDomain = (url: string | undefined | null): string | null => {
+    if (!url) return null;
+    return url.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "") || null;
+  };
+
   router.post("/clients", async (req, res) => {
     const b = req.body;
     if (!b.companyName) { res.status(400).json({ error: "companyName is required" }); return; }
     const slug = b.slug || b.companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    // Auto-derive domain from website if not explicitly provided
+    const domain = b.domain || deriveDomain(b.companyWebsite);
     try {
       const { rows } = await query(
         `INSERT INTO cm_clients (slug, company_name, legal_name, dba_name, industry, location, domain, company_phone, company_email, company_website, business_type, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-        [slug, b.companyName, b.legalName, b.dbaName, b.industry, b.location, b.domain, b.companyPhone, b.companyEmail, b.companyWebsite, b.businessType, b.status || "active"]
+        [slug, b.companyName, b.legalName, b.dbaName, b.industry, b.location, domain, b.companyPhone, b.companyEmail, b.companyWebsite, b.businessType, b.status || "active"]
       );
       res.json(toCamel(rows[0]));
     } catch (err) { console.error("Create client error:", err); res.status(500).json({ error: "Failed to create client" }); }
@@ -99,6 +107,14 @@ export function clientManagementRouter(): Router {
         if (allowed.includes(snakeKey) && val !== undefined) {
           fields.push(`${snakeKey} = $${i++}`);
           values.push(val);
+        }
+      }
+      // Auto-derive domain when companyWebsite is updated
+      if (b.companyWebsite !== undefined && !b.domain) {
+        const derived = deriveDomain(b.companyWebsite);
+        if (derived) {
+          fields.push(`domain = $${i++}`);
+          values.push(derived);
         }
       }
       if (fields.length === 0) { res.status(400).json({ error: "No valid fields to update" }); return; }
@@ -315,13 +331,53 @@ export function clientManagementRouter(): Router {
     } catch (err) { console.error("Revoke share link error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
-  // Generate brand story using AI
+  // Research outline from URL — fetches website, AI extracts key fields
+  router.post("/clients/:clientId/brand-story/research", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { url } = req.body;
+    if (!url) { res.status(400).json({ error: "url is required" }); return; }
+    req.socket.setTimeout(120_000); // 2 min for fetch + AI
+    try {
+      const outline = await researchOutlineFromUrl(clientId, url);
+      res.json({ success: true, outline, fields: RESEARCH_OUTLINE_FIELDS });
+    } catch (err) {
+      console.error("Research outline error:", err);
+      const message = err instanceof Error ? err.message : "Research failed";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Save edited intake data (after user reviews the research outline)
+  router.put("/clients/:clientId/brand-story/intake", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const { intake } = req.body;
+    if (!intake || typeof intake !== "object") { res.status(400).json({ error: "intake object is required" }); return; }
+    try {
+      await query(
+        `INSERT INTO cm_brand_story (client_id, intake_data, intake_submitted_at, status)
+         VALUES ($1, $2, NOW(), 'draft')
+         ON CONFLICT (client_id) DO UPDATE SET
+           intake_data = $2,
+           intake_submitted_at = NOW()`,
+        [clientId, JSON.stringify(intake)]
+      );
+      res.json({ success: true });
+    } catch (err) { console.error("Save intake error:", err); res.status(500).json({ error: "Failed to save" }); }
+  });
+
+  // Generate brand story using AI (extended timeout — 3 Claude calls can take 3+ min)
   router.post("/clients/:clientId/brand-story/generate", async (req, res) => {
     const clientId = parseInt(req.params.clientId);
+    // Extend socket timeout to 5 minutes for multi-step AI generation
+    req.socket.setTimeout(300_000);
     try {
       const result = await generateBrandStory(clientId);
       res.json(result);
-    } catch (err) { console.error("Generate brand story error:", err); res.status(500).json({ error: "Brand story generation failed" }); }
+    } catch (err) {
+      console.error("Generate brand story error:", err);
+      const message = err instanceof Error ? err.message : "Brand story generation failed";
+      res.status(500).json({ error: message });
+    }
   });
 
   // Generate short BrandScript (2-page version)
@@ -762,6 +818,7 @@ Return ONLY the JSON object, no markdown fences.`
         rawIntake: rows[0].intake_data,
         submittedAt: rows[0].intake_submitted_at,
         storyStatus: rows[0].status,
+        outlineFields: RESEARCH_OUTLINE_FIELDS,
       });
     } catch (err) { console.error("Get intake data error:", err); res.status(500).json({ error: "Failed to get intake data" }); }
   });

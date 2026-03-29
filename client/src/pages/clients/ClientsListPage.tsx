@@ -50,7 +50,8 @@ export function ClientsListPage() {
     ? clients.filter((c) =>
         c.companyName.toLowerCase().includes(search.toLowerCase()) ||
         c.industry?.toLowerCase().includes(search.toLowerCase()) ||
-        c.domain?.toLowerCase().includes(search.toLowerCase()))
+        c.domain?.toLowerCase().includes(search.toLowerCase()) ||
+        c.companyWebsite?.toLowerCase().includes(search.toLowerCase()))
     : clients;
 
   const openAdd = () => { setForm(emptyForm()); setEditingId(null); setDialogOpen(true); };
@@ -129,7 +130,7 @@ export function ClientsListPage() {
             {client.industry && <p className="text-xs text-muted mb-2">{client.industry}</p>}
             <div className="flex flex-wrap gap-2 text-xs text-dim">
               {client.location && <span className="px-2 py-0.5 rounded bg-surface-2">{client.location}</span>}
-              {client.domain && <span className="px-2 py-0.5 rounded bg-surface-2">{client.domain}</span>}
+              {(client.companyWebsite || client.domain) && <span className="px-2 py-0.5 rounded bg-surface-2">{(client.companyWebsite || client.domain || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")}</span>}
               {client.companyPhone && <span className="px-2 py-0.5 rounded bg-surface-2">{client.companyPhone}</span>}
             </div>
           </Link>
@@ -149,10 +150,7 @@ export function ClientsListPage() {
           <FormField label="Industry" value={form.industry || ""} onChange={(v) => upd("industry", v)} placeholder="e.g. Healthcare, Legal" />
           <FormField label="Location" value={form.location || ""} onChange={(v) => upd("location", v)} placeholder="e.g. Austin, TX" />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Website" value={form.companyWebsite || ""} onChange={(v) => upd("companyWebsite", v)} />
-          <FormField label="Domain" value={form.domain || ""} onChange={(v) => upd("domain", v)} placeholder="example.com" />
-        </div>
+        <FormField label="Website" value={form.companyWebsite || ""} onChange={(v) => upd("companyWebsite", v)} placeholder="https://example.com" />
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Phone" value={form.companyPhone || ""} onChange={(v) => upd("companyPhone", v)} />
           <FormField label="Email" value={form.companyEmail || ""} onChange={(v) => upd("companyEmail", v)} />

@@ -8,7 +8,7 @@ import {
   Pencil, Share2, Link2, Unlink, RefreshCw, ChevronDown, ChevronRight,
   Users, AlertTriangle, Shield, Compass, MousePointerClick, Trophy, Skull,
   MessageSquare, Eye, FileText, Palette, Rocket, Download, Check, X, Sparkles,
-  BookOpen, Wand2, Target, Copy, Unlink as Unlink2,
+  BookOpen, Wand2, Target, Copy, Unlink as Unlink2, Globe, Search,
 } from "lucide-react";
 import { CompanyInfoEdit } from "@/components/client/CompanyInfoEdit";
 import { ServicesSection } from "@/components/client/ServicesSection";
@@ -860,8 +860,23 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"brandscript" | "full">("brandscript");
 
+  // Research outline state
+  const [researchUrl, setResearchUrl] = useState("");
+  const [researching, setResearching] = useState(false);
+  const [outlineFields, setOutlineFields] = useState<{ key: string; label: string; hint: string }[]>([]);
+  const [outline, setOutline] = useState<Record<string, string> | null>(null);
+  const [outlineDirty, setOutlineDirty] = useState(false);
+  const [savingOutline, setSavingOutline] = useState(false);
+
   const reload = useCallback(() => {
     api<BrandStoryData>(`/cm/clients/${clientId}/brand-story`).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+    // Also load existing intake outline if any
+    api<{ hasIntakeData: boolean; rawIntake: Record<string, string> | null; outlineFields?: { key: string; label: string; hint: string }[] }>(`/cm/clients/${clientId}/intake`)
+      .then((r) => {
+        if (r.hasIntakeData && r.rawIntake) setOutline(r.rawIntake);
+        if (r.outlineFields) setOutlineFields(r.outlineFields);
+      })
+      .catch(() => {});
   }, [clientId]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -871,16 +886,76 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const brandColors = data?.brandColors || null;
   const hasGeneratedStory = story && story.status !== "draft";
 
-  const handleGenerate = async () => {
-    setGenerating(true);
-    setStatusMsg("Generating brand story... This may take 1-2 minutes.");
+  const handleResearch = async () => {
+    if (!researchUrl.trim()) return;
+    setResearching(true);
+    setStatusMsg("Researching website... This may take 30-60 seconds.");
     try {
-      await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST" });
+      const result = await api<{ outline: Record<string, string>; fields: { key: string; label: string; hint: string }[] }>(
+        `/cm/clients/${clientId}/brand-story/research`,
+        { method: "POST", body: JSON.stringify({ url: researchUrl.trim() }) }
+      );
+      setOutline(result.outline);
+      setOutlineFields(result.fields);
+      setOutlineDirty(false);
+      setStatusMsg("Research complete! Review the outline below, make corrections, then generate.");
+      setTimeout(() => setStatusMsg(null), 6000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Research failed";
+      setStatusMsg(`Research failed: ${msg}`);
+      setTimeout(() => setStatusMsg(null), 15000);
+    }
+    setResearching(false);
+  };
+
+  const handleSaveOutline = async () => {
+    if (!outline) return;
+    setSavingOutline(true);
+    try {
+      await api(`/cm/clients/${clientId}/brand-story/intake`, {
+        method: "PUT", body: JSON.stringify({ intake: outline }),
+      });
+      setOutlineDirty(false);
+      setStatusMsg("Outline saved!");
+      setTimeout(() => setStatusMsg(null), 3000);
+    } catch (e) { console.error(e); }
+    setSavingOutline(false);
+  };
+
+  const updateOutlineField = (key: string, value: string) => {
+    setOutline((prev) => prev ? { ...prev, [key]: value } : prev);
+    setOutlineDirty(true);
+  };
+
+  const handleGenerate = async () => {
+    // Auto-save outline edits before generating
+    if (outline && outlineDirty) {
+      try {
+        await api(`/cm/clients/${clientId}/brand-story/intake`, {
+          method: "PUT", body: JSON.stringify({ intake: outline }),
+        });
+        setOutlineDirty(false);
+      } catch { /* continue anyway */ }
+    }
+    setGenerating(true);
+    setStatusMsg("Generating brand story... This may take 2-3 minutes.");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 270_000); // 4.5 min client timeout
+      await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST", signal: controller.signal });
+      clearTimeout(timeout);
       setStatusMsg("Brand story generated!");
       reload();
-    } catch (e) { setStatusMsg("Generation failed. Please try again."); console.error(e); }
+      setTimeout(() => setStatusMsg(null), 4000);
+    } catch (e) {
+      const isTimeout = e instanceof DOMException && e.name === "AbortError";
+      const msg = isTimeout ? "Request timed out — the AI may be overloaded. Please try again." : (e instanceof Error ? e.message : "Unknown error");
+      setStatusMsg(`Generation failed: ${msg}`);
+      console.error(e);
+      // Keep error visible longer so user can read it
+      setTimeout(() => setStatusMsg(null), 15000);
+    }
     setGenerating(false);
-    setTimeout(() => setStatusMsg(null), 4000);
   };
 
   const handleRegenerateAll = async () => {
@@ -1427,25 +1502,109 @@ ${sectionsHtml}
 
       {/* ═══ FULL BRAND STORY VIEW ═══ */}
       {viewMode === "full" && !hasFullStory && (
-        <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
-            <BookOpen className="h-8 w-8 text-blue-400" />
+        <div className="space-y-6">
+          {/* Step indicator */}
+          <div className="flex items-center gap-3 text-sm">
+            <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium",
+              !outline ? "bg-accent/10 text-accent ring-1 ring-accent/30" : "bg-green-500/10 text-green-400")}>
+              <Search className="h-3.5 w-3.5" /> 1. Research
+            </div>
+            <div className="w-6 h-px bg-border" />
+            <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium",
+              outline && !hasFullStory ? "bg-accent/10 text-accent ring-1 ring-accent/30" : outline ? "bg-green-500/10 text-green-400" : "bg-surface-2 text-dim")}>
+              <Pencil className="h-3.5 w-3.5" /> 2. Review
+            </div>
+            <div className="w-6 h-px bg-border" />
+            <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium",
+              "bg-surface-2 text-dim")}>
+              <Wand2 className="h-3.5 w-3.5" /> 3. Generate
+            </div>
           </div>
-          <h3 className="text-xl font-semibold text-foreground">Generate {clientName}'s Full Brand Story</h3>
-          <p className="text-dim max-w-lg mx-auto text-sm">
-            Create a comprehensive 12-section Brand Story Guide covering customer messaging,
-            content strategy, brand identity, and implementation roadmap.
-          </p>
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 max-w-lg mx-auto">
-            <p className="text-sm text-amber-300">This takes 1-2 minutes to generate all 12 sections.</p>
-          </div>
-          <Button onClick={handleGenerate} disabled={generating} className="px-8">
-            {generating ? (
-              <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating Full Brand Story...</>
-            ) : (
-              <><Wand2 className="h-4 w-4 mr-2" /> Generate Full Brand Story</>
-            )}
-          </Button>
+
+          {/* Step 1: Research from URL */}
+          {!outline && (
+            <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-4">
+              <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Globe className="h-8 w-8 text-blue-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Research {clientName}</h3>
+              <p className="text-dim max-w-lg mx-auto text-sm">
+                Enter the company website and we'll research their business to create an outline.
+                You'll review and edit the outline before generating the full brand story.
+              </p>
+              <div className="flex items-center gap-2 max-w-md mx-auto">
+                <input
+                  type="url"
+                  value={researchUrl}
+                  onChange={(e) => setResearchUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="flex-1 px-3 py-2 rounded-md bg-surface border border-border text-foreground text-sm placeholder:text-dim focus:outline-none focus:ring-1 focus:ring-accent"
+                  onKeyDown={(e) => e.key === "Enter" && handleResearch()}
+                />
+                <Button onClick={handleResearch} disabled={researching || !researchUrl.trim()}>
+                  {researching ? (
+                    <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Researching...</>
+                  ) : (
+                    <><Search className="h-4 w-4 mr-2" /> Research</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Review & Edit Outline */}
+          {outline && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-foreground">Review Research Outline</h3>
+                <div className="flex items-center gap-2">
+                  {outlineDirty && (
+                    <Button size="sm" variant="outline" onClick={handleSaveOutline} disabled={savingOutline}>
+                      {savingOutline ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />} Save Changes
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => { setOutline(null); setResearchUrl(""); }}>
+                    <RefreshCw className="h-3 w-3 mr-1" /> Start Over
+                  </Button>
+                </div>
+              </div>
+              <p className="text-sm text-dim">
+                Review the AI's research below. Edit any fields that are inaccurate, then click "Generate Full Brand Story" when ready.
+                Fields marked <span className="text-amber-400">(inferred)</span> may need verification.
+              </p>
+
+              <div className="grid gap-3">
+                {(outlineFields.length > 0 ? outlineFields : Object.keys(outline).map((k) => ({ key: k, label: k.replace(/([A-Z])/g, " $1").trim(), hint: "" }))).map((field) => (
+                  <div key={field.key} className="bg-surface border border-border rounded-lg p-3">
+                    <label className="block text-xs font-semibold text-dim uppercase mb-1">
+                      {field.label}
+                      {field.hint && <span className="font-normal normal-case ml-1 text-dim/60">— {field.hint}</span>}
+                    </label>
+                    <textarea
+                      value={outline[field.key] || ""}
+                      onChange={(e) => updateOutlineField(field.key, e.target.value)}
+                      rows={Math.max(2, Math.min(5, Math.ceil((outline[field.key] || "").length / 80)))}
+                      className="w-full px-2 py-1.5 rounded bg-surface-2 border border-border text-sm text-foreground resize-y focus:outline-none focus:ring-1 focus:ring-accent"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Generate button */}
+              <div className="border-t border-border pt-4 flex items-center justify-between">
+                <div className="text-sm text-dim">
+                  {Object.keys(outline).length} fields ready
+                </div>
+                <Button onClick={handleGenerate} disabled={generating} className="px-8">
+                  {generating ? (
+                    <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Generating Full Brand Story...</>
+                  ) : (
+                    <><Wand2 className="h-4 w-4 mr-2" /> Generate Full Brand Story</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

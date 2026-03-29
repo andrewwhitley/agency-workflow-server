@@ -10,6 +10,32 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { query } from "./database.js";
 
+// For website fetching in research step
+async function fetchWebsiteText(url: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const res = await fetch(url.startsWith("http") ? url : `https://${url}`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; BrandStoryBot/1.0)" },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return "";
+    const html = await res.text();
+    // Strip tags, scripts, styles — keep just visible text
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&[a-z]+;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 15_000); // Cap at ~15k chars to fit in prompt
+  } catch {
+    return "";
+  }
+}
+
 const anthropic = new Anthropic();
 const MODEL = "claude-sonnet-4-5-20250929";
 
@@ -177,13 +203,18 @@ const GENERATION_SYSTEM_PROMPT = `You are a world-class brand strategist who cre
 Your output should be in markdown format with clear headers (###), bullet points, and **bold text** for emphasis. Write as if you're creating a professional document that will be used daily by a marketing team.
 
 CRITICAL RULES:
-- Be specific to THIS business. Use their actual company name, services, location, and customer details throughout.
+- Be specific to THIS business. Use their actual company name, services, and customer details throughout.
 - NEVER use placeholder text like "[Company Name]" or "[Service]" — always use the real information.
-- If some information is missing, make intelligent inferences based on the industry, location, and business type. Write confidently.
+- **LOCATION vs SERVICE AREA**: Pay close attention to whether the business is a "local service area" business or not. If the data says "Headquartered in" with a note about not being their target market, do NOT write as if they target that geographic area. Focus on their actual service areas and target customers. Many businesses are based in one place but serve clients nationally or in other regions.
+- **LOCAL SERVICE AREA businesses**: When marked as local service area, DO use their location as part of the marketing strategy — local SEO, community presence, and geographic targeting are appropriate.
+- Focus on the client's actual PRIMARY services and the specific niche they serve. Do not broaden their target audience to adjacent industries unless the data explicitly supports it.
+- If some information is missing, make intelligent inferences based on the industry and business type. Write confidently.
 - Each section should be rich and detailed (200-400 words).
 - Write in a professional but accessible tone.`;
 
-const RESEARCH_SYSTEM_PROMPT = `You are a business research analyst. Given a company name, website, and industry, provide a comprehensive profile based on your knowledge. Be specific and detailed. If you don't have specific information about this exact company, make reasonable inferences based on the industry, location, and business type. Always write as if you're confident in the information — this will be used to generate marketing materials.`;
+const RESEARCH_SYSTEM_PROMPT = `You are a business research analyst. Given a company name, website, and industry, provide a comprehensive profile based on your knowledge. Be specific and detailed. If you don't have specific information about this exact company, make reasonable inferences based on the industry and business type. Always write as if you're confident in the information — this will be used to generate marketing materials.
+
+IMPORTANT: The business location is where they are headquartered. Unless explicitly stated as a local service area business, do NOT assume they only serve that geographic area. Many businesses serve clients nationally or in specific regions far from their headquarters. Focus your analysis on the industry and customer type, not the geographic location.`;
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -194,13 +225,16 @@ interface ClientData {
   personas: Record<string, unknown>[];
   differentiators: Record<string, unknown>[];
   intakeData: Record<string, unknown> | null;
+  services: Record<string, unknown>[];
+  serviceAreas: Record<string, unknown>[];
 }
 
 async function gatherClientData(clientId: number): Promise<ClientData> {
-  const [clientRes, guidelinesRes, competitorsRes, personasRes, diffRes, storyRes] =
+  const [clientRes, guidelinesRes, competitorsRes, personasRes, diffRes, storyRes, servicesRes, serviceAreasRes] =
     await Promise.all([
       query(
-        `SELECT company_name, industry, company_website, location, year_founded, number_of_employees
+        `SELECT company_name, industry, company_website, location, year_founded, number_of_employees,
+                is_local_service_area, business_type, combined_years_experience, business_facts
          FROM cm_clients WHERE id = $1`,
         [clientId]
       ),
@@ -230,6 +264,16 @@ async function gatherClientData(clientId: number): Promise<ClientData> {
         `SELECT intake_data FROM cm_brand_story WHERE client_id = $1`,
         [clientId]
       ),
+      query(
+        `SELECT service_name, category, tier, description, description_long, ideal_patient_profile,
+                target_conditions, differentiators, expected_outcomes
+         FROM cm_services WHERE client_id = $1 AND offered = true ORDER BY tier, sort_order`,
+        [clientId]
+      ),
+      query(
+        `SELECT target_cities, target_counties, notes FROM cm_service_areas WHERE client_id = $1`,
+        [clientId]
+      ),
     ]);
 
   return {
@@ -239,6 +283,8 @@ async function gatherClientData(clientId: number): Promise<ClientData> {
     personas: personasRes.rows,
     differentiators: diffRes.rows,
     intakeData: storyRes.rows[0]?.intake_data ?? null,
+    services: servicesRes.rows,
+    serviceAreas: serviceAreasRes.rows,
   };
 }
 
@@ -264,10 +310,53 @@ function buildContextBlock(data: ClientData): string {
     parts.push("## Company Information");
     if (c.company_name) parts.push(`- **Company Name**: ${c.company_name}`);
     if (c.industry) parts.push(`- **Industry**: ${c.industry}`);
+    if (c.business_type) parts.push(`- **Business Type**: ${c.business_type}`);
     if (c.company_website) parts.push(`- **Website**: ${c.company_website}`);
-    if (c.location) parts.push(`- **Location**: ${c.location}`);
+    // Distinguish headquarters location from service area
+    if (c.location) {
+      if (c.is_local_service_area) {
+        parts.push(`- **Location (local service area)**: ${c.location}`);
+      } else {
+        parts.push(`- **Headquartered in**: ${c.location} (NOTE: This is where the company is based, NOT necessarily their target market. They may serve clients nationally or in other regions.)`);
+      }
+    }
     if (c.year_founded) parts.push(`- **Year Founded**: ${c.year_founded}`);
     if (c.number_of_employees) parts.push(`- **Employees**: ${c.number_of_employees}`);
+    if (c.combined_years_experience) parts.push(`- **Combined Years Experience**: ${c.combined_years_experience}`);
+    if (c.business_facts) parts.push(`- **Business Facts**: ${c.business_facts}`);
+  }
+
+  // Services
+  if (data.services.length > 0) {
+    parts.push("\n## Services Offered");
+    const byTier: Record<string, Record<string, unknown>[]> = {};
+    for (const s of data.services) {
+      const tier = (s.tier as string) || "other";
+      if (!byTier[tier]) byTier[tier] = [];
+      byTier[tier].push(s);
+    }
+    for (const tier of ["primary", "secondary", "complementary", "other"]) {
+      if (!byTier[tier]) continue;
+      if (tier !== "other") parts.push(`\n### ${tier.charAt(0).toUpperCase() + tier.slice(1)} Services`);
+      for (const s of byTier[tier]) {
+        parts.push(`- **${s.service_name}**${s.category ? ` (${s.category})` : ""}`);
+        if (s.description) parts.push(`  - ${s.description}`);
+        if (s.ideal_patient_profile) parts.push(`  - Ideal client: ${s.ideal_patient_profile}`);
+        if (s.target_conditions) parts.push(`  - Target conditions: ${s.target_conditions}`);
+        if (s.differentiators) parts.push(`  - Differentiators: ${s.differentiators}`);
+        if (s.expected_outcomes) parts.push(`  - Expected outcomes: ${s.expected_outcomes}`);
+      }
+    }
+  }
+
+  // Service areas
+  if (data.serviceAreas.length > 0) {
+    parts.push("\n## Service Areas");
+    for (const sa of data.serviceAreas) {
+      if (sa.target_cities) parts.push(`- **Target Cities**: ${sa.target_cities}`);
+      if (sa.target_counties) parts.push(`- **Target Counties**: ${sa.target_counties}`);
+      if (sa.notes) parts.push(`- **Notes**: ${sa.notes}`);
+    }
   }
 
   // Content guidelines
@@ -429,17 +518,22 @@ async function runResearchStep(data: ClientData): Promise<string> {
   const website = (data.client?.company_website as string) ?? "";
   const industry = (data.client?.industry as string) ?? "";
   const location = (data.client?.location as string) ?? "";
+  const isLocal = data.client?.is_local_service_area === true;
+
+  const locationLine = isLocal
+    ? `**Location (local service area)**: ${location}`
+    : `**Headquartered in**: ${location} (they may serve clients nationally — do NOT assume they only target this area)`;
 
   const prompt = `Research and provide a comprehensive business profile for:
 
 **Company**: ${companyName}
 **Website**: ${website}
 **Industry**: ${industry}
-**Location**: ${location}
+${locationLine}
 
 Please provide detailed information covering:
 1. What the company does and its core services/products
-2. Target audience and ideal customer profile
+2. Target audience and ideal customer profile (based on their industry and services, NOT their headquarters location)
 3. Key differentiators and competitive advantages
 4. Industry context and market positioning
 5. Likely customer pain points and desires
@@ -496,8 +590,16 @@ export async function generateBrandStory(
   const batch2Response = await callClaudeWithRetry(GENERATION_SYSTEM_PROMPT, batch2Prompt);
   const batch2Sections = parseBatchResponse(batch2Response, BATCH_2_KEYS);
 
-  // 5. Merge all sections
+  // 5. Merge all sections and validate
   const allSections: Record<string, string> = { ...batch1Sections, ...batch2Sections };
+  const totalExpected = BATCH_1_KEYS.length + BATCH_2_KEYS.length;
+  const totalParsed = Object.keys(allSections).length;
+  if (totalParsed === 0) {
+    throw new Error("Brand story generation failed — Claude returned no parseable sections. Please try again.");
+  }
+  if (totalParsed < totalExpected) {
+    console.warn(`[brand-story] Only ${totalParsed}/${totalExpected} sections parsed for client ${clientId}`);
+  }
 
   // 6. Build full markdown
   const fullStory = buildFullStoryMarkdown(allSections);
@@ -763,4 +865,114 @@ async function rebuildFullStory(clientId: number): Promise<void> {
     `UPDATE cm_brand_story SET full_brand_story = $2 WHERE client_id = $1`,
     [clientId, fullStory]
   );
+}
+
+// ── Research Outline (from URL) ──────────────────────────────
+
+// The key intake fields that the AI should research and pre-fill
+const RESEARCH_OUTLINE_FIELDS = [
+  { key: "companyName", label: "Company Name", hint: "Official company/practice name" },
+  { key: "industry", label: "Industry / Niche", hint: "Specific niche (e.g. 'functional medicine', 'concierge medicine', not just 'healthcare')" },
+  { key: "primaryServices", label: "Primary Services", hint: "List the main services/offerings this business provides" },
+  { key: "mostProfitableService", label: "Most Prominent Service", hint: "The service that appears most heavily featured or promoted" },
+  { key: "serviceModel", label: "Service Model", hint: "e.g. cash-based/direct-pay, insurance-based, subscription/membership, hybrid" },
+  { key: "averageServicePrice", label: "Pricing Indication", hint: "Any pricing info found, or 'Not listed' if not visible" },
+  { key: "idealCustomerDescription", label: "Ideal Customer / Patient", hint: "Who this business serves — demographics, conditions, lifestyle. Be specific to what the website says, don't generalize." },
+  { key: "customerLocation", label: "Customer Location / Service Area", hint: "Where their customers are. If the business appears to serve clients nationally or remotely, say so. Don't assume local-only." },
+  { key: "customerDesires", label: "What Their Customers Want", hint: "The outcomes and transformations customers are seeking" },
+  { key: "biggestFrustration", label: "Customer's Biggest Frustration", hint: "The root problem that drives people to seek this business — what conventional alternatives fail to deliver" },
+  { key: "practicalProblem", label: "Practical Day-to-Day Problem", hint: "Tangible, surface-level problem customers face" },
+  { key: "emotionalProblem", label: "Emotional Problem", hint: "How the problem makes customers FEEL" },
+  { key: "howYouHelp", label: "How They Help", hint: "Their approach to solving the problem — methodology, philosophy" },
+  { key: "whyTrustYou", label: "Why Trust Them (Authority)", hint: "Credentials, experience, certifications, team qualifications, years in practice" },
+  { key: "threeStepProcess", label: "Their Process", hint: "How working with them works — discovery/consultation → treatment/service → results. Infer from the site." },
+  { key: "brandPersonality", label: "Brand Personality", hint: "Tone and feel of the website — warm, clinical, luxury, approachable, authoritative, etc." },
+  { key: "brandTone", label: "Brand Tone", hint: "How they communicate — professional, conversational, empathetic, etc." },
+  { key: "brandColors", label: "Brand Colors", hint: "Describe the color palette visible on the website" },
+  { key: "directCTA", label: "Primary Call to Action", hint: "The main CTA on their website (e.g. 'Book a Consultation', 'Schedule Now')" },
+  { key: "topQuestionsCustomersAsk", label: "Top Questions Customers Likely Ask", hint: "Based on the services and industry, what would prospects want to know?" },
+  { key: "expertiseAreas", label: "Areas of Expertise", hint: "Specific specialties, conditions treated, technologies used" },
+  { key: "differentiators", label: "What Makes Them Different", hint: "What sets this business apart from competitors in the same space" },
+] as const;
+
+export { RESEARCH_OUTLINE_FIELDS };
+
+const RESEARCH_OUTLINE_SYSTEM_PROMPT = `You are a marketing research analyst. Given a business website's content, extract specific, accurate information to fill out a brand profile.
+
+CRITICAL RULES:
+- Only state what you can reasonably infer from the website content provided. Do NOT make up specific facts.
+- Be specific to THIS business — don't write generic industry descriptions.
+- If the website doesn't clearly indicate something, write your best inference and mark it with "(inferred)" so the user knows to verify.
+- For the customer location/service area: look for clues about whether they serve locally, regionally, or nationally. Many businesses are headquartered in one place but serve clients across the country (especially telehealth, remote services, consulting). Don't assume local-only unless the site explicitly says so.
+- For the service model: look for clues about pricing structure — membership programs, cash-pay, insurance accepted, etc.
+- Keep each field concise but informative (1-3 sentences).
+
+Return your response as a JSON object with the field keys provided. Every field must have a value (use your best inference if needed).`;
+
+export async function researchOutlineFromUrl(
+  clientId: number,
+  websiteUrl: string
+): Promise<Record<string, string>> {
+  // 1. Fetch website content
+  console.log(`[brand-story] Researching website: ${websiteUrl}`);
+  const websiteText = await fetchWebsiteText(websiteUrl);
+
+  if (!websiteText || websiteText.length < 100) {
+    throw new Error(`Could not fetch usable content from ${websiteUrl}. Check the URL and try again.`);
+  }
+
+  // 2. Also try to fetch /about page for more context
+  let aboutText = "";
+  try {
+    const baseUrl = websiteUrl.replace(/\/$/, "");
+    aboutText = await fetchWebsiteText(`${baseUrl}/about`);
+    if (aboutText.length < 100) {
+      aboutText = await fetchWebsiteText(`${baseUrl}/about-us`);
+    }
+  } catch { /* ok if about page doesn't exist */ }
+
+  // 3. Build the prompt
+  const fieldList = RESEARCH_OUTLINE_FIELDS.map(
+    (f) => `- "${f.key}": ${f.label} — ${f.hint}`
+  ).join("\n");
+
+  const userPrompt = `Here is the website content for analysis:
+
+=== HOMEPAGE ===
+${websiteText}
+
+${aboutText ? `=== ABOUT PAGE ===\n${aboutText.slice(0, 8_000)}\n` : ""}
+
+Please analyze this website and fill out the following brand profile fields. Return ONLY a valid JSON object with these exact keys:
+
+${fieldList}
+
+Return ONLY the JSON object, no markdown fences or extra text.`;
+
+  // 4. Call Claude
+  const response = await callClaudeWithRetry(RESEARCH_OUTLINE_SYSTEM_PROMPT, userPrompt);
+
+  // 5. Parse JSON response
+  let outline: Record<string, string>;
+  try {
+    // Strip markdown fences if present
+    const cleaned = response.replace(/^```(?:json)?\s*/m, "").replace(/\s*```\s*$/m, "").trim();
+    outline = JSON.parse(cleaned);
+  } catch {
+    throw new Error("AI returned invalid JSON. Please try again.");
+  }
+
+  // 6. Save as intake_data on cm_brand_story
+  await query(
+    `INSERT INTO cm_brand_story (client_id, intake_data, intake_submitted_at, status)
+     VALUES ($1, $2, NOW(), 'draft')
+     ON CONFLICT (client_id) DO UPDATE SET
+       intake_data = $2,
+       intake_submitted_at = NOW(),
+       status = CASE WHEN cm_brand_story.status = 'generated' THEN cm_brand_story.status ELSE 'draft' END`,
+    [clientId, JSON.stringify(outline)]
+  );
+
+  console.log(`[brand-story] Research outline saved for client ${clientId} (${Object.keys(outline).length} fields)`);
+  return outline;
 }
