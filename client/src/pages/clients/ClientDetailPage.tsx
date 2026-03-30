@@ -939,22 +939,49 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
       } catch { /* continue anyway */ }
     }
     setGenerating(true);
-    setStatusMsg("Generating brand story... This may take 2-3 minutes.");
+    setStatusMsg("Starting brand story generation...");
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 270_000); // 4.5 min client timeout
-      await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST", signal: controller.signal });
-      clearTimeout(timeout);
+      // Kick off generation — returns immediately
+      await api(`/cm/clients/${clientId}/brand-story/generate`, { method: "POST" });
+
+      // Poll for completion every 5 seconds
+      const progressMsgs = [
+        "Researching business context...",
+        "Generating core brand story sections...",
+        "Generating identity & strategy sections...",
+        "Finalizing brand story...",
+      ];
+      let pollCount = 0;
+      const maxPolls = 60; // 5 minutes max
+
+      const poll = async (): Promise<boolean> => {
+        const result = await api<{ status: string; error?: string }>(`/cm/clients/${clientId}/brand-story/generate/status`);
+        if (result.status === "done") return true;
+        if (result.status === "error") throw new Error(result.error || "Generation failed");
+        if (result.status === "idle") return true; // Job already completed and was cleaned up
+        // Still running — update progress message
+        const msgIdx = Math.min(pollCount, progressMsgs.length - 1);
+        setStatusMsg(progressMsgs[msgIdx] + ` (${(pollCount * 5)}s)`);
+        return false;
+      };
+
+      let done = false;
+      while (!done && pollCount < maxPolls) {
+        await new Promise((r) => setTimeout(r, 5000));
+        pollCount++;
+        done = await poll();
+      }
+
+      if (!done) throw new Error("Generation timed out after 5 minutes. Please try again.");
+
       setStatusMsg("Brand story generated!");
       setShowResearchFlow(false);
       reload();
       setTimeout(() => setStatusMsg(null), 4000);
     } catch (e) {
-      const isTimeout = e instanceof DOMException && e.name === "AbortError";
-      const msg = isTimeout ? "Request timed out — the AI may be overloaded. Please try again." : (e instanceof Error ? e.message : "Unknown error");
+      const msg = e instanceof Error ? e.message : "Unknown error";
       setStatusMsg(`Generation failed: ${msg}`);
       console.error(e);
-      // Keep error visible longer so user can read it
       setTimeout(() => setStatusMsg(null), 15000);
     }
     setGenerating(false);

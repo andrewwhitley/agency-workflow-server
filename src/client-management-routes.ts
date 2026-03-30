@@ -365,18 +365,48 @@ export function clientManagementRouter(): Router {
     } catch (err) { console.error("Save intake error:", err); res.status(500).json({ error: "Failed to save" }); }
   });
 
-  // Generate brand story using AI (extended timeout — 3 Claude calls can take 3+ min)
+  // ── Async brand story generation (avoids Cloudflare 100s proxy timeout) ──
+  // In-memory job tracker — jobs don't survive restarts, but that's fine
+  const generationJobs = new Map<number, { status: "running" | "done" | "error"; error?: string; startedAt: number }>();
+
+  // Start generation — returns immediately, runs in background
   router.post("/clients/:clientId/brand-story/generate", async (req, res) => {
     const clientId = parseInt(req.params.clientId);
-    // Extend socket timeout to 5 minutes for multi-step AI generation
-    req.socket.setTimeout(300_000);
-    try {
-      const result = await generateBrandStory(clientId);
-      res.json(result);
-    } catch (err) {
-      console.error("Generate brand story error:", err);
-      const message = err instanceof Error ? err.message : "Brand story generation failed";
-      res.status(500).json({ error: message });
+    // If already running for this client, don't start another
+    const existing = generationJobs.get(clientId);
+    if (existing?.status === "running") {
+      res.json({ status: "running", message: "Generation already in progress" });
+      return;
+    }
+    // Mark as running and respond immediately
+    generationJobs.set(clientId, { status: "running", startedAt: Date.now() });
+    res.json({ status: "running", message: "Brand story generation started" });
+
+    // Run in background
+    generateBrandStory(clientId)
+      .then(() => {
+        generationJobs.set(clientId, { status: "done", startedAt: Date.now() });
+        console.log(`[brand-story] Generation complete for client ${clientId}`);
+      })
+      .catch((err) => {
+        console.error("Generate brand story error:", err);
+        const message = err instanceof Error ? err.message : "Brand story generation failed";
+        generationJobs.set(clientId, { status: "error", error: message, startedAt: Date.now() });
+      });
+  });
+
+  // Poll generation status
+  router.get("/clients/:clientId/brand-story/generate/status", async (req, res) => {
+    const clientId = parseInt(req.params.clientId);
+    const job = generationJobs.get(clientId);
+    if (!job) {
+      res.json({ status: "idle" });
+      return;
+    }
+    res.json(job);
+    // Clean up completed/errored jobs after they've been read
+    if (job.status === "done" || job.status === "error") {
+      generationJobs.delete(clientId);
     }
   });
 
