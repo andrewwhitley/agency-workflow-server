@@ -62,40 +62,152 @@ type SectionKey = (typeof BRAND_STORY_SECTIONS)[number]["key"];
 
 const SECTION_INSTRUCTIONS: Record<SectionKey, string> = {
   heroSection:
-    "Describe the ideal customer in vivid detail — who they are (demographics, psychographics, lifestyle), what they want (the one clear desire), how they describe their situation in their own words, and their identity (how they see themselves). Write this so anyone on the marketing team immediately understands who they're talking to.",
+    `Describe the ideal customer. This section has two parts:
+
+### The Customer Profile
+A rich 1-2 paragraph description: who they are (demographics, psychographics, lifestyle), what they want (the one clear desire), how they describe their situation in their own words, and their identity (how they see themselves). Write this so anyone on the marketing team immediately understands who they're talking to.
+
+### Hero Aspirational Identity
+Then list 8-10 bullet points starting with "To..." that capture what this customer aspires to become or experience. These should be emotionally specific and quotable — the kind of lines that could go directly on a website or ad. Example: "To be known, not managed" or "To feel like their investment is finally paying off." Each one should be a complete thought in a single line.`,
 
   problemSection:
-    "Define all four layers of the problem:\n- The Root Cause: The underlying force, system, or condition causing the problem (not a person)\n- External Problem: The tangible, surface-level issue\n- Internal Problem: How it makes them FEEL (frustration, confusion, embarrassment)\n- Philosophical Problem: Why this situation is just WRONG — the \"should\" statement\nThis is the most important section. The root cause creates empathy. The internal problem drives action.",
+    `Define all four layers of the problem. Use a mix of brief explanatory context and punchy bullet points.
+
+### Root Cause
+1-2 sentences on the underlying force, system, or condition causing the problem (not a person).
+
+### External Problems
+5-8 bullet points — tangible, surface-level issues. Each one a complete, scannable line. Example: "A system that prioritizes volume over outcomes."
+
+### Internal Problems
+5-8 bullet points — how the problem makes them FEEL. Frustration, confusion, embarrassment, loneliness. Example: "An instinct that something's off — even if everything looks fine on paper."
+
+### Philosophical Truths
+5-8 standalone quotable lines — why this situation is fundamentally WRONG. These should be bold, conviction-driven statements that could stand alone as ad copy or social media posts. Example: "You deserve expertise that reflects your ambition." or "Settling isn't a strategy — it's surrender."
+
+This is the most important section. The root cause creates empathy. The internal problem drives action. The philosophical truths give the brand a moral backbone.`,
 
   guideSection:
-    "Show how the brand demonstrates:\n- Empathy: \"We understand what you're going through because...\" — specific empathy statements that show deep understanding of the customer's world\n- Authority: Proof the brand can solve the problem — credentials, years of experience, specialization depth, process quality, team expertise, industry knowledge. Focus on verifiable facts about the business (years in practice, niche focus, team qualifications, level of service detail) rather than unverifiable outcome claims. Authority comes from demonstrated expertise and commitment to the craft, not promises of specific results.\nWrite 3-5 empathy statements and 3-5 authority proof points.",
+    `Show how the brand demonstrates empathy and authority. Two clear subsections:
+
+### Empathy
+3-5 specific empathy statements that show deep understanding of the customer's world. Start with phrases like "We understand..." or "We've seen..." — statements that make the customer feel truly known. Brief paragraph intro, then bullet points.
+
+### Authority
+3-5 authority proof points. Focus on verifiable facts: years of experience, specialization depth, team qualifications, process quality, niche expertise, industry knowledge. Authority comes from demonstrated commitment to the craft and deep understanding of the customer's world — not outcome promises.
+
+Then include a short "Competency Statement" — a 2-3 sentence block that captures the team's story and why they do this work. This should feel human, not corporate.`,
 
   planSection:
-    "Define:\n- The Process Plan: A clear 3-step process that makes working with the brand feel simple and safe\n- The Agreement Plan: Risk reversal elements — guarantees, promises, what the brand commits to\nName each step with a clear action verb. Make it feel effortless.",
+    `Define a clear, simple process that makes working with the brand feel safe and easy.
+
+### The Process (3 Steps)
+Format each step as:
+**Step 1: [Action Verb + Noun]** — One sentence explaining what happens and why it matters.
+
+Name each step with a clear, confident action verb. The goal is to make the entire engagement feel effortless and inevitable.
+
+### The Agreement
+What the brand commits to — risk reversal elements, guarantees, promises about the level of service, attention, and quality the customer will receive. Focus on process commitments (what you WILL do), not outcome promises (what will happen as a result).`,
 
   ctaSection:
-    "Define:\n- Direct CTA: The primary action (e.g., \"Schedule Your Free Consultation\")\n- Transitional CTA: A softer entry point for people not ready to commit (e.g., \"Download Our Free Guide\")\nInclude 3-5 variations of each with context for when to use them.",
+    `Define calls to action — both direct and transitional.
+
+### Direct CTA
+The primary action. Write 3-5 variations with context for when to use each (website hero, email, social, conversation). Each should be specific and confident.
+
+### Transitional CTA
+A softer entry point for people not ready to commit. Be creative and specific to this business — not just "Download Our Guide" but something that provides genuine value and qualifies interest. Think: quizzes, assessments, checklists, comparison tools, video series. Write 3-5 variations with context.`,
 
   successSection:
-    "Paint a vivid picture of life AFTER working with this brand:\n- What does the customer's life look like? (qualitative outcomes — confidence, clarity, growth, freedom)\n- How do they FEEL? (emotional transformation)\n- What can they now do that they couldn't before?\n- What do others notice about them?\nInclude a before/after contrast. Make the transformation feel real and desirable. Describe outcomes qualitatively, not with fabricated numbers or specific metrics.",
+    `Paint the picture of life AFTER working with this brand. Two formats:
+
+### The Transformation (narrative)
+1-2 paragraphs describing the qualitative change — what their life, business, or health looks like now. Focus on feeling, confidence, freedom, clarity, and capability. No fabricated numbers.
+
+### Success Statements
+8-10 bullet points — each a standalone, emotionally resonant outcome. Example: "The clarity and confidence of knowing exactly where things stand" or "A relationship that finally feels like a partnership." These should be usable directly in marketing materials.
+
+### From → To
+5-8 transformation pairs that capture the journey in shorthand. Format: "From [before state] to [after state]." Example: "From overwhelmed to in control" or "From scattered efforts to a clear strategy." These are powerful for ads, social media, and landing pages.`,
 
   failureSection:
-    "Define what's at risk if the customer doesn't act:\n- What gets worse over time?\n- What opportunities are they missing?\n- What's the emotional cost of inaction?\n- What's the practical cost of staying the same?\nBe honest but not fear-mongering. The goal is to create appropriate urgency. IMPORTANT: Do NOT use specific dollar amounts, revenue projections, or fabricated statistics. Describe the cost of inaction qualitatively — lost momentum, falling behind competitors, continued frustration, wasted effort on ineffective approaches. Paint the picture with emotion and consequence, not made-up numbers.",
+    `Define what's at risk if the customer doesn't act. Two formats:
+
+### The Cost of Inaction (narrative)
+2-3 paragraphs describing what happens when nothing changes. Focus on emotional weight, lost momentum, competitive erosion, continued frustration, and wasted effort. Be honest but not fear-mongering. The goal is appropriate urgency through consequence, not scare tactics.
+
+IMPORTANT: Do NOT use specific dollar amounts, revenue projections, or fabricated statistics. Describe consequences qualitatively — lost time, falling behind, continued frustration, wasted resources on approaches that don't work.
+
+### Failure Statements
+8-10 bullet points — each a concise, honest consequence of inaction. Example: "Staying stuck in a cycle that was never built for you" or "Losing ground to competitors who invested sooner." Each should be a complete thought in one line.`,
 
   brandVoiceSection:
-    "Define the brand's personality and communication style:\n- Voice characteristics (3-5 adjectives that define how the brand sounds)\n- Tone guidelines for different contexts (social media, website, ads, email)\n- Language dos and don'ts (words to use, words to avoid)\n- Sample phrases that capture the brand voice\n- How the brand would introduce itself at a networking event\nIMPORTANT for Language Dos and Don'ts: Only recommend using specific numbers that are verifiable facts (years of experience, number of team members, geographic reach). Do NOT recommend using unverifiable performance claims like 'triple your leads' or '40+ consultations monthly' — these create liability and erode trust.",
+    `Define the brand's personality and communication style.
+
+### Voice Characteristics
+3-5 adjectives that define how the brand sounds, each with a one-sentence explanation of what it means in practice.
+
+### Tone by Context
+Brief guidelines for how tone shifts across channels: website, social media, email, ads, sales conversations, customer support. Not different voices — the same voice at different volumes.
+
+### Language Dos and Don'ts
+Two columns. Dos: words, phrases, and approaches to use. Don'ts: words, phrases, and approaches to avoid. Be specific — give actual examples of each.
+IMPORTANT: Only recommend using numbers that are verifiable facts (years of experience, team size, geographic reach). Do NOT recommend unverifiable performance claims — these create liability and erode trust.
+
+### Sample Phrases
+5-8 phrases that capture the brand voice — ready to use in copy. And a brief "networking introduction" — how the brand would introduce itself in 2-3 sentences at a professional event.`,
 
   visualIdentitySection:
-    "Define the visual brand guidelines:\n- Color palette recommendations (with reasoning for each color choice)\n- Typography suggestions (heading and body fonts that match the brand personality)\n- Photography/imagery style (what kinds of images represent the brand)\n- Logo usage guidelines\n- Overall visual mood (modern, classic, warm, clinical, etc.)",
+    `Define the visual brand guidelines:
+- Color palette recommendations (with hex codes and reasoning for each color choice)
+- Typography suggestions (heading and body fonts that match the brand personality)
+- Photography/imagery style (what kinds of images represent the brand)
+- Logo usage guidelines
+- Overall visual mood (modern, classic, warm, clinical, etc.)`,
 
   contentStrategySection:
-    "Define the content approach based on thought leadership principles:\n- Top 10 questions customers ask (and the brand should answer publicly)\n- Content pillars (3-5 core topics the brand should own)\n- Content types that work best for this business (blog, video, social, email)\n- Pricing/cost transparency approach\n- Comparison content strategy (how to honestly compare with alternatives)\n- Content calendar themes by quarter",
+    `Define the content approach based on thought leadership principles:
+- Top 10 questions customers ask (and the brand should answer publicly)
+- Content pillars (3-5 core topics the brand should own)
+- Content types that work best for this business (blog, video, social, email)
+- Pricing/cost transparency approach
+- Comparison content strategy (how to honestly compare with alternatives)
+- Content calendar themes by quarter`,
 
   messagingSection:
-    "Create ready-to-use messaging:\n- One-liner: A single sentence that explains what the brand does (problem, solution, result)\n- Elevator pitch: 30-second version\n- Tagline options: 3-5 tagline variations\n- Email subject line templates\n- Social media bio variations\n- Key phrases and talking points for sales conversations\nIMPORTANT: Do not include specific unverifiable performance claims in messaging (e.g. 'triple your bookings', '40+ consultations monthly'). Messaging should convey expertise and transformation without making promises that could create liability.",
+    `Create ready-to-use messaging blocks:
+
+### One-Liner
+A single sentence that explains what the brand does: problem → solution → result.
+
+### Elevator Pitch
+A 30-second version (3-4 sentences).
+
+### Taglines
+3-5 tagline variations — short, punchy, memorable.
+
+### Copy Snippets
+Ready-to-use blocks for common needs:
+- **Solution statement**: 2-3 sentences describing what the brand offers (not features — the model/approach)
+- **Uniqueness statement**: 2-3 sentences on what sets them apart
+- **Empathy statement**: 1-2 sentences that show understanding
+- **Competency statement**: 2-3 sentences on why they're qualified
+
+### Social & Email
+- Social media bio variations (Twitter/X, LinkedIn, Instagram)
+- Email subject line templates for different purposes (intro, follow-up, value-add)
+- Key phrases for sales conversations
+
+IMPORTANT: No unverifiable performance claims. Messaging should convey expertise and transformation through specificity about the service and understanding of the customer, not promises about outcomes.`,
 
   implementationSection:
-    "Create a 90-day implementation roadmap:\n- Week 1-2: Quick wins (immediate changes to website, social profiles, email signatures)\n- Week 3-4: Foundation (update all marketing materials with new messaging)\n- Month 2: Content launch (begin publishing thought leadership content)\n- Month 3: Optimization (review what's working, refine messaging)\nInclude specific, actionable tasks for each phase.",
+    `Create a 90-day implementation roadmap:
+- Week 1-2: Quick wins (immediate changes to website, social profiles, email signatures)
+- Week 3-4: Foundation (update all marketing materials with new messaging)
+- Month 2: Content launch (begin publishing thought leadership content)
+- Month 3: Optimization (review what's working, refine messaging)
+Include specific, actionable tasks for each phase.`,
 };
 
 // ── Intake Field Labels ─────────────────────────────────────
@@ -210,7 +322,7 @@ CRITICAL RULES:
 - Focus on the client's actual PRIMARY services and the specific niche they serve. Do not broaden their target audience to adjacent industries unless the data explicitly supports it.
 - **NO UNVERIFIABLE NUMBERS OR PROMISES**: Do NOT invent specific statistics, dollar amounts, percentages, or performance metrics (e.g. "20-40 leads per month", "$800,000-$2,500,000 annually", "triple your bookings", "3X patient inquiries"). Only use numbers that are verifiable facts about the business (years of experience, number of locations, service areas). Avoid specific ROI claims, revenue projections, cost comparisons, or performance guarantees — these are unverifiable and create legal/ethical liability. Instead, describe outcomes qualitatively: "consistent qualified inquiries", "page one visibility", "predictable patient flow". The brand story should inspire confidence through expertise and empathy, not fabricated metrics.
 - If some information is missing, make intelligent inferences based on the industry and business type. Write confidently.
-- Each section should be rich and detailed (200-400 words).
+- Each section should be rich and detailed (250-500 words). Follow the structural format requested in each section's instructions — use the mix of narrative paragraphs and bullet points as specified.
 - Write in a professional but accessible tone.`;
 
 const RESEARCH_SYSTEM_PROMPT = `You are a business research analyst. Given a company name, website, and industry, provide a comprehensive profile based on your knowledge. Be specific and detailed. If you don't have specific information about this exact company, make reasonable inferences based on the industry and business type. Always write as if you're confident in the information — this will be used to generate marketing materials.
