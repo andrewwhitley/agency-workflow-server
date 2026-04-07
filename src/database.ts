@@ -1544,6 +1544,93 @@ Before saving, verify:
       ALTER TABLE enrichment_prospects ADD COLUMN IF NOT EXISTS gbp_has_website_link BOOLEAN;
     `,
   },
+  {
+    id: "047_seed_traffic_light_departments",
+    sql: `
+      -- Seed default departments (skip if any already exist)
+      INSERT INTO cm_tl_departments (name, description, icon, color, sort_order, is_active)
+      SELECT * FROM (VALUES
+        ('Media Buying',    'Google Ads, Meta Ads — campaign performance, spend efficiency, ROAS',        'megaphone',  '#EF4444', 1, TRUE),
+        ('SEO',             'Organic search rankings, keyword tracking, technical health, content gaps',  'search',     '#22C55E', 2, TRUE),
+        ('Content',         'Blog posts, website copy, social media content, brand voice consistency',    'pen-tool',   '#8B5CF6', 3, TRUE),
+        ('Web Development', 'Site speed, uptime, technical maintenance, Divi/WordPress health',           'code',       '#3B82F6', 4, TRUE),
+        ('Social Media',    'Social engagement, posting consistency, audience growth, community management', 'share-2',  '#EC4899', 5, TRUE),
+        ('Automations',     'GHL workflows, AI chat/voice agents, email sequences, funnel performance',  'zap',        '#F59E0B', 6, TRUE),
+        ('Billing',         'Invoice status, payment collection, contract renewals, account standing',    'credit-card','#6B7280', 7, TRUE)
+      ) AS v(name, description, icon, color, sort_order, is_active)
+      WHERE NOT EXISTS (SELECT 1 FROM cm_tl_departments LIMIT 1);
+
+      -- Seed metrics for Media Buying
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('ROAS',             'Return on ad spend',                    'core_performance', 'Above target ROAS',      'Within 20% of target',       'Below 50% of target or declining', 1),
+        ('Cost Per Lead',    'Average cost to acquire a lead',        'core_performance', 'At or below target CPL', 'CPL rising but manageable',  'CPL 2x+ above target',             2),
+        ('Ad Spend Pacing',  'Monthly budget utilization',            'leading',          'On pace (90-110%)',       'Over/under pacing (80-120%)', 'Severely off pace (<80% or >120%)',3)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Media Buying'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed metrics for SEO
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('Keyword Rankings',   'Target keyword position changes',      'core_performance', 'Rankings stable/improving', 'Some rankings dropped',         'Major ranking losses',              1),
+        ('Organic Traffic',    'Organic sessions trend',               'core_performance', 'Traffic growing or stable',  'Traffic flat or slight decline', 'Significant traffic drop (>15%)',   2),
+        ('Technical Health',   'Site audit score and issues',          'leading',          'Score >90, no critical issues', 'Score 70-90, minor issues',  'Score <70 or critical issues',      3)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'SEO'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed metrics for Content
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('Content Output',     'Articles/posts published vs plan',     'core_performance', 'On schedule',               'Slightly behind',               'Significantly behind schedule',     1),
+        ('Content Quality',    'Brand voice consistency, engagement',  'core_performance', 'High quality, on brand',    'Minor revisions needed',        'Major quality issues',              2)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Content'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed metrics for Web Development
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('Site Speed',         'Core Web Vitals / page load time',     'core_performance', 'All CWV passing',           'Some CWV marginal',             'CWV failing, slow load',            1),
+        ('Uptime',             'Site availability',                    'leading',          '99.9%+ uptime',             'Minor downtime incidents',      'Significant downtime or outage',    2)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Web Development'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed playbooks for Media Buying
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Review creative performance and audience targeting' || E'\\n' || 'Check for audience fatigue or ad disapprovals' || E'\\n' || 'Schedule optimization review with team',
+        'Within 48 hours',
+        'Full campaign audit — pause underperformers' || E'\\n' || 'Client strategy call to realign goals/budget' || E'\\n' || 'Leadership review of account',
+        'Within 24 hours',
+        'Media Director, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Media Buying'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+
+      -- Seed playbooks for SEO
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Review ranking drops and identify causes' || E'\\n' || 'Check for algorithm updates or technical issues' || E'\\n' || 'Prioritize content updates for affected keywords',
+        'Within 1 week',
+        'Full technical audit and ranking analysis' || E'\\n' || 'Emergency content/link building plan' || E'\\n' || 'Client notification with action plan',
+        'Within 48 hours',
+        'SEO Lead, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'SEO'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
