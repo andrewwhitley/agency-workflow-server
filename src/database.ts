@@ -1631,6 +1631,114 @@ Before saving, verify:
       AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
     `,
   },
+  {
+    id: "048_refine_traffic_light_departments",
+    sql: `
+      -- Remove Billing department (managed externally)
+      DELETE FROM cm_tl_departments WHERE name = 'Billing';
+
+      -- Add Customer Success department (relationship health — the #1 retention signal from SFA traffic light workshop)
+      INSERT INTO cm_tl_departments (name, description, icon, color, sort_order, is_active)
+      SELECT 'Customer Success', 'Client relationship health — communication, satisfaction (NPS), call engagement, overall vibe', 'heart', '#10B981', 7, TRUE
+      WHERE NOT EXISTS (SELECT 1 FROM cm_tl_departments WHERE name = 'Customer Success');
+
+      -- Seed metrics for Social Media
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('Posting Consistency', 'Posts published vs scheduled plan',  'core_performance', 'All posts on schedule',     'Slightly behind schedule',      'Significantly behind or missed',    1),
+        ('Engagement Rate',     'Likes, comments, shares per post',  'core_performance', 'Above industry benchmark',  'At or slightly below benchmark', 'Well below benchmark, declining',   2),
+        ('Audience Growth',     'Follower/subscriber growth trend',  'leading',          'Steady growth',             'Flat or minimal growth',        'Declining followers',               3)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Social Media'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed metrics for Automations
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('Workflow Health',     'GHL automations running without errors', 'core_performance', 'All workflows active, no errors', 'Minor issues, some skipped steps', 'Workflows broken or disabled',  1),
+        ('AI Agent Performance','Chat/voice agent resolution and engagement', 'core_performance', 'High resolution rate, positive feedback', 'Some unresolved, mixed feedback', 'Low resolution, complaints', 2),
+        ('Funnel Conversion',  'Lead-to-appointment or lead-to-sale rate', 'leading',         'Conversion at or above target', 'Conversion slightly below target', 'Conversion significantly below',  3)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Automations'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed metrics for Customer Success (relationship health signals from the traffic light workshop)
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, m.name, m.description, m.metric_type, m.green_label, m.yellow_label, m.red_label, m.sort_order
+      FROM cm_tl_departments d
+      CROSS JOIN (VALUES
+        ('NPS / Satisfaction',  'Client happiness score (NPS survey or call feedback)',  'core_performance', 'Purple/Green — happy, would refer', 'Okay — average, room to improve', 'Not good — dissatisfied, at risk',     1),
+        ('Communication',       'Recency and quality of client contact',                'leading',          'Regular contact, responsive',       'Slow responses, missed calls',     'Gone dark or hostile tone',            2),
+        ('Call Engagement',     'Showing up for calls, booking reviews',                'friction',         'Books and attends calls',           'Misses some, slow to reschedule',  'Avoids calls, no engagement',          3)
+      ) AS m(name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      WHERE d.name = 'Customer Success'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_metrics WHERE department_id = d.id LIMIT 1);
+
+      -- Seed playbooks for Content
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Review content calendar and identify bottlenecks' || E'\\n' || 'Check brand voice alignment on recent pieces' || E'\\n' || 'Prioritize overdue deliverables',
+        'Within 1 week',
+        'Emergency content catch-up plan' || E'\\n' || 'Client call to reset expectations and timeline' || E'\\n' || 'Reassign resources if needed',
+        'Within 48 hours',
+        'Content Lead, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Content'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+
+      -- Seed playbooks for Web Development
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Run speed audit and identify slow pages' || E'\\n' || 'Check for plugin conflicts or update issues' || E'\\n' || 'Review hosting performance metrics',
+        'Within 1 week',
+        'Emergency site fix — downtime or critical errors' || E'\\n' || 'Client notification with status and ETA' || E'\\n' || 'Escalate to hosting provider if needed',
+        'Within 4 hours',
+        'Web Dev Lead, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Web Development'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+
+      -- Seed playbooks for Social Media
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Review posting schedule and catch up on missed posts' || E'\\n' || 'Audit recent engagement and adjust strategy' || E'\\n' || 'Check content quality and brand alignment',
+        'Within 1 week',
+        'Full social audit — content, audience, competitors' || E'\\n' || 'Client strategy call to realign social goals' || E'\\n' || 'Develop recovery content plan',
+        'Within 48 hours',
+        'Social Media Lead, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Social Media'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+
+      -- Seed playbooks for Automations
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Review GHL workflow logs for errors or skipped steps' || E'\\n' || 'Check AI agent conversation quality' || E'\\n' || 'Audit funnel conversion drop-off points',
+        'Within 1 week',
+        'Emergency workflow repair — disable broken automations' || E'\\n' || 'Manual follow-up on leads stuck in pipeline' || E'\\n' || 'Client notification with remediation plan',
+        'Within 24 hours',
+        'Automations Lead, Account Manager'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Automations'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+
+      -- Seed playbooks for Customer Success (pivot options from the traffic light workshop)
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id,
+        'Proactive check-in call — ask how things are going' || E'\\n' || 'Review recent deliverables and results together' || E'\\n' || 'Send NPS survey if not recently collected',
+        'Within 48 hours',
+        'Immediate escalation call — team lead or director' || E'\\n' || 'Full account review across all departments' || E'\\n' || 'Build recovery game plan with specific action items and timeline',
+        'Within 24 hours',
+        'CSM Director, Agency Owner'
+      FROM cm_tl_departments d
+      WHERE d.name = 'Customer Success'
+      AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
