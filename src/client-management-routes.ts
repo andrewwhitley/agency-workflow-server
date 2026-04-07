@@ -940,6 +940,48 @@ Return ONLY the JSON object, no markdown fences.`
     } catch (err) { res.status(500).json({ error: "Failed" }); }
   });
 
+  // Per-client metric overrides — get for a client
+  router.get("/traffic-light/client-metrics/:clientId", async (req, res) => {
+    try {
+      const { rows } = await query(
+        `SELECT cm.*, m.name as metric_name, m.department_id, m.green_label as default_green_label,
+                m.yellow_label as default_yellow_label, m.red_label as default_red_label
+         FROM cm_tl_client_metrics cm
+         JOIN cm_tl_metrics m ON cm.metric_id = m.id
+         WHERE cm.client_id = $1 ORDER BY m.department_id, m.sort_order`,
+        [req.params.clientId]
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Per-client metric overrides — upsert one override
+  router.put("/traffic-light/client-metrics/:clientId/:metricId", async (req, res) => {
+    const { clientId, metricId } = req.params;
+    const b = req.body;
+    try {
+      const { rows } = await query(
+        `INSERT INTO cm_tl_client_metrics (client_id, metric_id, green_label, yellow_label, red_label, notes)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (client_id, metric_id)
+         DO UPDATE SET green_label = EXCLUDED.green_label, yellow_label = EXCLUDED.yellow_label,
+           red_label = EXCLUDED.red_label, notes = EXCLUDED.notes, updated_at = NOW()
+         RETURNING *`,
+        [clientId, metricId, b.greenLabel || null, b.yellowLabel || null, b.redLabel || null, b.notes || null]
+      );
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Per-client metric overrides — delete (revert to global defaults)
+  router.delete("/traffic-light/client-metrics/:clientId/:metricId", async (req, res) => {
+    try {
+      await query("DELETE FROM cm_tl_client_metrics WHERE client_id = $1 AND metric_id = $2",
+        [req.params.clientId, req.params.metricId]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
   // Action log — get
   router.get("/traffic-light/actions", async (req, res) => {
     const { clientId, healthEntryId, limit: lim } = req.query;
@@ -979,7 +1021,7 @@ Return ONLY the JSON object, no markdown fences.`
       d.setDate(d.getDate() - 7);
       const prevWeek = d.toISOString().slice(0, 10);
 
-      const [depts, metrics, playbooks, current, previous, actions, clientDepts] = await Promise.all([
+      const [depts, metrics, playbooks, current, previous, actions, clientDepts, clientMetrics] = await Promise.all([
         query("SELECT * FROM cm_tl_departments WHERE is_active = true ORDER BY sort_order, name"),
         query("SELECT * FROM cm_tl_metrics WHERE is_active = true ORDER BY department_id, sort_order"),
         query("SELECT p.*, d.name as department_name FROM cm_tl_playbooks p JOIN cm_tl_departments d ON p.department_id = d.id"),
@@ -987,6 +1029,7 @@ Return ONLY the JSON object, no markdown fences.`
         query("SELECT h.*, d.name as department_name FROM cm_tl_health_entries h JOIN cm_tl_departments d ON h.department_id = d.id WHERE h.client_id = $1 AND h.week_of = $2 ORDER BY d.sort_order", [clientId, prevWeek]),
         query("SELECT a.*, d.name as department_name FROM cm_tl_action_log a JOIN cm_tl_departments d ON a.department_id = d.id WHERE a.client_id = $1 ORDER BY a.created_at DESC LIMIT 20", [clientId]),
         query("SELECT cd.*, d.name as department_name FROM cm_tl_client_departments cd JOIN cm_tl_departments d ON cd.department_id = d.id WHERE cd.client_id = $1", [clientId]),
+        query("SELECT cm.* FROM cm_tl_client_metrics cm WHERE cm.client_id = $1", [clientId]),
       ]);
       res.json({
         departments: rowsToCamel(depts.rows),
@@ -996,6 +1039,7 @@ Return ONLY the JSON object, no markdown fences.`
         previousEntries: rowsToCamel(previous.rows),
         recentActions: rowsToCamel(actions.rows),
         clientDepartments: rowsToCamel(clientDepts.rows),
+        clientMetricOverrides: rowsToCamel(clientMetrics.rows),
       });
     } catch (err) { console.error("Client dashboard error:", err); res.status(500).json({ error: "Failed" }); }
   });

@@ -1757,6 +1757,26 @@ Before saving, verify:
       CREATE INDEX IF NOT EXISTS idx_cm_tl_client_dept ON cm_tl_client_departments(client_id);
     `,
   },
+  {
+    id: "050_per_client_metric_overrides",
+    sql: `
+      -- Per-client metric threshold overrides
+      -- If no override exists for a client+metric, the global metric thresholds apply
+      CREATE TABLE IF NOT EXISTS cm_tl_client_metrics (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        metric_id INT NOT NULL REFERENCES cm_tl_metrics(id) ON DELETE CASCADE,
+        green_label VARCHAR(500),
+        yellow_label VARCHAR(500),
+        red_label VARCHAR(500),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(client_id, metric_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_tl_client_metrics ON cm_tl_client_metrics(client_id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

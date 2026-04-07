@@ -72,6 +72,15 @@ interface ClientDepartment {
   departmentName?: string;
 }
 
+interface ClientMetricOverride {
+  clientId: number;
+  metricId: number;
+  greenLabel: string | null;
+  yellowLabel: string | null;
+  redLabel: string | null;
+  notes: string | null;
+}
+
 interface DashboardData {
   departments: Department[];
   metrics: Metric[];
@@ -80,6 +89,7 @@ interface DashboardData {
   previousEntries: HealthEntry[];
   recentActions: ActionLogEntry[];
   clientDepartments: ClientDepartment[];
+  clientMetricOverrides: ClientMetricOverride[];
 }
 
 type StatusKey = "green" | "yellow" | "red" | "na";
@@ -168,6 +178,13 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
   const [configDrafts, setConfigDrafts] = useState<Record<number, boolean>>({});
   const [savingConfig, setSavingConfig] = useState(false);
 
+  // Metric customization (in edit dialog)
+  const [editingMetricId, setEditingMetricId] = useState<number | null>(null);
+  const [metricGreen, setMetricGreen] = useState("");
+  const [metricYellow, setMetricYellow] = useState("");
+  const [metricRed, setMetricRed] = useState("");
+  const [savingMetric, setSavingMetric] = useState(false);
+
   const reload = useCallback(() => {
     setLoading(true);
     api<DashboardData>(`/cm/traffic-light/client-dashboard?clientId=${clientId}&weekOf=${weekOf}`)
@@ -201,6 +218,25 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
   const metrics = data?.metrics || [];
   const recentActions = data?.recentActions || [];
   const clientDepts = data?.clientDepartments || [];
+  const clientMetricOverrides = data?.clientMetricOverrides || [];
+
+  // Map of client metric overrides by metricId
+  const overrideMap = useMemo(() => {
+    const map: Record<number, ClientMetricOverride> = {};
+    clientMetricOverrides.forEach((o) => (map[o.metricId] = o));
+    return map;
+  }, [clientMetricOverrides]);
+
+  // Get effective metric labels (client override or global default)
+  const getMetricLabels = useCallback((m: Metric) => {
+    const o = overrideMap[m.id];
+    return {
+      greenLabel: o?.greenLabel || m.greenLabel,
+      yellowLabel: o?.yellowLabel || m.yellowLabel,
+      redLabel: o?.redLabel || m.redLabel,
+      isOverridden: !!o,
+    };
+  }, [overrideMap]);
 
   // Filter departments: if per-client config exists, only show enabled ones
   // If no config exists for this client, show all departments
@@ -271,6 +307,35 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
       reload();
     } catch (e) { console.error(e); }
     setSaving(false);
+  };
+
+  const openMetricEdit = (m: Metric) => {
+    const labels = getMetricLabels(m);
+    setEditingMetricId(m.id);
+    setMetricGreen(labels.greenLabel || "");
+    setMetricYellow(labels.yellowLabel || "");
+    setMetricRed(labels.redLabel || "");
+  };
+
+  const saveMetricOverride = async () => {
+    if (editingMetricId === null) return;
+    setSavingMetric(true);
+    try {
+      await api(`/cm/traffic-light/client-metrics/${clientId}/${editingMetricId}`, {
+        method: "PUT",
+        body: JSON.stringify({ greenLabel: metricGreen, yellowLabel: metricYellow, redLabel: metricRed }),
+      });
+      setEditingMetricId(null);
+      reload();
+    } catch (e) { console.error(e); }
+    setSavingMetric(false);
+  };
+
+  const resetMetricOverride = async (metricId: number) => {
+    try {
+      await api(`/cm/traffic-light/client-metrics/${clientId}/${metricId}`, { method: "DELETE" });
+      reload();
+    } catch (e) { console.error(e); }
   };
 
   const handleLogAction = async () => {
@@ -484,26 +549,81 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
             </div>
           </div>
 
-          {/* Metric Thresholds Reference */}
+          {/* Metric Thresholds — with per-client customization */}
           {editDeptMetrics.length > 0 && (
-            <div className="rounded-lg border border-border p-3 space-y-2">
+            <div className="rounded-lg border border-border p-3 space-y-3">
               <h4 className="text-xs font-semibold text-dim uppercase tracking-wider">Metric Thresholds</h4>
-              {editDeptMetrics.map((m) => (
-                <div key={m.id} className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">{m.name}</p>
-                  <div className="grid grid-cols-3 gap-1 text-xs">
-                    <div className="bg-emerald-50 text-emerald-700 rounded px-2 py-1">
-                      <span className="font-medium">G:</span> {m.greenLabel || "—"}
+              {editDeptMetrics.map((m) => {
+                const labels = getMetricLabels(m);
+                const isEditing = editingMetricId === m.id;
+
+                return (
+                  <div key={m.id} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground">{m.name}</p>
+                      <div className="flex items-center gap-1">
+                        {labels.isOverridden && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Custom</span>
+                        )}
+                        {!isEditing ? (
+                          <button type="button" onClick={() => openMetricEdit(m)}
+                            className="text-xs text-muted hover:text-foreground px-1.5 py-0.5 rounded hover:bg-surface-2">
+                            {labels.isOverridden ? "Edit" : "Customize"}
+                          </button>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setEditingMetricId(null)}
+                              className="text-xs h-6 px-2">Cancel</Button>
+                            <Button type="button" size="sm" onClick={saveMetricOverride} disabled={savingMetric}
+                              className="text-xs h-6 px-2">{savingMetric ? "..." : "Save"}</Button>
+                            {labels.isOverridden && (
+                              <Button type="button" variant="outline" size="sm"
+                                className="text-xs h-6 px-2 text-red-600"
+                                onClick={() => { resetMetricOverride(m.id); setEditingMetricId(null); }}>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="bg-amber-50 text-amber-700 rounded px-2 py-1">
-                      <span className="font-medium">Y:</span> {m.yellowLabel || "—"}
-                    </div>
-                    <div className="bg-red-50 text-red-700 rounded px-2 py-1">
-                      <span className="font-medium">R:</span> {m.redLabel || "—"}
-                    </div>
+                    {isEditing ? (
+                      <div className="grid grid-cols-3 gap-1">
+                        <div className="space-y-1">
+                          <label className="text-xs text-emerald-700 font-medium">Green</label>
+                          <input value={metricGreen} onChange={(e) => setMetricGreen(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-xs text-emerald-700"
+                            placeholder="What's green?" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-amber-700 font-medium">Yellow</label>
+                          <input value={metricYellow} onChange={(e) => setMetricYellow(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-amber-200 bg-amber-50 text-xs text-amber-700"
+                            placeholder="What's yellow?" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-red-700 font-medium">Red</label>
+                          <input value={metricRed} onChange={(e) => setMetricRed(e.target.value)}
+                            className="w-full px-2 py-1 rounded border border-red-200 bg-red-50 text-xs text-red-700"
+                            placeholder="What's red?" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1 text-xs">
+                        <div className="bg-emerald-50 text-emerald-700 rounded px-2 py-1">
+                          <span className="font-medium">G:</span> {labels.greenLabel || "—"}
+                        </div>
+                        <div className="bg-amber-50 text-amber-700 rounded px-2 py-1">
+                          <span className="font-medium">Y:</span> {labels.yellowLabel || "—"}
+                        </div>
+                        <div className="bg-red-50 text-red-700 rounded px-2 py-1">
+                          <span className="font-medium">R:</span> {labels.redLabel || "—"}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
