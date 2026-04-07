@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 interface Department { id: number; name: string; description: string | null; icon: string | null; color: string | null; sortOrder: number; }
 interface Client { id: number; slug: string; companyName: string; status: string; }
 interface HealthEntry { id: number; clientId: number; departmentId: number; weekOf: string; status: string; notes: string | null; }
+interface ClientDeptConfig { clientId: number; departmentId: number; isEnabled: boolean; }
 
 type StatusKey = "green" | "yellow" | "red" | "na";
 
@@ -83,6 +84,7 @@ export function WeeklyCheckInPage() {
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState<DraftMap>({});
   const [notesClient, setNotesClient] = useState<number | null>(null);
+  const [clientDeptConfigs, setClientDeptConfigs] = useState<ClientDeptConfig[]>([]);
 
   const prevWeek = useMemo(() => shiftWeek(weekOf, -1), [weekOf]);
 
@@ -93,14 +95,29 @@ export function WeeklyCheckInPage() {
       api<Client[]>("/cm/clients"),
       api<HealthEntry[]>(`/cm/traffic-light/health?weekOf=${weekOf}`),
       api<HealthEntry[]>(`/cm/traffic-light/health?weekOf=${prevWeek}`),
-    ]).then(([depts, cls, ents, prev]) => {
+      api<ClientDeptConfig[]>("/cm/traffic-light/client-departments").catch(() => []),
+    ]).then(([depts, cls, ents, prev, cdConfigs]) => {
       setDepartments(depts.sort((a, b) => a.sortOrder - b.sortOrder));
       setClients(cls.filter((c) => c.status === "active"));
       setEntries(ents);
       setPrevEntries(prev);
+      setClientDeptConfigs(cdConfigs);
       setDrafts({});
     }).catch(console.error).finally(() => setLoading(false));
   }, [weekOf, prevWeek]);
+
+  // Per-client department filtering: returns true if this dept is enabled for this client
+  const isDeptEnabledForClient = useCallback((clientId: number, deptId: number): boolean => {
+    const configs = clientDeptConfigs.filter((c) => c.clientId === clientId);
+    if (configs.length === 0) return true; // no config = all enabled
+    const match = configs.find((c) => c.departmentId === deptId);
+    return match ? match.isEnabled : true;
+  }, [clientDeptConfigs]);
+
+  // Get enabled departments for a specific client
+  const getClientDepts = useCallback((clientId: number): Department[] => {
+    return departments.filter((d) => isDeptEnabledForClient(clientId, d.id));
+  }, [departments, isDeptEnabledForClient]);
 
   // Server entry map
   const serverMap = useMemo(() => {
@@ -141,22 +158,24 @@ export function WeeklyCheckInPage() {
   const hasChanges = Object.keys(drafts).length > 0;
   const changedCount = Object.keys(drafts).length;
 
-  // Overall status per client
+  // Overall status per client (using only their enabled departments)
   const clientOverall = useMemo(() => {
     const result: Record<number, StatusKey> = {};
     clients.forEach((c) => {
-      result[c.id] = computeOverallStatus(departments.map((d) => getEffective(c.id, d.id).status));
+      const cDepts = getClientDepts(c.id);
+      result[c.id] = computeOverallStatus(cDepts.map((d) => getEffective(c.id, d.id).status));
     });
     return result;
-  }, [clients, departments, getEffective]);
+  }, [clients, getClientDepts, getEffective]);
 
   const prevClientOverall = useMemo(() => {
     const result: Record<number, StatusKey> = {};
     clients.forEach((c) => {
-      result[c.id] = computeOverallStatus(departments.map((d) => prevMap[`${c.id}-${d.id}`] || "na"));
+      const cDepts = getClientDepts(c.id);
+      result[c.id] = computeOverallStatus(cDepts.map((d) => prevMap[`${c.id}-${d.id}`] || "na"));
     });
     return result;
-  }, [clients, departments, prevMap]);
+  }, [clients, getClientDepts, prevMap]);
 
   // Sort: red first, then yellow, green, na
   const sortedClients = useMemo(() => {
@@ -317,6 +336,14 @@ export function WeeklyCheckInPage() {
 
                       {/* Department cells */}
                       {departments.map((dept) => {
+                        const enabled = isDeptEnabledForClient(client.id, dept.id);
+                        if (!enabled) {
+                          return (
+                            <td key={dept.id} className="px-2 py-2 text-center">
+                              <span className="text-xs text-dim" title={`${dept.name} not tracked for this client`}>—</span>
+                            </td>
+                          );
+                        }
                         const effective = getEffective(client.id, dept.id);
                         const prevStatus = prevMap[`${client.id}-${dept.id}`] as StatusKey | undefined;
                         const key = `${client.id}-${dept.id}`;
@@ -417,7 +444,7 @@ export function WeeklyCheckInPage() {
 
                   {/* Department grid */}
                   <div className="grid grid-cols-2 gap-2">
-                    {departments.map((dept) => {
+                    {departments.filter((d) => isDeptEnabledForClient(client.id, d.id)).map((dept) => {
                       const effective = getEffective(client.id, dept.id);
                       const prevStatus = prevMap[`${client.id}-${dept.id}`] as StatusKey | undefined;
                       const key = `${client.id}-${dept.id}`;

@@ -64,6 +64,14 @@ interface ActionLogEntry {
   departmentName?: string;
 }
 
+interface ClientDepartment {
+  clientId: number;
+  departmentId: number;
+  isEnabled: boolean;
+  notes: string | null;
+  departmentName?: string;
+}
+
 interface DashboardData {
   departments: Department[];
   metrics: Metric[];
@@ -71,6 +79,7 @@ interface DashboardData {
   currentEntries: HealthEntry[];
   previousEntries: HealthEntry[];
   recentActions: ActionLogEntry[];
+  clientDepartments: ClientDepartment[];
 }
 
 type StatusKey = "green" | "yellow" | "red" | "na";
@@ -154,6 +163,11 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
   // Playbook dialog
   const [playbookDeptId, setPlaybookDeptId] = useState<number | null>(null);
 
+  // Configure departments dialog
+  const [showConfig, setShowConfig] = useState(false);
+  const [configDrafts, setConfigDrafts] = useState<Record<number, boolean>>({});
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const reload = useCallback(() => {
     setLoading(true);
     api<DashboardData>(`/cm/traffic-light/client-dashboard?clientId=${clientId}&weekOf=${weekOf}`)
@@ -183,9 +197,18 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
     return map;
   }, [data?.playbooks]);
 
-  const departments = data?.departments || [];
+  const allDepartments = data?.departments || [];
   const metrics = data?.metrics || [];
   const recentActions = data?.recentActions || [];
+  const clientDepts = data?.clientDepartments || [];
+
+  // Filter departments: if per-client config exists, only show enabled ones
+  // If no config exists for this client, show all departments
+  const departments = useMemo(() => {
+    if (clientDepts.length === 0) return allDepartments;
+    const enabledIds = new Set(clientDepts.filter((cd) => cd.isEnabled).map((cd) => cd.departmentId));
+    return allDepartments.filter((d) => enabledIds.has(d.id));
+  }, [allDepartments, clientDepts]);
 
   const overallStatus = computeOverallStatus(
     departments.map((d) => ({ status: currentMap[d.id]?.status || "na" }))
@@ -193,6 +216,38 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
   const overallPrevStatus = computeOverallStatus(
     departments.map((d) => ({ status: previousMap[d.id]?.status || "na" }))
   );
+
+  // Configure departments handlers
+  const openConfig = () => {
+    const drafts: Record<number, boolean> = {};
+    allDepartments.forEach((d) => {
+      if (clientDepts.length === 0) {
+        drafts[d.id] = true; // all enabled by default
+      } else {
+        const cd = clientDepts.find((cd) => cd.departmentId === d.id);
+        drafts[d.id] = cd ? cd.isEnabled : true;
+      }
+    });
+    setConfigDrafts(drafts);
+    setShowConfig(true);
+  };
+
+  const saveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const deptConfigs = allDepartments.map((d) => ({
+        departmentId: d.id,
+        isEnabled: configDrafts[d.id] ?? true,
+      }));
+      await api(`/cm/traffic-light/client-departments/${clientId}`, {
+        method: "PUT",
+        body: JSON.stringify({ departments: deptConfigs }),
+      });
+      setShowConfig(false);
+      reload();
+    } catch (e) { console.error(e); }
+    setSavingConfig(false);
+  };
 
   // Edit dialog handlers
   const openEdit = (deptId: number) => {
@@ -270,13 +325,18 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
               disabled={weekOf >= getCurrentWeekMonday()}
               className="px-2.5 py-1.5 rounded-md text-sm bg-surface-2 text-muted hover:bg-surface-3 disabled:opacity-40">→</button>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">Overall:</span>
-            <StatusDot status={overallStatus} size="lg" />
-            <span className={cn("text-sm font-semibold", STATUS_CONFIG[overallStatus].text)}>
-              {STATUS_CONFIG[overallStatus].label}
-            </span>
-            <TrendIndicator current={overallStatus} previous={overallPrevStatus} />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">Overall:</span>
+              <StatusDot status={overallStatus} size="lg" />
+              <span className={cn("text-sm font-semibold", STATUS_CONFIG[overallStatus].text)}>
+                {STATUS_CONFIG[overallStatus].label}
+              </span>
+              <TrendIndicator current={overallStatus} previous={overallPrevStatus} />
+            </div>
+            <Button variant="outline" size="sm" onClick={openConfig}>
+              Configure
+            </Button>
           </div>
         </div>
       </div>
@@ -550,6 +610,47 @@ export function ClientHealthTab({ clientId }: ClientHealthTabProps) {
             {playbookData.escalationContacts && (
               <p className="text-sm"><strong>Escalation Contacts:</strong> {playbookData.escalationContacts}</p>
             )}
+          </div>
+        </FormDialog>
+      )}
+
+      {/* ── Configure Departments Dialog ── */}
+      {showConfig && (
+        <FormDialog
+          open={true}
+          onOpenChange={() => setShowConfig(false)}
+          title="Configure Tracked Departments"
+          description="Choose which departments are tracked for this client. Uncheck departments that don't apply."
+          onSubmit={saveConfig}
+          isPending={savingConfig}
+        >
+          <div className="space-y-2">
+            {allDepartments.map((dept) => {
+              const enabled = configDrafts[dept.id] ?? true;
+              return (
+                <label key={dept.id}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors",
+                    enabled ? "border-border bg-surface" : "border-border bg-surface-2 opacity-60"
+                  )}>
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(e) => setConfigDrafts((prev) => ({ ...prev, [dept.id]: e.target.checked }))}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: dept.color || "#3B82F6" }} />
+                    <div>
+                      <span className="text-sm font-medium text-foreground">{dept.name}</span>
+                      {dept.description && (
+                        <p className="text-xs text-muted">{dept.description}</p>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
           </div>
         </FormDialog>
       )}

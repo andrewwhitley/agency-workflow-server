@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface Department { id: number; name: string; }
 interface Client { id: number; slug: string; companyName: string; status: string; }
 interface HealthEntry { clientId: number; departmentId: number; status: string; }
+interface ClientDeptConfig { clientId: number; departmentId: number; isEnabled: boolean; }
 
 type StatusKey = "green" | "yellow" | "red" | "na";
 
@@ -64,6 +65,7 @@ export function TrafficLightRollUp({ compact = false }: TrafficLightRollUpProps)
   const [departments, setDepartments] = useState<Department[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [entries, setEntries] = useState<HealthEntry[]>([]);
+  const [clientDeptConfigs, setClientDeptConfigs] = useState<ClientDeptConfig[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -71,12 +73,22 @@ export function TrafficLightRollUp({ compact = false }: TrafficLightRollUpProps)
       api<Department[]>("/cm/traffic-light/departments"),
       api<Client[]>("/cm/clients"),
       api<HealthEntry[]>(`/cm/traffic-light/health?weekOf=${weekOf}`),
-    ]).then(([depts, cls, ents]) => {
+      api<ClientDeptConfig[]>("/cm/traffic-light/client-departments").catch(() => []),
+    ]).then(([depts, cls, ents, cdConfigs]) => {
       setDepartments(depts);
       setClients(cls.filter((c) => c.status === "active"));
       setEntries(ents);
+      setClientDeptConfigs(cdConfigs);
     }).catch(console.error).finally(() => setLoading(false));
   }, [weekOf]);
+
+  // Per-client department filtering
+  const isDeptEnabled = useCallback((clientId: number, deptId: number): boolean => {
+    const configs = clientDeptConfigs.filter((c) => c.clientId === clientId);
+    if (configs.length === 0) return true;
+    const match = configs.find((c) => c.departmentId === deptId);
+    return match ? match.isEnabled : true;
+  }, [clientDeptConfigs]);
 
   // Group entries by clientId → departmentId → status
   const clientHealthMap = useMemo(() => {
@@ -88,15 +100,16 @@ export function TrafficLightRollUp({ compact = false }: TrafficLightRollUpProps)
     return map;
   }, [entries]);
 
-  // Overall per client
+  // Overall per client (only enabled departments)
   const clientOverall = useMemo(() => {
     const result: Record<number, StatusKey> = {};
     clients.forEach((c) => {
-      const statuses = departments.map((d) => clientHealthMap[c.id]?.[d.id] || "na" as StatusKey);
+      const enabledDepts = departments.filter((d) => isDeptEnabled(c.id, d.id));
+      const statuses = enabledDepts.map((d) => clientHealthMap[c.id]?.[d.id] || "na" as StatusKey);
       result[c.id] = computeOverallStatus(statuses);
     });
     return result;
-  }, [clients, departments, clientHealthMap]);
+  }, [clients, departments, clientHealthMap, isDeptEnabled]);
 
   // Sort: red first
   const sortedClients = useMemo(() => {
@@ -185,11 +198,17 @@ export function TrafficLightRollUp({ compact = false }: TrafficLightRollUpProps)
                   <StatusDot status={overall} size="md" />
                   <span className="flex-1 text-sm font-medium text-foreground truncate">{client.companyName}</span>
                   <div className="flex items-center gap-1 shrink-0">
-                    {departments.map((dept) => (
-                      <div key={dept.id} title={dept.name}>
-                        <StatusDot status={(deptStatuses[dept.id] as StatusKey) || "na"} />
-                      </div>
-                    ))}
+                    {departments.map((dept) => {
+                      const enabled = isDeptEnabled(client.id, dept.id);
+                      return (
+                        <div key={dept.id} title={dept.name}>
+                          {enabled
+                            ? <StatusDot status={(deptStatuses[dept.id] as StatusKey) || "na"} />
+                            : <div className="h-3 w-3 rounded-full bg-transparent border border-gray-200" title={`${dept.name} (not tracked)`} />
+                          }
+                        </div>
+                      );
+                    })}
                   </div>
                 </button>
               );

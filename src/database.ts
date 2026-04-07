@@ -1739,6 +1739,24 @@ Before saving, verify:
       AND NOT EXISTS (SELECT 1 FROM cm_tl_playbooks WHERE department_id = d.id);
     `,
   },
+  {
+    id: "049_per_client_departments",
+    sql: `
+      -- Per-client department configuration: which departments are tracked for each client
+      -- If no rows exist for a client, ALL active departments apply (backward compatible)
+      CREATE TABLE IF NOT EXISTS cm_tl_client_departments (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        department_id INT NOT NULL REFERENCES cm_tl_departments(id) ON DELETE CASCADE,
+        is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(client_id, department_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_tl_client_dept ON cm_tl_client_departments(client_id);
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

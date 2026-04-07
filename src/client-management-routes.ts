@@ -892,6 +892,54 @@ Return ONLY the JSON object, no markdown fences.`
     } catch (err) { res.status(500).json({ error: "Failed" }); }
   });
 
+  // Per-client department config — get ALL client department configs (for weekly check-in / roll-up)
+  router.get("/traffic-light/client-departments", async (_req, res) => {
+    try {
+      const { rows } = await query(
+        `SELECT cd.client_id, cd.department_id, cd.is_enabled FROM cm_tl_client_departments cd ORDER BY cd.client_id`
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Per-client department config — get which departments are enabled for a specific client
+  router.get("/traffic-light/client-departments/:clientId", async (req, res) => {
+    try {
+      const { rows } = await query(
+        `SELECT cd.*, d.name as department_name FROM cm_tl_client_departments cd
+         JOIN cm_tl_departments d ON cd.department_id = d.id
+         WHERE cd.client_id = $1 ORDER BY d.sort_order`,
+        [req.params.clientId]
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Per-client department config — bulk set (replace all for this client)
+  router.put("/traffic-light/client-departments/:clientId", async (req, res) => {
+    const clientId = req.params.clientId;
+    const departments: { departmentId: number; isEnabled: boolean; notes?: string }[] = req.body.departments || [];
+    try {
+      // Upsert each department config
+      for (const d of departments) {
+        await query(
+          `INSERT INTO cm_tl_client_departments (client_id, department_id, is_enabled, notes)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (client_id, department_id)
+           DO UPDATE SET is_enabled = EXCLUDED.is_enabled, notes = EXCLUDED.notes, updated_at = NOW()`,
+          [clientId, d.departmentId, d.isEnabled, d.notes || null]
+        );
+      }
+      const { rows } = await query(
+        `SELECT cd.*, d.name as department_name FROM cm_tl_client_departments cd
+         JOIN cm_tl_departments d ON cd.department_id = d.id
+         WHERE cd.client_id = $1 ORDER BY d.sort_order`,
+        [clientId]
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
   // Action log — get
   router.get("/traffic-light/actions", async (req, res) => {
     const { clientId, healthEntryId, limit: lim } = req.query;
@@ -931,13 +979,14 @@ Return ONLY the JSON object, no markdown fences.`
       d.setDate(d.getDate() - 7);
       const prevWeek = d.toISOString().slice(0, 10);
 
-      const [depts, metrics, playbooks, current, previous, actions] = await Promise.all([
+      const [depts, metrics, playbooks, current, previous, actions, clientDepts] = await Promise.all([
         query("SELECT * FROM cm_tl_departments WHERE is_active = true ORDER BY sort_order, name"),
         query("SELECT * FROM cm_tl_metrics WHERE is_active = true ORDER BY department_id, sort_order"),
         query("SELECT p.*, d.name as department_name FROM cm_tl_playbooks p JOIN cm_tl_departments d ON p.department_id = d.id"),
         query("SELECT h.*, d.name as department_name, d.icon, d.color FROM cm_tl_health_entries h JOIN cm_tl_departments d ON h.department_id = d.id WHERE h.client_id = $1 AND h.week_of = $2 ORDER BY d.sort_order", [clientId, weekOf]),
         query("SELECT h.*, d.name as department_name FROM cm_tl_health_entries h JOIN cm_tl_departments d ON h.department_id = d.id WHERE h.client_id = $1 AND h.week_of = $2 ORDER BY d.sort_order", [clientId, prevWeek]),
         query("SELECT a.*, d.name as department_name FROM cm_tl_action_log a JOIN cm_tl_departments d ON a.department_id = d.id WHERE a.client_id = $1 ORDER BY a.created_at DESC LIMIT 20", [clientId]),
+        query("SELECT cd.*, d.name as department_name FROM cm_tl_client_departments cd JOIN cm_tl_departments d ON cd.department_id = d.id WHERE cd.client_id = $1", [clientId]),
       ]);
       res.json({
         departments: rowsToCamel(depts.rows),
@@ -946,6 +995,7 @@ Return ONLY the JSON object, no markdown fences.`
         currentEntries: rowsToCamel(current.rows),
         previousEntries: rowsToCamel(previous.rows),
         recentActions: rowsToCamel(actions.rows),
+        clientDepartments: rowsToCamel(clientDepts.rows),
       });
     } catch (err) { console.error("Client dashboard error:", err); res.status(500).json({ error: "Failed" }); }
   });
