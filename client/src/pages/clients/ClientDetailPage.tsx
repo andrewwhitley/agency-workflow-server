@@ -22,6 +22,7 @@ import { MarketIntelSection } from "@/components/client/MarketIntelSection";
 import { ClientSeoTab } from "@/components/client/ClientSeoTab";
 import { ClientContentTab } from "@/components/client/ClientContentTab";
 import { StrategyOutputs } from "@/components/client/StrategyOutputs";
+import { ClientHealthTab } from "@/components/client/ClientHealthTab";
 
 // ── Types ────────────────────────────────────
 
@@ -113,7 +114,6 @@ interface Deliverable { id: number; campaignId: number; title: string; deliverab
 interface MarketingPlanItem { id: number; category: string; item: string; isIncluded: boolean; quantity: number | null; notes: string | null; completionTarget: string | null; }
 interface ContentGuidelines { brandVoice: string | null; tone: string | null; writingStyle: string | null; dosAndDonts: string | null; approvedTerminology: string | null; restrictions: string | null; uniqueSellingPoints: string | null; guarantees: string | null; competitiveAdvantages: string | null; brandColors: string | null; fonts: string | null; logoGuidelines: string | null; designInspiration: string | null; targetAudienceSummary: string | null; demographics: string | null; psychographics: string | null; focusTopics: string | null; seoKeywords: string | null; contentThemes: string | null; messagingPriorities: string | null; featuredTestimonials: string | null; successStories: string | null; socialProofNotes: string | null; adCopyGuidelines: string | null; preferredCtas: string | null; targetingPreferences: string | null; promotions: string | null; observedHolidays: string | null; holidayContentNotes: string | null; brandStory: string | null; contentPurpose: string | null; userActionStrategy: string | null; existingCollateral: string | null; useStockPhotography: boolean; imageSourceNotes: string | null; marketingGuide: string | null; writingStyleGuide: string | null; [key: string]: unknown; }
 interface BrandStory { id: number; status: string; heroSection: unknown; problemSection: unknown; guideSection: unknown; planSection: unknown; ctaSection: unknown; successSection: unknown; failureSection: unknown; brandVoiceSection: unknown; visualIdentitySection: unknown; contentStrategySection: unknown; messagingSection: unknown; implementationSection: unknown; fullBrandStory: string | null; shareToken: string | null; }
-interface HealthEntry { id: number; departmentName: string; status: string; notes: string | null; weekOf: string; icon: string | null; color: string | null; }
 
 // ── Tabs ─────────────────────────────────────
 
@@ -263,7 +263,7 @@ export function ClientDetailPage() {
           </div>
         </div>
       )}
-      {section === "health" && <HealthTab clientId={client.id} />}
+      {section === "health" && <ClientHealthTab clientId={client.id} clientName={client.companyName} />}
       {section === "brand-story" && (
         <BrandStoryTab clientId={client.id} clientName={client.companyName} />
       )}
@@ -564,91 +564,6 @@ function InfoTab({ client, onClientUpdate }: { client: Client; onClientUpdate: (
   );
 }
 
-// ── Health Tab (Traffic Light) ───────────────
-
-function HealthTab({ clientId }: { clientId: number }) {
-  const [entries, setEntries] = useState<HealthEntry[]>([]);
-  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editEntry, setEditEntry] = useState<HealthEntry | null>(null);
-  const [editNotes, setEditNotes] = useState("");
-  const [editStatus, setEditStatus] = useState("");
-  const [pending, setPending] = useState(false);
-
-  const reload = useCallback(() => {
-    Promise.all([
-      api<HealthEntry[]>(`/cm/traffic-light/health?clientId=${clientId}`).catch(() => []),
-      api<{ id: number; name: string }[]>(`/cm/traffic-light/departments`).catch(() => []),
-    ]).then(([e, d]) => { setEntries(e); setDepartments(d); }).finally(() => setLoading(false));
-  }, [clientId]);
-
-  useEffect(() => { reload(); }, [reload]);
-
-  const openEdit = (e: HealthEntry) => { setEditEntry(e); setEditStatus(e.status); setEditNotes(e.notes || ""); };
-  const submitEdit = async () => {
-    if (!editEntry) return;
-    setPending(true);
-    try {
-      await api(`/cm/traffic-light/health`, { method: "POST", body: JSON.stringify({
-        clientId, departmentId: editEntry.id, weekOf: editEntry.weekOf, status: editStatus, notes: editNotes,
-      })});
-      setEditEntry(null);
-      reload();
-    } catch (e) { console.error(e); }
-    setPending(false);
-  };
-
-  if (loading) return <div className="text-sm text-muted">Loading health status...</div>;
-
-  const latestWeek = entries.length > 0 ? entries[0].weekOf : null;
-  const latest = entries.filter((e) => e.weekOf === latestWeek);
-
-  const statusColors: Record<string, string> = {
-    green: "bg-success", yellow: "bg-warning", red: "bg-destructive", na: "bg-dim",
-  };
-
-  return (
-    <div>
-      {latest.length === 0 ? (
-        <div className="text-muted">No health entries yet. Use the Weekly Check-in page to add status.</div>
-      ) : (
-        <>
-          <div className="text-sm text-muted mb-4">Week of {latestWeek}</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {latest.map((e) => (
-              <button key={e.id} onClick={() => openEdit(e)}
-                className="bg-surface border border-border rounded-md p-4 text-left hover:border-accent/50 transition-colors">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={cn("w-3 h-3 rounded-full", statusColors[e.status] || "bg-dim")} />
-                  <span className="text-sm font-medium text-foreground">{e.departmentName}</span>
-                </div>
-                {e.notes && <p className="text-xs text-muted">{e.notes}</p>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {editEntry && (
-        <FormDialog open={true} onOpenChange={() => setEditEntry(null)}
-          title={`Edit ${editEntry.departmentName} — ${editEntry.weekOf}`}
-          onSubmit={submitEdit} isPending={pending}>
-          <div className="flex gap-3">
-            {["green", "yellow", "red", "na"].map((s) => (
-              <button key={s} type="button" onClick={() => setEditStatus(s)}
-                className={cn("flex items-center gap-2 px-3 py-2 rounded-md border text-sm capitalize transition-colors",
-                  editStatus === s ? "border-accent bg-accent/10 font-medium" : "border-border hover:bg-surface-2")}>
-                <span className={cn("w-3 h-3 rounded-full", statusColors[s])} />
-                {s === "na" ? "N/A" : s}
-              </button>
-            ))}
-          </div>
-          <FormField label="Notes" type="textarea" value={editNotes} onChange={setEditNotes} rows={3} />
-        </FormDialog>
-      )}
-    </div>
-  );
-}
 
 // ── Import Documents Section ──────────────────────────────────
 

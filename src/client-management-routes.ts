@@ -799,11 +799,170 @@ Return ONLY the JSON object, no markdown fences.`
     } catch (err) { console.error("Upsert health entries error:", err); res.status(500).json({ error: "Failed" }); }
   });
 
+  // Department update
+  router.put("/traffic-light/departments/:id", async (req, res) => {
+    const b = req.body;
+    try {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let i = 1;
+      if (b.name !== undefined) { sets.push(`name = $${i++}`); params.push(b.name); }
+      if (b.description !== undefined) { sets.push(`description = $${i++}`); params.push(b.description); }
+      if (b.icon !== undefined) { sets.push(`icon = $${i++}`); params.push(b.icon); }
+      if (b.color !== undefined) { sets.push(`color = $${i++}`); params.push(b.color); }
+      if (b.sortOrder !== undefined) { sets.push(`sort_order = $${i++}`); params.push(b.sortOrder); }
+      if (b.isActive !== undefined) { sets.push(`is_active = $${i++}`); params.push(b.isActive); }
+      if (sets.length === 0) return res.json({ success: true });
+      sets.push("updated_at = NOW()");
+      params.push(req.params.id);
+      const { rows } = await query(`UPDATE cm_tl_departments SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, params);
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Department delete
+  router.delete("/traffic-light/departments/:id", async (req, res) => {
+    try {
+      await query("DELETE FROM cm_tl_departments WHERE id = $1", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Metric update
+  router.put("/traffic-light/metrics/:id", async (req, res) => {
+    const b = req.body;
+    try {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let i = 1;
+      if (b.name !== undefined) { sets.push(`name = $${i++}`); params.push(b.name); }
+      if (b.description !== undefined) { sets.push(`description = $${i++}`); params.push(b.description); }
+      if (b.metricType !== undefined) { sets.push(`metric_type = $${i++}`); params.push(b.metricType); }
+      if (b.unit !== undefined) { sets.push(`unit = $${i++}`); params.push(b.unit); }
+      if (b.greenLabel !== undefined) { sets.push(`green_label = $${i++}`); params.push(b.greenLabel); }
+      if (b.yellowLabel !== undefined) { sets.push(`yellow_label = $${i++}`); params.push(b.yellowLabel); }
+      if (b.redLabel !== undefined) { sets.push(`red_label = $${i++}`); params.push(b.redLabel); }
+      if (b.sortOrder !== undefined) { sets.push(`sort_order = $${i++}`); params.push(b.sortOrder); }
+      if (b.isActive !== undefined) { sets.push(`is_active = $${i++}`); params.push(b.isActive); }
+      if (sets.length === 0) return res.json({ success: true });
+      sets.push("updated_at = NOW()");
+      params.push(req.params.id);
+      const { rows } = await query(`UPDATE cm_tl_metrics SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, params);
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Metric delete
+  router.delete("/traffic-light/metrics/:id", async (req, res) => {
+    try {
+      await query("DELETE FROM cm_tl_metrics WHERE id = $1", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
   // Playbooks
   router.get("/traffic-light/playbooks", async (_req, res) => {
     try {
       const { rows } = await query("SELECT p.*, d.name as department_name FROM cm_tl_playbooks p JOIN cm_tl_departments d ON p.department_id = d.id ORDER BY d.sort_order");
       res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Playbook upsert
+  router.put("/traffic-light/playbooks/:departmentId", async (req, res) => {
+    const b = req.body;
+    const deptId = req.params.departmentId;
+    try {
+      const { rows: existing } = await query("SELECT id FROM cm_tl_playbooks WHERE department_id = $1", [deptId]);
+      if (existing.length > 0) {
+        const { rows } = await query(
+          `UPDATE cm_tl_playbooks SET yellow_actions = $1, yellow_timeframe = $2, red_actions = $3, red_timeframe = $4,
+           escalation_contacts = $5, notes = $6, updated_at = NOW() WHERE department_id = $7 RETURNING *`,
+          [b.yellowActions, b.yellowTimeframe, b.redActions, b.redTimeframe, b.escalationContacts, b.notes, deptId]
+        );
+        res.json(toCamel(rows[0]));
+      } else {
+        const { rows } = await query(
+          `INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          [deptId, b.yellowActions, b.yellowTimeframe, b.redActions, b.redTimeframe, b.escalationContacts, b.notes]
+        );
+        res.json(toCamel(rows[0]));
+      }
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Action log — get
+  router.get("/traffic-light/actions", async (req, res) => {
+    const { clientId, healthEntryId, limit: lim } = req.query;
+    try {
+      let sql = "SELECT a.*, d.name as department_name FROM cm_tl_action_log a JOIN cm_tl_departments d ON a.department_id = d.id WHERE 1=1";
+      const params: unknown[] = [];
+      let i = 1;
+      if (clientId) { sql += ` AND a.client_id = $${i++}`; params.push(clientId); }
+      if (healthEntryId) { sql += ` AND a.health_entry_id = $${i++}`; params.push(healthEntryId); }
+      sql += ` ORDER BY a.created_at DESC LIMIT $${i}`;
+      params.push(lim ? Number(lim) : 50);
+      const { rows } = await query(sql, params);
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Action log — create
+  router.post("/traffic-light/actions", async (req, res) => {
+    const b = req.body;
+    try {
+      const { rows } = await query(
+        `INSERT INTO cm_tl_action_log (health_entry_id, client_id, department_id, action, action_type, completed_by_name, completed_at, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7) RETURNING *`,
+        [b.healthEntryId, b.clientId, b.departmentId, b.action, b.actionType || "other", b.completedByName, b.notes]
+      );
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Client dashboard composite endpoint — all health data for one client in one call
+  router.get("/traffic-light/client-dashboard", async (req, res) => {
+    const { clientId, weekOf } = req.query;
+    if (!clientId || !weekOf) return res.status(400).json({ error: "clientId and weekOf required" });
+    try {
+      // Calculate previous week
+      const d = new Date(weekOf + "T12:00:00");
+      d.setDate(d.getDate() - 7);
+      const prevWeek = d.toISOString().slice(0, 10);
+
+      const [depts, metrics, playbooks, current, previous, actions] = await Promise.all([
+        query("SELECT * FROM cm_tl_departments WHERE is_active = true ORDER BY sort_order, name"),
+        query("SELECT * FROM cm_tl_metrics WHERE is_active = true ORDER BY department_id, sort_order"),
+        query("SELECT p.*, d.name as department_name FROM cm_tl_playbooks p JOIN cm_tl_departments d ON p.department_id = d.id"),
+        query("SELECT h.*, d.name as department_name, d.icon, d.color FROM cm_tl_health_entries h JOIN cm_tl_departments d ON h.department_id = d.id WHERE h.client_id = $1 AND h.week_of = $2 ORDER BY d.sort_order", [clientId, weekOf]),
+        query("SELECT h.*, d.name as department_name FROM cm_tl_health_entries h JOIN cm_tl_departments d ON h.department_id = d.id WHERE h.client_id = $1 AND h.week_of = $2 ORDER BY d.sort_order", [clientId, prevWeek]),
+        query("SELECT a.*, d.name as department_name FROM cm_tl_action_log a JOIN cm_tl_departments d ON a.department_id = d.id WHERE a.client_id = $1 ORDER BY a.created_at DESC LIMIT 20", [clientId]),
+      ]);
+      res.json({
+        departments: rowsToCamel(depts.rows),
+        metrics: rowsToCamel(metrics.rows),
+        playbooks: rowsToCamel(playbooks.rows),
+        currentEntries: rowsToCamel(current.rows),
+        previousEntries: rowsToCamel(previous.rows),
+        recentActions: rowsToCamel(actions.rows),
+      });
+    } catch (err) { console.error("Client dashboard error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // Full traffic light config (departments + metrics + playbooks)
+  router.get("/traffic-light/config", async (_req, res) => {
+    try {
+      const [depts, metrics, playbooks] = await Promise.all([
+        query("SELECT * FROM cm_tl_departments ORDER BY sort_order, name"),
+        query("SELECT * FROM cm_tl_metrics ORDER BY department_id, sort_order"),
+        query("SELECT p.*, d.name as department_name FROM cm_tl_playbooks p JOIN cm_tl_departments d ON p.department_id = d.id"),
+      ]);
+      res.json({
+        departments: rowsToCamel(depts.rows),
+        metrics: rowsToCamel(metrics.rows),
+        playbooks: rowsToCamel(playbooks.rows),
+      });
     } catch (err) { res.status(500).json({ error: "Failed" }); }
   });
 

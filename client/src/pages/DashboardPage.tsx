@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Building2, Target, Heart, Users, Globe, PenTool } from "lucide-react";
+import { TrafficLightRollUp } from "@/components/client/TrafficLightRollUp";
 
 interface SummaryData {
   workflows: { name: string; description: string; category: string }[];
@@ -86,6 +87,11 @@ export function DashboardPage() {
             </Link>
           );
         })}
+      </div>
+
+      {/* Client Health Overview */}
+      <div className="mb-8">
+        <TrafficLightRollUp compact />
       </div>
 
       {/* Stats cards */}
