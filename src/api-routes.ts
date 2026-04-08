@@ -729,39 +729,183 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
 
   // ── Content Management ─────────────────────────────────────
 
-  /** List clients that have a contentProfile configured */
-  router.get("/content-management/clients", (_req, res) => {
-    const clients = listClients().map((c) => {
-      const config = loadClientConfig(c.slug);
-      return {
-        slug: c.slug,
-        name: c.name,
-        provider: c.provider,
-        hasContentProfile: !!config?.contentProfile,
-        hasFulfillmentFolder: !!config?.fulfillmentFolderId,
-        hasPlanningSheet: !!config?.planningSheetId,
-        hasOutputFolder: !!config?.outputFolder,
-        outputFolder: config?.outputFolder || null,
-        fulfillmentFolderId: config?.fulfillmentFolderId || null,
-        planningSheetId: config?.planningSheetId || null,
-        domain: config?.domain || null,
+  /**
+   * Build a ClientConfig from the database for a given slug.
+   * Falls back to file-based config if DB client doesn't exist or has no data.
+   */
+  async function resolveClientConfig(slug: string): Promise<{ config: ReturnType<typeof loadClientConfig>; fromDb: boolean }> {
+    // Try file-based first
+    const fileConfig = loadClientConfig(slug);
+    if (fileConfig?.contentProfile) return { config: fileConfig, fromDb: false };
+
+    // Try building from database
+    try {
+      const { rows: clientRows } = await query(
+        "SELECT * FROM cm_clients WHERE slug = $1", [slug]
+      );
+      if (!clientRows[0]) return { config: fileConfig, fromDb: false };
+      const client = clientRows[0] as Record<string, unknown>;
+      const clientId = client.id as number;
+
+      // Fetch services, brand story, content guidelines, service areas in parallel
+      const [servicesRes, storyRes, guideRes, areasRes] = await Promise.all([
+        query("SELECT * FROM cm_services WHERE client_id = $1 ORDER BY category, name", [clientId]),
+        query("SELECT * FROM cm_brand_story WHERE client_id = $1 LIMIT 1", [clientId]),
+        query("SELECT * FROM cm_content_guidelines WHERE client_id = $1 LIMIT 1", [clientId]),
+        query("SELECT * FROM cm_service_areas WHERE client_id = $1", [clientId]),
+      ]);
+
+      const services = servicesRes.rows as Record<string, unknown>[];
+      const story = storyRes.rows[0] as Record<string, unknown> | undefined;
+      const guide = guideRes.rows[0] as Record<string, unknown> | undefined;
+      const areas = areasRes.rows.map((r: Record<string, unknown>) => r.city || r.name || r.area) as string[];
+
+      // Build CoreService[] from cm_services
+      const coreServices = services.map((s) => ({
+        name: (s.name as string) || "",
+        slug: ((s.name as string) || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        description: (s.description as string) || undefined,
+        subServices: (() => {
+          try {
+            const subs = typeof s.sub_services === "string" ? JSON.parse(s.sub_services) : s.sub_services;
+            return Array.isArray(subs) ? subs.map((ss: { name: string; slug?: string }) => ({
+              name: ss.name || "", slug: ss.slug || ss.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "",
+            })) : undefined;
+          } catch { return undefined; }
+        })(),
+      }));
+
+      // Build BrandStory from cm_brand_story JSONB sections
+      const extractText = (section: unknown): string => {
+        if (!section) return "";
+        if (typeof section === "string") return section;
+        if (typeof section === "object") return JSON.stringify(section);
+        return "";
       };
-    });
-    res.json(clients);
+      const storybrand = story ? {
+        hero: extractText(story.hero_section),
+        problem: extractText(story.problem_section),
+        guide: extractText(story.guide_section),
+        plan: extractText(story.plan_section),
+        callToAction: extractText(story.cta_section),
+        avoidFailure: extractText(story.failure_section),
+        achieveSuccess: extractText(story.success_section),
+      } : undefined;
+
+      // Build BrandVoice from cm_content_guidelines
+      const brandVoice = guide ? {
+        tone: (guide.tone as string) || "",
+        style: (guide.writing_style as string) || "",
+        avoidWords: (guide.restrictions as string)?.split(/[,\n]+/).map((w: string) => w.trim()).filter(Boolean) || undefined,
+        preferWords: (guide.approved_terminology as string)?.split(/[,\n]+/).map((w: string) => w.trim()).filter(Boolean) || undefined,
+      } : undefined;
+
+      const contentProfile = {
+        businessType: (client.industry as string) || (client.company_name as string) || "",
+        tagline: (guide?.unique_selling_points as string) || undefined,
+        cities: areas.length > 0 ? areas.filter(Boolean) as string[] : undefined,
+        coreServices: coreServices.length > 0 ? coreServices : undefined,
+        storybrand: storybrand?.hero ? storybrand : undefined,
+        brandVoice: brandVoice?.tone ? brandVoice : undefined,
+      };
+
+      // Only return DB config if we have meaningful content data
+      const hasContent = coreServices.length > 0 || storybrand?.hero || brandVoice?.tone;
+
+      const dbConfig = {
+        name: (client.company_name as string) || slug,
+        provider: "",
+        colors: { primary: "#3B82F6", secondary: "#6B7280", accent: "#10B981", dark: "#1F2937", muted: "#9CA3AF", lightBg: "#F9FAFB" },
+        fonts: { heading: "Inter", body: "Inter" },
+        images: {},
+        domain: ((client.company_website as string) || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "") || undefined,
+        contentProfile: hasContent ? contentProfile : undefined,
+        // Preserve file-based settings if they exist
+        fulfillmentFolderId: fileConfig?.fulfillmentFolderId || undefined,
+        planningSheetId: fileConfig?.planningSheetId || undefined,
+        outputFolder: fileConfig?.outputFolder || undefined,
+      };
+
+      return { config: dbConfig as ReturnType<typeof loadClientConfig>, fromDb: true };
+    } catch (err) {
+      console.error("DB content profile resolution error:", err);
+      return { config: fileConfig, fromDb: false };
+    }
+  }
+
+  /** List clients — merges file-based and DB clients */
+  router.get("/content-management/clients", async (_req, res) => {
+    try {
+      // File-based clients
+      const fileSlugs = new Set<string>();
+      const fileClients = listClients().map((c) => {
+        fileSlugs.add(c.slug);
+        const config = loadClientConfig(c.slug);
+        return {
+          slug: c.slug,
+          name: c.name,
+          provider: c.provider,
+          hasContentProfile: !!config?.contentProfile,
+          hasFulfillmentFolder: !!config?.fulfillmentFolderId,
+          hasPlanningSheet: !!config?.planningSheetId,
+          hasOutputFolder: !!config?.outputFolder,
+          outputFolder: config?.outputFolder || null,
+          fulfillmentFolderId: config?.fulfillmentFolderId || null,
+          planningSheetId: config?.planningSheetId || null,
+          domain: config?.domain || null,
+        };
+      });
+
+      // DB clients not already in file list
+      let dbClients: typeof fileClients = [];
+      try {
+        const { rows } = await query("SELECT id, slug, company_name, company_website, industry FROM cm_clients WHERE status = 'active' ORDER BY company_name");
+        dbClients = rows
+          .filter((r: Record<string, unknown>) => !fileSlugs.has(r.slug as string))
+          .map((r: Record<string, unknown>) => ({
+            slug: r.slug as string,
+            name: (r.company_name as string) || (r.slug as string),
+            provider: "",
+            hasContentProfile: true, // DB clients always have some data
+            hasFulfillmentFolder: false,
+            hasPlanningSheet: false,
+            hasOutputFolder: false,
+            outputFolder: null,
+            fulfillmentFolderId: null,
+            planningSheetId: null,
+            domain: ((r.company_website as string) || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "") || null,
+          }));
+      } catch { /* DB not available */ }
+
+      res.json([...fileClients, ...dbClients]);
+    } catch (err) { console.error(err); res.status(500).json({ error: "Failed to list clients" }); }
   });
 
   /** Get full client config */
-  router.get("/content-management/clients/:slug", (req, res) => {
-    const config = loadClientConfig(req.params.slug);
+  router.get("/content-management/clients/:slug", async (req, res) => {
+    const { config } = await resolveClientConfig(req.params.slug);
     if (!config) { res.status(404).json({ error: "Client not found" }); return; }
     res.json({ slug: req.params.slug, ...config });
   });
 
+  /** Client content status (for badges in the content tab) */
+  router.get("/content-management/clients/:slug/status", async (req, res) => {
+    const { config } = await resolveClientConfig(req.params.slug);
+    if (!config) { res.status(404).json({ error: "Client not found" }); return; }
+    res.json({
+      hasProfile: !!config.contentProfile,
+      hasContentProfile: !!config.contentProfile,
+      hasFulfillmentFolder: !!config.fulfillmentFolderId,
+      hasPlanningSheet: !!config.planningSheetId,
+      hasOutputFolder: !!config.outputFolder,
+    });
+  });
+
   /** Get content plan (sitemap + factory pages) — no LLM calls, instant */
-  router.get("/content-management/clients/:slug/plan", (req, res) => {
-    const config = loadClientConfig(req.params.slug);
+  router.get("/content-management/clients/:slug/plan", async (req, res) => {
+    const { config } = await resolveClientConfig(req.params.slug);
     if (!config?.contentProfile) {
-      res.status(400).json({ error: "Client has no content profile configured" });
+      res.status(400).json({ error: "Client has no content profile configured. Add services and brand story first." });
       return;
     }
     const sitemap = buildSitemap(config.contentProfile, config.name);
@@ -772,9 +916,9 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
   /** Generate content strategy (editorial calendar) — uses LLM */
   router.post("/content-management/clients/:slug/strategy", async (req, res) => {
     try {
-      const config = loadClientConfig(req.params.slug);
+      const { config } = await resolveClientConfig(req.params.slug);
       if (!config?.contentProfile) {
-        res.status(400).json({ error: "Client has no content profile configured" });
+        res.status(400).json({ error: "Client has no content profile configured. Add services and brand story first." });
         return;
       }
       const strategy = await generateContentStrategy({
@@ -804,9 +948,9 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       const parsed = contentGenerateRequestSchema.safeParse(req.body);
       if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-      const config = loadClientConfig(req.params.slug);
+      const { config } = await resolveClientConfig(req.params.slug);
       if (!config?.contentProfile) {
-        res.status(400).json({ error: "Client has no content profile configured" });
+        res.status(400).json({ error: "Client has no content profile configured. Add services and brand story first." });
         return;
       }
 
@@ -814,6 +958,8 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
 
       const result = await runContentFactory({
         clientSlug: req.params.slug,
+        contentProfile: config.contentProfile,
+        clientConfig: config,
         contentTypes: parsed.data.contentTypes || ["website-page"],
         dryRun: false,
         outputFolderId: outputFolderId || undefined,
