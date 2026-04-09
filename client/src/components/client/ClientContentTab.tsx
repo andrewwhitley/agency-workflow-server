@@ -318,6 +318,8 @@ function SheetTab({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ total: number; sheetsProcessed: number; imported: Record<string, number> } | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -332,14 +334,44 @@ function SheetTab({ slug }: { slug: string }) {
   const importSheet = async () => { setImporting(true); try { await api(`/content-management/clients/${slug}/planning/import`, { method: "POST" }); fetchData(); } catch (err) { console.error(err); } setImporting(false); };
   const syncBack = async () => { setSyncing(true); try { await api(`/content-management/clients/${slug}/planning/sync-back`, { method: "POST" }); } catch (err) { console.error(err); } setSyncing(false); };
 
+  const uploadExcel = async (file: File) => {
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/content-management/clients/${slug}/planning/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({ error: "Upload failed" })); throw new Error(err.error); }
+      const data = await res.json();
+      setUploadResult(data);
+      fetchData();
+    } catch (err) { console.error(err); }
+    setUploading(false);
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-1">{SHEET_SUBTABS.map((st) => (<button key={st} onClick={() => setSubtab(st)} className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize", subtab === st ? "bg-accent text-white" : "bg-surface-2 text-muted hover:bg-surface-3")}>{st.replace(/-/g, " ")}</button>))}</div>
-        <div className="flex gap-2">
-          <button onClick={importSheet} disabled={importing} className="px-3 py-1.5 rounded-md text-xs font-medium bg-surface-2 text-muted hover:bg-surface-3">{importing ? "Importing..." : "Import from Sheet"}</button>
-          <button onClick={syncBack} disabled={syncing} className="px-3 py-1.5 rounded-md text-xs font-medium bg-surface-2 text-muted hover:bg-surface-3">{syncing ? "Syncing..." : "Sync Back"}</button>
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 flex-wrap">{SHEET_SUBTABS.map((st) => (<button key={st} onClick={() => setSubtab(st)} className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize", subtab === st ? "bg-accent text-white" : "bg-surface-2 text-muted hover:bg-surface-3")}>{st.replace(/-/g, " ")}</button>))}</div>
+          <div className="flex gap-2 items-center">
+            <label className={cn("px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors", uploading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>
+              {uploading ? "Uploading..." : "Upload Excel"}
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={uploading}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadExcel(f); e.target.value = ""; }} />
+            </label>
+            <button onClick={importSheet} disabled={importing} className="px-3 py-1.5 rounded-md text-xs font-medium bg-surface-2 text-muted hover:bg-surface-3">{importing ? "Importing..." : "Import from Sheet"}</button>
+            <button onClick={syncBack} disabled={syncing} className="px-3 py-1.5 rounded-md text-xs font-medium bg-surface-2 text-muted hover:bg-surface-3">{syncing ? "Syncing..." : "Sync Back"}</button>
+          </div>
         </div>
+        {uploadResult && (
+          <div className="text-xs px-3 py-2 rounded bg-success/10 text-success border border-success/20">
+            Imported {uploadResult.total} rows across {uploadResult.sheetsProcessed} sheets: {Object.entries(uploadResult.imported).map(([k, v]) => `${k} (${v})`).join(", ")}
+          </div>
+        )}
       </div>
       {loading ? (<div className="text-sm text-muted">Loading sheet data...</div>) : (
         <div className="bg-surface border border-border rounded-md overflow-x-auto">
@@ -347,7 +379,7 @@ function SheetTab({ slug }: { slug: string }) {
             <thead><tr className="border-b border-border bg-surface-2">{headers.map((h) => (<th key={h} className="text-left px-3 py-2 font-medium text-dim text-xs whitespace-nowrap">{h}</th>))}</tr></thead>
             <tbody>{rows.map((row) => (<tr key={row.id} className="border-b border-border last:border-0 hover:bg-surface-2/50">{headers.map((h) => (<td key={h} className="px-3 py-2 text-xs text-foreground whitespace-nowrap max-w-[200px] truncate">{row.data[h] || ""}</td>))}</tr>))}</tbody>
           </table>
-          {rows.length === 0 && <div className="p-8 text-center text-muted text-sm">No data. Import from Google Sheet to get started.</div>}
+          {rows.length === 0 && <div className="p-8 text-center text-muted text-sm">No data. Upload an Excel file or import from Google Sheets to get started.</div>}
         </div>
       )}
     </div>

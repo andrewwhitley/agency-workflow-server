@@ -3,6 +3,8 @@
  */
 
 import { Router } from "express";
+import multer from "multer";
+import * as XLSX from "xlsx";
 import Anthropic from "@anthropic-ai/sdk";
 import { agentService } from "./agent-service.js";
 import { threadService } from "./thread-service.js";
@@ -1072,6 +1074,91 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
       res.json({ imported: results });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Upload Excel file and import all sheets into planning data */
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+  router.post("/content-management/clients/:slug/planning/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
+
+      const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+      const clientSlug = req.params.slug;
+      const results: Record<string, number> = {};
+
+      // Map Excel sheet names to our tab system
+      const sheetMapping: Record<string, string> = {
+        "Deliverables": "Deliverables",
+        "Topical Sitemap": "Topical Sitemap",
+        "New Content Tracking": "New Content Tracking",
+        "Completed Articles": "Completed Articles",
+      };
+
+      for (const excelName of wb.SheetNames) {
+        const tabName = sheetMapping[excelName];
+        if (!tabName) continue; // skip unrecognized sheets
+
+        const ws = wb.Sheets[excelName];
+        const jsonRows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        if (!jsonRows.length) { results[excelName] = 0; continue; }
+
+        const headers = (jsonRows[0] as string[]).map((h) => String(h || "").trim()).filter(Boolean);
+        if (headers.length === 0) { results[excelName] = 0; continue; }
+
+        const dataRows = jsonRows.slice(1).filter((row) =>
+          (row as string[]).some((c) => c != null && String(c).trim() !== "")
+        );
+
+        // Upsert sheet metadata
+        const { rows: sheetRows } = await query(
+          `INSERT INTO planning_sheets (client_slug, tab_name, headers, last_synced_from_sheet)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (client_slug, tab_name)
+           DO UPDATE SET headers = $3, last_synced_from_sheet = NOW(), updated_at = NOW()
+           RETURNING id`,
+          [clientSlug, tabName, JSON.stringify(headers)]
+        );
+        const sheetId = sheetRows[0].id;
+
+        // Replace all rows
+        await query("DELETE FROM planning_rows WHERE sheet_id = $1", [sheetId]);
+
+        if (dataRows.length > 0) {
+          const valuePlaceholders: string[] = [];
+          const params: unknown[] = [];
+          let idx = 1;
+          for (let i = 0; i < dataRows.length; i++) {
+            const rowData: Record<string, string> = {};
+            headers.forEach((h, j) => {
+              const val = (dataRows[i] as unknown[])[j];
+              // Convert Excel serial dates to readable dates
+              if (typeof val === "number" && val > 40000 && val < 60000) {
+                const date = new Date((val - 25569) * 86400 * 1000);
+                rowData[h] = date.toISOString().slice(0, 10);
+              } else {
+                rowData[h] = val != null ? String(val) : "";
+              }
+            });
+            valuePlaceholders.push(`($${idx}, $${idx + 1}, $${idx + 2})`);
+            params.push(sheetId, i, JSON.stringify(rowData));
+            idx += 3;
+          }
+          await query(
+            `INSERT INTO planning_rows (sheet_id, row_index, data) VALUES ${valuePlaceholders.join(", ")}`,
+            params
+          );
+        }
+
+        results[excelName] = dataRows.length;
+      }
+
+      const totalImported = Object.values(results).reduce((a, b) => a + b, 0);
+      res.json({ imported: results, total: totalImported, sheetsProcessed: Object.keys(results).length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Excel upload error:", err);
       res.status(500).json({ error: message });
     }
   });
