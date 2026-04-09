@@ -7,11 +7,13 @@
  */
 
 import { Router } from "express";
+import multer from "multer";
 import { query } from "./database.js";
 import { DataForSEOService } from "./dataforseo.js";
 import { generateContentPillars, generateCustomerJourney, generateContentPlan, generateSprintPlan } from "./strategy-generator.js";
 import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection, researchOutlineFromUrl, RESEARCH_OUTLINE_FIELDS } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
+import { importIntakeTemplate } from "./intake-importer.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
 
@@ -604,6 +606,26 @@ Return ONLY the JSON object, no markdown fences.`
     } catch (err) {
       console.error("Market intel error:", err);
       res.status(500).json({ error: "Failed to fetch market intelligence" });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  INTAKE TEMPLATE — Excel upload
+  // ════════════════════════════════════════════════════════
+
+  const intakeUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+  router.post("/clients/:clientId/intake/upload", intakeUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
+      const clientId = parseInt(String(req.params.clientId));
+      if (isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
+
+      const result = await importIntakeTemplate(clientId, req.file.buffer);
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("Intake import error:", err);
+      res.status(500).json({ error: message });
     }
   });
 

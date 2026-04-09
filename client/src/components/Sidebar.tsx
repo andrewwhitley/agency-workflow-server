@@ -81,38 +81,43 @@ const salesSection = {
   ],
 };
 
-// ── Client Navigation ────────────────────────
+// ── Client Navigation (4-Pillar Foundational System) ─────
+// Pillar 1: Foundation — who they are
+// Pillar 2: Discovery — what we learned (research/intake)
+// Pillar 3: Brand Strategy — the official framework (StoryBrand + Endless Customers)
+// Pillar 4: Marketing Execution — CMO-level strategy aligned to services + deliverables
 
 function getClientSections(slug: string) {
   const base = `/clients/${slug}`;
   return [
     {
-      label: "Client",
+      label: "1 · Foundation",
       items: [
-        { to: base, label: "Overview", icon: Info, end: true },
-        { to: `${base}/services`, label: "Services", icon: Briefcase },
+        { to: base, label: "Company Profile", icon: Info, end: true },
+        { to: `${base}/services`, label: "Services & Scope", icon: Briefcase },
       ],
     },
     {
-      label: "Marketing",
+      label: "2 · Discovery",
       items: [
-        { to: `${base}/seo`, label: "SEO", icon: Globe },
-        { to: `${base}/content`, label: "Content", icon: PenTool },
-        { to: `${base}/campaigns`, label: "Campaigns", icon: Campaign },
-        { to: `${base}/deliverables`, label: "Deliverables", icon: ListChecks },
+        // Strategy Hub currently houses market intel + buyer personas + content guide intake
+        { to: `${base}/strategy`, label: "Market & Audience", icon: Compass },
       ],
     },
     {
-      label: "Strategy",
+      label: "3 · Brand Strategy",
       items: [
-        { to: `${base}/strategy`, label: "Strategy Hub", icon: Compass },
         { to: `${base}/brand-story`, label: "Brand Story", icon: BrandStory },
       ],
     },
     {
-      label: "Health",
+      label: "4 · Marketing Execution",
       items: [
-        { to: `${base}/health`, label: "Traffic Light", icon: Activity },
+        { to: `${base}/campaigns`, label: "Campaigns", icon: Campaign },
+        { to: `${base}/deliverables`, label: "Marketing Plan", icon: ListChecks },
+        { to: `${base}/content`, label: "Content", icon: PenTool },
+        { to: `${base}/seo`, label: "SEO", icon: Globe },
+        { to: `${base}/health`, label: "Department Health", icon: Activity },
       ],
     },
   ];

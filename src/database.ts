@@ -1849,6 +1849,156 @@ Build recovery game plan with specific action items and timeline', 'Within 24 ho
     `,
   },
   {
+    id: "053_intake_field_completeness",
+    sql: `
+      -- ─── Pillar 1: Foundation gaps ─────────────────────────
+      -- Mission, values, slogans, founding story
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS mission_statement TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS core_values TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS slogans_mottos TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS company_background TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS founding_inspiration TEXT;
+
+      -- Google Business Profile fields
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS gbp_url VARCHAR(2000);
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS gbp_review_link VARCHAR(2000);
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS gbp_location_id VARCHAR(255);
+
+      -- Logins / access (per Andrew: store Drive link, not actual creds)
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS logins_drive_link VARCHAR(2000);
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS access_checklist JSONB DEFAULT '{}';
+
+      -- Social media URLs (single JSONB to avoid sub-table sprawl)
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS social_links JSONB DEFAULT '{}';
+      -- Expected keys: facebook, instagram, linkedin, twitter, youtube, tiktok, pinterest, other
+      -- social_media_guidelines: text instructions for content team
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS social_media_guidelines TEXT;
+
+      -- Multi-location support: keep existing 'location' field for backward compat,
+      -- add JSONB array for multi-location agencies
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS additional_locations JSONB DEFAULT '[]';
+
+      -- ─── Pillar 2: Discovery gaps ─────────────────────────
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS notable_mentions TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS awards_recognitions TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS quality_assurance_process TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS what_makes_us_unique TEXT;
+
+      -- Demographics breakdown (currently only on content_guidelines)
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_gender TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_age TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_location TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_income TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_education TEXT;
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS demographics_pain_points TEXT;
+
+      -- Testimonials as their own table (don't duplicate the cluttered content_guidelines.featured_testimonials)
+      CREATE TABLE IF NOT EXISTS cm_testimonials (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        author VARCHAR(255),
+        author_title VARCHAR(255),
+        testimonial_text TEXT NOT NULL,
+        link VARCHAR(2000),
+        rating INT,
+        sort_order INT DEFAULT 0,
+        is_featured BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_testimonials_client ON cm_testimonials(client_id);
+
+      -- ─── Pillar 3: Brand Strategy gaps (Endless Customers / Big 5) ─────
+      -- These will be sections in cm_brand_story (JSONB columns), but we need
+      -- to add them to the schema first
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS big_five_section JSONB;
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS endless_customers_section JSONB;
+      ALTER TABLE cm_brand_story ADD COLUMN IF NOT EXISTS taya_questions JSONB;
+
+      -- ─── Pillar 4: Marketing Execution gaps ─────────────────────
+      -- Ads management config
+      CREATE TABLE IF NOT EXISTS cm_ads_config (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE UNIQUE,
+        platforms JSONB DEFAULT '[]',
+        services_focus TEXT,
+        unique_capabilities TEXT,
+        accounts_setup BOOLEAN DEFAULT FALSE,
+        access_granted JSONB DEFAULT '{}',
+        budget_per_network JSONB DEFAULT '{}',
+        optimization_goal VARCHAR(255),
+        expected_close_rate NUMERIC(5,2),
+        appointment_handler VARCHAR(255),
+        value_per_client NUMERIC(10,2),
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      -- Database reactivation offers
+      CREATE TABLE IF NOT EXISTS cm_reactivation_offers (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        offer_name VARCHAR(255),
+        offer_description TEXT,
+        dates_active TEXT,
+        target_segment TEXT,
+        delivery_method VARCHAR(50),
+        message_copy TEXT,
+        landing_page_url VARCHAR(2000),
+        notes TEXT,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_reactivation_offers_client ON cm_reactivation_offers(client_id);
+
+      -- Appointment calendar setup
+      CREATE TABLE IF NOT EXISTS cm_appointment_types (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        purpose TEXT,
+        assigned_user VARCHAR(255),
+        hours_available TEXT,
+        meeting_length VARCHAR(100),
+        min_schedule_notice VARCHAR(100),
+        date_range VARCHAR(100),
+        buffer_time VARCHAR(100),
+        reminders_automations TEXT,
+        notes TEXT,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_appointment_types_client ON cm_appointment_types(client_id);
+
+      -- AI bot training config
+      CREATE TABLE IF NOT EXISTS cm_ai_bot_config (
+        id SERIAL PRIMARY KEY,
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE UNIQUE,
+        bot_name VARCHAR(255),
+        role TEXT,
+        purpose TEXT,
+        primary_tasks TEXT,
+        rules TEXT,
+        difficult_topics_handling TEXT,
+        pricing_response TEXT,
+        conversation_flow TEXT,
+        appointment_info_needed TEXT,
+        common_problems TEXT,
+        user_demographics TEXT,
+        languages VARCHAR(255),
+        employment_inquiries TEXT,
+        solicitor_handling TEXT,
+        meta_ai_disabled BOOLEAN DEFAULT FALSE,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `,
+  },
+  {
     id: "052_local_heatmaps_and_gbp",
     sql: `
       -- Add local pack position to keyword_rankings (for GBP map pack tracking)

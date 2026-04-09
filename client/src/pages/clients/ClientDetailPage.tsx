@@ -168,6 +168,7 @@ export function ClientDetailPage() {
           {/* Data Sources */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-dim uppercase tracking-wider">Data Sources</h3>
+            <IntakeUploadSection clientId={client.id} onComplete={() => {}} />
             <ImportDocumentsSection clientId={client.id} onComplete={() => {}} />
             <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
           </div>
@@ -642,6 +643,88 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
           {Object.entries((result as any).summary?.entitiesCreated || {}).map(([k, v]) => (
             <span key={k} className="ml-2">{String(v)} {k}</span>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Intake Template Upload Section ────────────────
+
+function IntakeUploadSection({ clientId, onComplete }: { clientId: number; onComplete: () => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<{
+    sheetsProcessed: string[];
+    fieldsImported: Record<string, number>;
+    warnings: string[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/cm/clients/${clientId}/intake/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(data.error || "Upload failed");
+      }
+      const data = await res.json();
+      setResult(data);
+      onComplete();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    }
+    setUploading(false);
+  };
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <FileText className="h-4 w-4 text-purple-400" /> Upload Intake Spreadsheet
+        </h3>
+      </div>
+      <p className="text-xs text-dim">
+        Upload the agency's "Company Info / Intake Template" Excel file to bulk-import client data
+        across all 7 sheets: General Info, Content Guidelines, Logins, Services, Ads, Personas, AI Bot.
+        Existing data won't be overwritten — only empty fields get filled.
+      </p>
+      <div>
+        <label className={cn(
+          "inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors",
+          uploading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90"
+        )}>
+          {uploading ? (
+            <><RefreshCw className="h-3 w-3 animate-spin" /> Importing...</>
+          ) : (
+            <><Sparkles className="h-3 w-3" /> Upload Intake Excel</>
+          )}
+          <input type="file" accept=".xlsx,.xls" className="hidden" disabled={uploading}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+        </label>
+      </div>
+      {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
+      {result && (
+        <div className="text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2 text-success space-y-1">
+          <div className="font-medium">
+            ✓ Imported {Object.values(result.fieldsImported).reduce((a, b) => a + b, 0)} fields
+            across {result.sheetsProcessed.length} sheets
+          </div>
+          <div className="text-xs text-success/80">
+            {Object.entries(result.fieldsImported).filter(([, v]) => v > 0).map(([k, v]) => `${k} (${v})`).join(", ")}
+          </div>
+          {result.warnings && result.warnings.length > 0 && (
+            <div className="text-xs text-warning mt-2">
+              ⚠️ {result.warnings.join(" ")}
+            </div>
+          )}
         </div>
       )}
     </div>
