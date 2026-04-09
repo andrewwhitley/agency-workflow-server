@@ -101,7 +101,47 @@ const SECTIONS: SectionConfig[] = [
       { key: "businessFacts", label: "Business Facts", type: "textarea" },
       { key: "affiliationsAssociations", label: "Affiliations & Associations", type: "textarea" },
       { key: "certificationsTrainings", label: "Certifications & Trainings", type: "textarea" },
+      { key: "awardsRecognitions", label: "Awards & Recognitions", type: "textarea" },
       { key: "communityInvolvement", label: "Community Involvement", type: "textarea" },
+      { key: "qualityAssuranceProcess", label: "Quality Assurance Process", type: "textarea" },
+      { key: "notableMentions", label: "Notable Mentions", type: "textarea" },
+    ],
+  },
+  {
+    title: "Mission, Values & Story",
+    fields: [
+      { key: "missionStatement", label: "Mission Statement", type: "textarea" },
+      { key: "coreValues", label: "Core Values", type: "textarea" },
+      { key: "slogansMottos", label: "Slogans / Mottos", type: "textarea" },
+      { key: "companyBackground", label: "Company Background Story", type: "textarea" },
+      { key: "foundingInspiration", label: "Founding Inspiration", type: "textarea" },
+      { key: "whatMakesUsUnique", label: "What Makes Us Unique", type: "textarea" },
+    ],
+  },
+  {
+    title: "Audience Demographics",
+    fields: [
+      { key: "demographicsGender", label: "Gender Breakdown" },
+      { key: "demographicsAge", label: "Age Breakdown" },
+      { key: "demographicsLocation", label: "Geographic Distribution" },
+      { key: "demographicsIncome", label: "Income Range" },
+      { key: "demographicsEducation", label: "Education Level" },
+      { key: "demographicsPainPoints", label: "Main Pain Points", type: "textarea" },
+    ],
+  },
+  {
+    title: "Google Business Profile",
+    fields: [
+      { key: "gbpUrl", label: "GBP URL" },
+      { key: "gbpReviewLink", label: "Review Link" },
+      { key: "gbpLocationId", label: "GBP Location ID" },
+    ],
+  },
+  {
+    title: "Logins (Drive Reference)",
+    fields: [
+      { key: "loginsDriveLink", label: "Logins Drive Folder Link" },
+      { key: "socialMediaGuidelines", label: "Social Media Guidelines", type: "textarea" },
     ],
   },
   {
@@ -109,7 +149,7 @@ const SECTIONS: SectionConfig[] = [
     fields: [
       { key: "colorScheme", label: "Color Scheme" },
       { key: "designInspirationUrls", label: "Design Inspiration URLs", type: "textarea" },
-      { key: "googleDriveLink", label: "Google Drive Link" },
+      { key: "googleDriveLink", label: "Media Assets Drive Link" },
     ],
   },
 ];
