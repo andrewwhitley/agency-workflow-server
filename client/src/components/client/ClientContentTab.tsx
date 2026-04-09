@@ -373,13 +373,19 @@ function SheetTab({ slug }: { slug: string }) {
           </div>
         )}
       </div>
-      {loading ? (<div className="text-sm text-muted">Loading sheet data...</div>) : (
+      {loading ? (<div className="text-sm text-muted">Loading sheet data...</div>) : headers.length === 0 ? (
+        <div className="bg-surface border border-border rounded-md p-8 text-center">
+          <div className="text-muted mb-2 text-sm font-medium">No planning data for this tab yet</div>
+          <p className="text-xs text-dim mb-4">Upload your client's marketing info spreadsheet (.xlsx) using the "Upload Excel" button above. The system will automatically import sheets named Deliverables, Topical Sitemap, New Content Tracking, and Completed Articles.</p>
+          <p className="text-xs text-dim">You can also link a Google Sheet in the Settings tab and use "Import from Sheet".</p>
+        </div>
+      ) : (
         <div className="bg-surface border border-border rounded-md overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border bg-surface-2">{headers.map((h) => (<th key={h} className="text-left px-3 py-2 font-medium text-dim text-xs whitespace-nowrap">{h}</th>))}</tr></thead>
             <tbody>{rows.map((row) => (<tr key={row.id} className="border-b border-border last:border-0 hover:bg-surface-2/50">{headers.map((h) => (<td key={h} className="px-3 py-2 text-xs text-foreground whitespace-nowrap max-w-[200px] truncate">{row.data[h] || ""}</td>))}</tr>))}</tbody>
           </table>
-          {rows.length === 0 && <div className="p-8 text-center text-muted text-sm">No data. Upload an Excel file or import from Google Sheets to get started.</div>}
+          {rows.length === 0 && headers.length > 0 && <div className="p-8 text-center text-muted text-sm">Sheet structure imported but no data rows. Check the source spreadsheet.</div>}
         </div>
       )}
     </div>

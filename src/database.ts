@@ -1758,6 +1758,97 @@ Before saving, verify:
     `,
   },
   {
+    id: "051_ensure_all_departments",
+    sql: `
+      -- Ensure all 7 departments exist (fixes partial seeding from 047/048 if departments pre-existed)
+      INSERT INTO cm_tl_departments (name, description, icon, color, sort_order, is_active)
+      SELECT v.name, v.description, v.icon, v.color, v.sort_order, TRUE
+      FROM (VALUES
+        ('Media Buying',      'Google Ads, Meta Ads — campaign performance, spend efficiency, ROAS',        'megaphone',  '#EF4444', 1),
+        ('SEO',               'Organic search rankings, keyword tracking, technical health, content gaps',  'search',     '#22C55E', 2),
+        ('Content',           'Blog posts, website copy, social media content, brand voice consistency',    'pen-tool',   '#8B5CF6', 3),
+        ('Web Development',   'Site speed, uptime, technical maintenance, Divi/WordPress health',           'code',       '#3B82F6', 4),
+        ('Social Media',      'Social engagement, posting consistency, audience growth, community management', 'share-2', '#EC4899', 5),
+        ('Automations',       'GHL workflows, AI chat/voice agents, email sequences, funnel performance',  'zap',        '#F59E0B', 6),
+        ('Customer Success',  'Client relationship health — communication, satisfaction (NPS), call engagement, overall vibe', 'heart', '#10B981', 7)
+      ) AS v(name, description, icon, color, sort_order)
+      WHERE NOT EXISTS (SELECT 1 FROM cm_tl_departments d WHERE d.name = v.name);
+
+      -- Remove Billing if it exists (managed externally)
+      DELETE FROM cm_tl_departments WHERE name = 'Billing';
+
+      -- Seed metrics for any departments that don't have them yet
+      INSERT INTO cm_tl_metrics (department_id, name, description, metric_type, green_label, yellow_label, red_label, sort_order)
+      SELECT d.id, v.name, v.description, v.metric_type, v.green_label, v.yellow_label, v.red_label, v.sort_order
+      FROM cm_tl_departments d
+      JOIN (VALUES
+        ('Media Buying',     'ROAS',                 'Return on ad spend',                    'core_performance', 'Above target ROAS',           'Within 20% of target',            'Below 50% of target or declining', 1),
+        ('Media Buying',     'Cost Per Lead',        'Average cost to acquire a lead',        'core_performance', 'At or below target CPL',      'CPL rising but manageable',       'CPL 2x+ above target',             2),
+        ('Media Buying',     'Ad Spend Pacing',      'Monthly budget utilization',            'leading',          'On pace (90-110%)',            'Over/under pacing (80-120%)',     'Severely off pace',                 3),
+        ('SEO',              'Keyword Rankings',     'Target keyword position changes',       'core_performance', 'Rankings stable/improving',    'Some rankings dropped',           'Major ranking losses',              1),
+        ('SEO',              'Organic Traffic',      'Organic sessions trend',                'core_performance', 'Traffic growing or stable',    'Traffic flat or slight decline',   'Significant traffic drop (>15%)',   2),
+        ('SEO',              'Technical Health',     'Site audit score and issues',           'leading',          'Score >90, no critical issues','Score 70-90, minor issues',       'Score <70 or critical issues',      3),
+        ('Content',          'Content Output',       'Articles/posts published vs plan',      'core_performance', 'On schedule',                  'Slightly behind',                 'Significantly behind schedule',     1),
+        ('Content',          'Content Quality',      'Brand voice consistency, engagement',   'core_performance', 'High quality, on brand',       'Minor revisions needed',          'Major quality issues',              2),
+        ('Web Development',  'Site Speed',           'Core Web Vitals / page load time',      'core_performance', 'All CWV passing',              'Some CWV marginal',               'CWV failing, slow load',            1),
+        ('Web Development',  'Uptime',              'Site availability',                     'leading',          '99.9%+ uptime',                'Minor downtime incidents',        'Significant downtime or outage',    2),
+        ('Social Media',     'Posting Consistency',  'Posts published vs scheduled plan',     'core_performance', 'All posts on schedule',        'Slightly behind schedule',        'Significantly behind or missed',    1),
+        ('Social Media',     'Engagement Rate',      'Likes, comments, shares per post',     'core_performance', 'Above industry benchmark',     'At or slightly below benchmark',  'Well below benchmark, declining',   2),
+        ('Social Media',     'Audience Growth',      'Follower/subscriber growth trend',      'leading',          'Steady growth',                'Flat or minimal growth',          'Declining followers',               3),
+        ('Automations',      'Workflow Health',      'GHL automations running without errors','core_performance', 'All workflows active',         'Minor issues, some skipped',      'Workflows broken or disabled',      1),
+        ('Automations',      'AI Agent Performance', 'Chat/voice agent resolution',          'core_performance', 'High resolution rate',         'Some unresolved, mixed feedback', 'Low resolution, complaints',        2),
+        ('Automations',      'Funnel Conversion',    'Lead-to-appointment rate',             'leading',          'Conversion at or above target','Slightly below target',           'Significantly below',               3),
+        ('Customer Success', 'NPS / Satisfaction',   'Client happiness score',               'core_performance', 'Purple/Green — happy',         'Okay — room to improve',          'Not good — dissatisfied, at risk',  1),
+        ('Customer Success', 'Communication',        'Recency and quality of contact',       'leading',          'Regular contact, responsive',  'Slow responses, missed calls',    'Gone dark or hostile tone',         2),
+        ('Customer Success', 'Call Engagement',      'Showing up for calls',                 'friction',         'Books and attends calls',      'Misses some, slow to reschedule', 'Avoids calls, no engagement',       3)
+      ) AS v(dept_name, name, description, metric_type, green_label, yellow_label, red_label, sort_order) ON d.name = v.dept_name
+      WHERE NOT EXISTS (SELECT 1 FROM cm_tl_metrics m WHERE m.department_id = d.id AND m.name = v.name);
+
+      -- Seed playbooks for departments that don't have them yet
+      INSERT INTO cm_tl_playbooks (department_id, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts)
+      SELECT d.id, v.yellow_actions, v.yellow_timeframe, v.red_actions, v.red_timeframe, v.escalation_contacts
+      FROM cm_tl_departments d
+      JOIN (VALUES
+        ('Media Buying',     'Review creative performance and audience targeting
+Check for audience fatigue or ad disapprovals
+Schedule optimization review with team', 'Within 48 hours', 'Full campaign audit — pause underperformers
+Client strategy call to realign goals/budget
+Leadership review of account', 'Within 24 hours', 'Media Director, Account Manager'),
+        ('SEO',              'Review ranking drops and identify causes
+Check for algorithm updates or technical issues
+Prioritize content updates for affected keywords', 'Within 1 week', 'Full technical audit and ranking analysis
+Emergency content/link building plan
+Client notification with action plan', 'Within 48 hours', 'SEO Lead, Account Manager'),
+        ('Content',          'Review content calendar and identify bottlenecks
+Check brand voice alignment on recent pieces
+Prioritize overdue deliverables', 'Within 1 week', 'Emergency content catch-up plan
+Client call to reset expectations and timeline
+Reassign resources if needed', 'Within 48 hours', 'Content Lead, Account Manager'),
+        ('Web Development',  'Run speed audit and identify slow pages
+Check for plugin conflicts or update issues
+Review hosting performance metrics', 'Within 1 week', 'Emergency site fix — downtime or critical errors
+Client notification with status and ETA
+Escalate to hosting provider if needed', 'Within 4 hours', 'Web Dev Lead, Account Manager'),
+        ('Social Media',     'Review posting schedule and catch up on missed posts
+Audit recent engagement and adjust strategy
+Check content quality and brand alignment', 'Within 1 week', 'Full social audit — content, audience, competitors
+Client strategy call to realign social goals
+Develop recovery content plan', 'Within 48 hours', 'Social Media Lead, Account Manager'),
+        ('Automations',      'Review GHL workflow logs for errors or skipped steps
+Check AI agent conversation quality
+Audit funnel conversion drop-off points', 'Within 1 week', 'Emergency workflow repair — disable broken automations
+Manual follow-up on leads stuck in pipeline
+Client notification with remediation plan', 'Within 24 hours', 'Automations Lead, Account Manager'),
+        ('Customer Success',  'Proactive check-in call — ask how things are going
+Review recent deliverables and results together
+Send NPS survey if not recently collected', 'Within 48 hours', 'Immediate escalation call — team lead or director
+Full account review across all departments
+Build recovery game plan with specific action items and timeline', 'Within 24 hours', 'CSM Director, Agency Owner')
+      ) AS v(dept_name, yellow_actions, yellow_timeframe, red_actions, red_timeframe, escalation_contacts) ON d.name = v.dept_name
+      WHERE NOT EXISTS (SELECT 1 FROM cm_tl_playbooks p WHERE p.department_id = d.id);
+    `,
+  },
+  {
     id: "050_per_client_metric_overrides",
     sql: `
       -- Per-client metric threshold overrides

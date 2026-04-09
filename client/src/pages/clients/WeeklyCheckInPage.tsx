@@ -226,7 +226,7 @@ export function WeeklyCheckInPage() {
           <h2 className="text-2xl font-semibold text-foreground">Weekly Check-In</h2>
           <p className="text-sm text-muted mt-1">Update all client health statuses in one view</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate("/clients/traffic-light-settings")}>
+        <Button variant="outline" size="sm" onClick={() => navigate("/settings/traffic-light")}>
           Settings
         </Button>
       </div>
