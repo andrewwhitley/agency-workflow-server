@@ -581,6 +581,49 @@ export class DataForSEOService {
     }));
   }
 
+  /**
+   * Search Google Maps listings at a specific lat/lng coordinate.
+   * Used for local heatmap grid scans — each grid point queries from a different
+   * location to see how rankings change geographically.
+   *
+   * Cost: ~$0.0006 per call (Google Maps Live SERP)
+   */
+  async searchBusinessListingsByCoordinate(
+    keyword: string,
+    latitude: number,
+    longitude: number,
+    limit: number = 20,
+  ): Promise<BusinessListing[]> {
+    if (!this.authHeader) throw new Error("DataForSEO not configured");
+
+    // location_coordinate format: "lat,lng,radius_km" — radius is required
+    const response = await this.apiCall(
+      "/v3/serp/google/maps/live/advanced",
+      [{
+        keyword,
+        location_coordinate: `${latitude},${longitude},5`, // 5km radius from point
+        language_code: "en",
+        depth: limit,
+      }],
+    );
+    this.logCost("Heatmap point", `"${keyword}" @ ${latitude.toFixed(4)},${longitude.toFixed(4)}`, response);
+
+    const items = response?.tasks?.[0]?.result?.[0]?.items || [];
+    return items.map((item: any) => ({
+      title: item.title || "",
+      address: item.address || undefined,
+      phone: item.phone || undefined,
+      url: item.url || item.domain || undefined,
+      rating: item.rating?.value,
+      reviewCount: item.rating?.votes_count,
+      category: item.category || undefined,
+      latitude: item.gps_coordinates?.latitude,
+      longitude: item.gps_coordinates?.longitude,
+      placeId: item.place_id || undefined,
+      cid: item.cid || undefined,
+    }));
+  }
+
   // ═══════════════════════════════════════════════════════════
   //  PRIVATE
   // ═══════════════════════════════════════════════════════════

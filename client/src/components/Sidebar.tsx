@@ -38,6 +38,8 @@ const globalSections = [
       { to: "/guides", label: "Marketing Guides", icon: FileText },
       { to: "/workbooks", label: "Workbooks", icon: BookOpen },
       { to: "/agents", label: "AI Agents", icon: Bot },
+      { to: "/seo/keywords", label: "Keyword Tracker", icon: Globe },
+      { to: "/seo/heatmap", label: "Local Heatmap", icon: Globe },
     ],
   },
   {

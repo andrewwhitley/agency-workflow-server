@@ -16,7 +16,7 @@ export interface ScheduledJob {
   name: string;
   description: string;
   cron_expression: string;
-  job_type: "prompt" | "workflow" | "drive_sync";
+  job_type: "prompt" | "workflow" | "drive_sync" | "seo_check";
   config: Record<string, unknown>;
   enabled: boolean;
   last_run_at: string | null;
@@ -43,7 +43,7 @@ export interface CreateJobInput {
   name: string;
   description?: string;
   cron_expression: string;
-  job_type: "prompt" | "workflow" | "drive_sync";
+  job_type: "prompt" | "workflow" | "drive_sync" | "seo_check";
   config: Record<string, unknown>;
   enabled?: boolean;
   created_by?: string;
@@ -63,6 +63,10 @@ export interface JobExecutor {
   }): Promise<string>;
   executeDriveSync(config: {
     folder_id: string;
+  }): Promise<string>;
+  executeSeoCheck(config: {
+    client_slug: string;
+    discord_channel_id?: string;
   }): Promise<string>;
 }
 
@@ -135,6 +139,9 @@ export class Scheduler {
           break;
         case "drive_sync":
           result = await this.executor.executeDriveSync(job.config as any);
+          break;
+        case "seo_check":
+          result = await this.executor.executeSeoCheck(job.config as any);
           break;
         default:
           throw new Error(`Unknown job type: ${job.job_type}`);

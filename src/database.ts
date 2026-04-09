@@ -1849,6 +1849,51 @@ Build recovery game plan with specific action items and timeline', 'Within 24 ho
     `,
   },
   {
+    id: "052_local_heatmaps_and_gbp",
+    sql: `
+      -- Add local pack position to keyword_rankings (for GBP map pack tracking)
+      ALTER TABLE keyword_rankings ADD COLUMN IF NOT EXISTS local_pack_position INT;
+      ALTER TABLE keyword_rankings ADD COLUMN IF NOT EXISTS local_pack_url VARCHAR(2000);
+
+      -- Local heatmap scans — one per (client, keyword, scan_date)
+      CREATE TABLE IF NOT EXISTS local_heatmap_scans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_slug VARCHAR(200) NOT NULL,
+        keyword VARCHAR(500) NOT NULL,
+        center_lat NUMERIC(10,7) NOT NULL,
+        center_lng NUMERIC(10,7) NOT NULL,
+        grid_size INT NOT NULL DEFAULT 5,
+        radius_miles NUMERIC(5,2) NOT NULL DEFAULT 1.0,
+        business_name VARCHAR(500),
+        scanned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        cost_estimate NUMERIC(10,4),
+        notes TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_local_heatmap_client ON local_heatmap_scans(client_slug, scanned_at DESC);
+
+      -- Individual grid points within a scan
+      CREATE TABLE IF NOT EXISTS local_heatmap_points (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        scan_id UUID NOT NULL REFERENCES local_heatmap_scans(id) ON DELETE CASCADE,
+        grid_row INT NOT NULL,
+        grid_col INT NOT NULL,
+        latitude NUMERIC(10,7) NOT NULL,
+        longitude NUMERIC(10,7) NOT NULL,
+        position INT,
+        business_found BOOLEAN DEFAULT FALSE,
+        top_competitor VARCHAR(500),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_local_heatmap_points_scan ON local_heatmap_points(scan_id);
+
+      -- Add scheduling fields to tracked_keywords
+      ALTER TABLE tracked_keywords ADD COLUMN IF NOT EXISTS check_frequency VARCHAR(20) DEFAULT 'weekly';
+      ALTER TABLE tracked_keywords ADD COLUMN IF NOT EXISTS track_local_pack BOOLEAN DEFAULT FALSE;
+      ALTER TABLE tracked_keywords ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal';
+      ALTER TABLE tracked_keywords ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual';
+    `,
+  },
+  {
     id: "050_per_client_metric_overrides",
     sql: `
       -- Per-client metric threshold overrides

@@ -1222,6 +1222,103 @@ async function main(): Promise<void> {
         const count = await indexer.refreshIndex(drive);
         return `Synced ${count} documents`;
       },
+
+      async executeSeoCheck(config) {
+        if (!seoService.isAuthenticated()) return "DataForSEO not configured";
+        const slug = config.client_slug;
+        if (!slug) return "Missing client_slug in job config";
+
+        // Look up client domain + business name
+        let domain: string | undefined;
+        let businessName: string | undefined;
+        const { rows } = await dbQuery(
+          "SELECT company_name, company_website, domain FROM cm_clients WHERE slug = $1",
+          [slug]
+        );
+        if (rows[0]) {
+          domain = (rows[0].domain as string) || ((rows[0].company_website as string) || "")
+            .replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+          businessName = rows[0].company_name as string;
+        }
+        if (!domain) return `No domain configured for client ${slug}`;
+
+        // Get tracked keywords
+        const { rows: keywords } = await dbQuery(
+          "SELECT * FROM tracked_keywords WHERE client_slug = $1", [slug]
+        );
+        if (keywords.length === 0) return `No tracked keywords for client ${slug}`;
+
+        const keywordStrings = keywords.map((k: { keyword: string }) => k.keyword);
+        const metrics = await seoService.getKeywordMetrics(keywordStrings, keywords[0].location_code);
+
+        let checked = 0;
+        let improved = 0;
+        let declined = 0;
+        let lost = 0;
+        let new_top10 = 0;
+
+        for (const kw of keywords) {
+          try {
+            const serp = await seoService.getSerpResults(kw.keyword, kw.location_code, 30);
+            const match = serp.items?.find((item: { url?: string }) => item.url?.includes(domain!));
+            const kwMetrics = metrics.find((m: { keyword: string }) => m.keyword.toLowerCase() === kw.keyword.toLowerCase());
+
+            // Local pack check
+            let localPackPosition: number | null = null;
+            let localPackUrl: string | null = null;
+            if (kw.track_local_pack) {
+              const localPackItems = serp.items?.filter((item: { type?: string }) => item.type === "local_pack") || [];
+              for (let i = 0; i < localPackItems.length; i++) {
+                const lp = localPackItems[i] as { title?: string; url?: string };
+                if (businessName && lp.title?.toLowerCase().includes(businessName.toLowerCase())) {
+                  localPackPosition = i + 1;
+                  localPackUrl = lp.url || null;
+                  break;
+                }
+              }
+            }
+
+            const newPos = match?.position || null;
+
+            // Get previous position to compute deltas
+            const { rows: prevRows } = await dbQuery(
+              "SELECT position FROM keyword_rankings WHERE tracked_keyword_id = $1 ORDER BY checked_at DESC LIMIT 1",
+              [kw.id]
+            );
+            const prevPos: number | null = prevRows[0]?.position ?? null;
+
+            if (newPos !== null && prevPos !== null) {
+              if (newPos < prevPos) improved++;
+              else if (newPos > prevPos) declined++;
+            } else if (newPos !== null && prevPos === null) {
+              if (newPos <= 10) new_top10++;
+            } else if (newPos === null && prevPos !== null) {
+              lost++;
+            }
+
+            await dbQuery(
+              `INSERT INTO keyword_rankings (tracked_keyword_id, client_slug, keyword, position, url, search_volume, cpc, competition, difficulty, local_pack_position, local_pack_url)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              [kw.id, slug, kw.keyword, newPos, match?.url || null,
+               kwMetrics?.searchVolume || null, kwMetrics?.cpc || null,
+               kwMetrics?.competition || null, kwMetrics?.keywordDifficulty || null,
+               localPackPosition, localPackUrl]
+            );
+            checked++;
+          } catch (err) {
+            console.error(`SEO check failed for "${kw.keyword}":`, err);
+          }
+        }
+
+        const summary = `SEO rank check for **${slug}**: ${checked}/${keywords.length} keywords checked. ` +
+          `${improved} improved, ${declined} declined, ${new_top10} new top-10, ${lost} lost rankings.`;
+
+        if (config.discord_channel_id && discordBot.isConnected()) {
+          await discordBot.sendToChannel(config.discord_channel_id, summary);
+        }
+
+        return summary;
+      },
     };
 
     scheduler = new Scheduler(jobExecutor);

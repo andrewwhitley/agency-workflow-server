@@ -23,6 +23,7 @@ import { ContentGapsPage } from "./pages/seo/ContentGapsPage";
 import { TechnicalAuditPage } from "./pages/seo/TechnicalAuditPage";
 import { SerpAnalysisPage } from "./pages/seo/SerpAnalysisPage";
 import { KeywordResearchPage } from "./pages/seo/KeywordResearchPage";
+import { LocalHeatmapPage } from "./pages/seo/LocalHeatmapPage";
 import { ClientsListPage } from "./pages/clients/ClientsListPage";
 import { ClientDetailPage } from "./pages/clients/ClientDetailPage";
 import { AgencyTeamPage } from "./pages/clients/AgencyTeamPage";
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/seo/audit" element={<TechnicalAuditPage />} />
         <Route path="/seo/serp" element={<SerpAnalysisPage />} />
         <Route path="/seo/research" element={<KeywordResearchPage />} />
+        <Route path="/seo/heatmap" element={<LocalHeatmapPage />} />
         <Route path="/content" element={<ContentPage />} />
         <Route path="/workbooks" element={<WorkbooksPage />} />
         <Route path="/agents" element={<AgentsPage />} />
