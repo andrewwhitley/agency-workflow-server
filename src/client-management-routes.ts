@@ -311,7 +311,7 @@ export function clientManagementRouter(): Router {
     const fields: string[] = [];
     const values: unknown[] = [];
     let i = 1;
-    const jsonFields = ["heroSection", "problemSection", "guideSection", "planSection", "ctaSection", "successSection", "failureSection", "brandVoiceSection", "visualIdentitySection", "contentStrategySection", "messagingSection", "implementationSection"];
+    const jsonFields = ["heroSection", "problemSection", "guideSection", "planSection", "ctaSection", "successSection", "failureSection", "brandVoiceSection", "visualIdentitySection", "contentStrategySection", "messagingSection", "implementationSection", "bigFiveSection", "tayaQuestionsSection", "endlessCustomersSection"];
     for (const [key, val] of Object.entries(b)) {
       if (key === "id" || key === "clientId" || val === undefined) continue;
       const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);

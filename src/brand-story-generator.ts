@@ -54,6 +54,10 @@ export const BRAND_STORY_SECTIONS = [
   { key: "contentStrategySection", title: "Content Strategy", framework: "Thought Leadership" },
   { key: "messagingSection", title: "Core Messaging", framework: "Messaging" },
   { key: "implementationSection", title: "Implementation Roadmap", framework: "Strategy" },
+  // ─── Endless Customers (Marcus Sheridan) — added 2026-04-09 ───
+  { key: "bigFiveSection", title: "The Big 5 Content Topics", framework: "Endless Customers" },
+  { key: "tayaQuestionsSection", title: "They Ask, You Answer Questions", framework: "Endless Customers" },
+  { key: "endlessCustomersSection", title: "Buyer Trust Framework", framework: "Endless Customers" },
 ] as const;
 
 type SectionKey = (typeof BRAND_STORY_SECTIONS)[number]["key"];
@@ -208,6 +212,89 @@ IMPORTANT: No unverifiable performance claims. Messaging should convey expertise
 - Month 2: Content launch (begin publishing thought leadership content)
 - Month 3: Optimization (review what's working, refine messaging)
 Include specific, actionable tasks for each phase.`,
+
+  // ─── Endless Customers / They Ask You Answer (Marcus Sheridan) ───
+
+  bigFiveSection:
+    `Generate The Big 5 content topics from Marcus Sheridan's "They Ask, You Answer" framework. These are the 5 categories of content that buyers search for most when making a purchase decision. For each category, generate 5-10 specific article titles tailored to THIS business and their actual services. Be specific and use the client's real services and target customer terminology.
+
+### 1. Cost & Pricing
+Articles that address what things cost — even if pricing is variable. Buyers search for cost information constantly; if you don't answer, your competitors will. Generate 5-10 article titles like:
+- "How much does [service] cost in [year]? A complete breakdown"
+- "[Service] pricing: what affects the cost"
+- "Is [service] worth the investment? A cost-benefit analysis"
+
+### 2. Problems & Risks
+Articles that honestly discuss the problems, downsides, side effects, or risks of your services or industry. This builds enormous trust because buyers expect you to hide bad news. Generate 5-10 article titles like:
+- "Common problems with [service] (and how to avoid them)"
+- "When [service] is NOT the right choice"
+- "[Service] side effects: what you need to know"
+
+### 3. Comparisons
+Articles that compare your service/approach to alternatives, including direct competitors. Buyers do this research anyway — be the source. Generate 5-10 article titles like:
+- "[Your service] vs [alternative]: which is right for you?"
+- "[Brand] vs [competitor type]: an honest comparison"
+- "Comparing [service] options: what to look for"
+
+### 4. Reviews & Best-of Lists
+Aggregated, honest reviews. "Best [service] in [city]," "Top providers for [service type]," etc. These also do well in AI search. Generate 5-10 article titles like:
+- "Best [service] providers in [client's city/region]"
+- "Top [service type] companies reviewed"
+- "Reviews of [common product/method]"
+
+### 5. Best of / Best in Class
+"Best of" content that positions the buyer as smart for choosing well. Generate 5-10 article titles like:
+- "The best [service] for [specific situation]"
+- "Best [service] for [target customer type]"
+- "What makes the best [service]?"
+
+CRITICAL: Tailor every title to THIS client's specific services and customer base. Avoid generic placeholder titles. Use their real service names. Each topic should be a real article they could write next month.`,
+
+  tayaQuestionsSection:
+    `List the most important questions this client's prospects search for and ask, organized by buyer journey stage. Pull from the intake "topQuestionsCustomersAsk" field if available, but expand significantly with industry knowledge.
+
+### Awareness Stage Questions
+What questions do prospects ask BEFORE they know they need this service? List 8-12 questions. Example: "Why am I always tired even when I sleep 8 hours?"
+
+### Consideration Stage Questions
+What do prospects ask once they know they need help and are evaluating options? List 8-12 questions. Example: "What's the difference between functional medicine and traditional medicine?"
+
+### Decision Stage Questions
+What do prospects ask right before they pick a provider? List 8-12 questions. Example: "How long does it take to see results with [service]?" or "Does insurance cover [service]?"
+
+### Post-Purchase / Retention Questions
+What do customers ask after they've started? List 5-10 questions. These build loyalty and referrals.
+
+For each question, briefly note the SEARCH INTENT (informational/commercial/transactional) so the content team knows whether to write a blog, comparison, or sales page.
+
+These questions become the foundation for content planning, FAQ pages, sales call objection handling, and AI chat training.`,
+
+  endlessCustomersSection:
+    `Define the trust-building strategy from Marcus Sheridan's "Endless Customers" framework. This positions the brand to win in the AI search era where buyers trust brands that are most transparent and helpful.
+
+### Self-Selection Strategy
+Help prospects qualify themselves IN or OUT before they ever talk to sales. Be specific:
+- Who is the IDEAL fit (3-5 specific characteristics)
+- Who is NOT a fit (3-5 specific disqualifiers — be brave about saying no)
+- The "honest sales" approach: how to invite the wrong fits to leave gracefully
+
+### Pricing Transparency Plan
+Where the brand currently stands on price transparency, and where they should go. Specific recommendations like:
+- Add a "Pricing" page with starting points or ranges
+- Address pricing in the first sales call openly
+- Create a cost calculator or "Investment Guide"
+
+### Video Selling Strategy
+Marcus emphasizes that video closes the trust gap fastest. Recommend 5-10 specific videos this brand should create:
+- 80% pricing video, About-us videos, Product/service walkthroughs, Bio/team videos, Customer journey videos
+
+### "Insourcing" Content Production
+The recommendation: don't outsource content creation entirely. The agency's job is to teach the client's TEAM to create content (especially video) because authenticity wins. Outline how this brand should structure their internal content production.
+
+### Trust Acceleration KPIs
+What to measure: pages viewed before sales contact, time on pricing page, video completion rates, sales-cycle length reduction, % of leads that come pre-qualified.
+
+This is the "fractional CMO" play: positioning the agency as a strategic partner that teaches the client's team to be world-class at trust-building, not just a vendor that produces marketing assets.`,
 };
 
 // ── Intake Field Labels ─────────────────────────────────────
@@ -286,6 +373,9 @@ const SECTION_KEY_TO_COLUMN: Record<SectionKey, string> = {
   contentStrategySection: "content_strategy_section",
   messagingSection: "messaging_section",
   implementationSection: "implementation_section",
+  bigFiveSection: "big_five_section",
+  tayaQuestionsSection: "taya_questions",
+  endlessCustomersSection: "endless_customers_section",
 };
 
 // ── Batch Definitions ───────────────────────────────────────
@@ -306,6 +396,12 @@ const BATCH_2_KEYS: SectionKey[] = [
   "contentStrategySection",
   "messagingSection",
   "implementationSection",
+];
+
+const BATCH_3_KEYS: SectionKey[] = [
+  "bigFiveSection",
+  "tayaQuestionsSection",
+  "endlessCustomersSection",
 ];
 
 // ── System Prompts ──────────────────────────────────────────
@@ -703,9 +799,21 @@ export async function generateBrandStory(
   const batch2Response = await callClaudeWithRetry(GENERATION_SYSTEM_PROMPT, batch2Prompt);
   const batch2Sections = parseBatchResponse(batch2Response, BATCH_2_KEYS);
 
+  // 4b. Generate batch 3 (Endless Customers / Big 5 / TAYA) — failures here don't fail the whole story
+  console.log(`[brand-story] Generating batch 3 (Endless Customers) for client ${clientId}...`);
+  let batch3Sections: Record<string, string> = {};
+  try {
+    const batch3Prompt = buildBatchPrompt(BATCH_3_KEYS, context, { ...batch1Sections, ...batch2Sections });
+    const batch3Response = await callClaudeWithRetry(GENERATION_SYSTEM_PROMPT, batch3Prompt);
+    batch3Sections = parseBatchResponse(batch3Response, BATCH_3_KEYS);
+  } catch (err) {
+    console.error(`[brand-story] Batch 3 generation failed (non-fatal):`, err);
+    // Continue without Endless Customers sections — they can be regenerated individually
+  }
+
   // 5. Merge all sections and validate
-  const allSections: Record<string, string> = { ...batch1Sections, ...batch2Sections };
-  const totalExpected = BATCH_1_KEYS.length + BATCH_2_KEYS.length;
+  const allSections: Record<string, string> = { ...batch1Sections, ...batch2Sections, ...batch3Sections };
+  const totalExpected = BATCH_1_KEYS.length + BATCH_2_KEYS.length + BATCH_3_KEYS.length;
   const totalParsed = Object.keys(allSections).length;
   if (totalParsed === 0) {
     throw new Error("Brand story generation failed — Claude returned no parseable sections. Please try again.");

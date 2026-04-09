@@ -113,7 +113,7 @@ interface Campaign { id: number; campaignName: string; campaignType: string | nu
 interface Deliverable { id: number; campaignId: number; title: string; deliverableType: string; status: string; priority: string; description: string | null; assignedTo: string | null; dueDate: string | null; completedAt: string | null; notes: string | null; }
 interface MarketingPlanItem { id: number; category: string; item: string; isIncluded: boolean; quantity: number | null; notes: string | null; completionTarget: string | null; }
 interface ContentGuidelines { brandVoice: string | null; tone: string | null; writingStyle: string | null; dosAndDonts: string | null; approvedTerminology: string | null; restrictions: string | null; uniqueSellingPoints: string | null; guarantees: string | null; competitiveAdvantages: string | null; brandColors: string | null; fonts: string | null; logoGuidelines: string | null; designInspiration: string | null; targetAudienceSummary: string | null; demographics: string | null; psychographics: string | null; focusTopics: string | null; seoKeywords: string | null; contentThemes: string | null; messagingPriorities: string | null; featuredTestimonials: string | null; successStories: string | null; socialProofNotes: string | null; adCopyGuidelines: string | null; preferredCtas: string | null; targetingPreferences: string | null; promotions: string | null; observedHolidays: string | null; holidayContentNotes: string | null; brandStory: string | null; contentPurpose: string | null; userActionStrategy: string | null; existingCollateral: string | null; useStockPhotography: boolean; imageSourceNotes: string | null; marketingGuide: string | null; writingStyleGuide: string | null; [key: string]: unknown; }
-interface BrandStory { id: number; status: string; heroSection: unknown; problemSection: unknown; guideSection: unknown; planSection: unknown; ctaSection: unknown; successSection: unknown; failureSection: unknown; brandVoiceSection: unknown; visualIdentitySection: unknown; contentStrategySection: unknown; messagingSection: unknown; implementationSection: unknown; fullBrandStory: string | null; shareToken: string | null; }
+interface BrandStory { id: number; status: string; heroSection: unknown; problemSection: unknown; guideSection: unknown; planSection: unknown; ctaSection: unknown; successSection: unknown; failureSection: unknown; brandVoiceSection: unknown; visualIdentitySection: unknown; contentStrategySection: unknown; messagingSection: unknown; implementationSection: unknown; bigFiveSection: unknown; tayaQuestionsSection: unknown; endlessCustomersSection: unknown; fullBrandStory: string | null; shareToken: string | null; }
 
 // ── Tabs ─────────────────────────────────────
 
@@ -746,6 +746,10 @@ const BRAND_STORY_SECTIONS = [
   { key: "contentStrategySection", title: "Content Strategy", framework: "Thought Leadership" },
   { key: "messagingSection", title: "Core Messaging", framework: "Messaging" },
   { key: "implementationSection", title: "Implementation Roadmap", framework: "Strategy" },
+  // ─── Endless Customers (Marcus Sheridan) ───
+  { key: "bigFiveSection", title: "The Big 5 Content Topics", framework: "Endless Customers" },
+  { key: "tayaQuestionsSection", title: "They Ask, You Answer Questions", framework: "Endless Customers" },
+  { key: "endlessCustomersSection", title: "Buyer Trust Framework", framework: "Endless Customers" },
 ] as const;
 
 const sectionIcons: Record<string, React.ElementType> = {
@@ -753,6 +757,7 @@ const sectionIcons: Record<string, React.ElementType> = {
   planSection: Compass, ctaSection: MousePointerClick, successSection: Trophy,
   failureSection: Skull, brandVoiceSection: MessageSquare, visualIdentitySection: Eye,
   contentStrategySection: FileText, messagingSection: Palette, implementationSection: Rocket,
+  bigFiveSection: BookOpen, tayaQuestionsSection: MessageSquare, endlessCustomersSection: Target,
 };
 
 const sectionColors: Record<string, string> = {
@@ -760,6 +765,7 @@ const sectionColors: Record<string, string> = {
   planSection: "text-amber-500", ctaSection: "text-purple-500", successSection: "text-green-500",
   failureSection: "text-rose-500", brandVoiceSection: "text-pink-500", visualIdentitySection: "text-indigo-500",
   contentStrategySection: "text-cyan-500", messagingSection: "text-orange-500", implementationSection: "text-teal-500",
+  bigFiveSection: "text-orange-600", tayaQuestionsSection: "text-violet-500", endlessCustomersSection: "text-fuchsia-500",
 };
 
 const frameworkBadgeColors: Record<string, string> = {
@@ -768,6 +774,7 @@ const frameworkBadgeColors: Record<string, string> = {
   "Thought Leadership": "bg-amber-500/10 text-amber-400 border-amber-500/20",
   Messaging: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
   Strategy: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  "Endless Customers": "bg-orange-500/10 text-orange-400 border-orange-500/20",
 };
 
 interface SectionData { title: string; framework: string; content: string; generatedAt: string | null; editedAt: string | null; isEdited: boolean; }
