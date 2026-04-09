@@ -229,6 +229,54 @@ export function clientManagementRouter(): Router {
   crudRoutes("cm_logins", "logins");
   crudRoutes("cm_marketing_plan", "marketing-plan");
   crudRoutes("cm_campaign_deliverables", "campaign-deliverables");
+  // ─── New tables from migration 053 ───
+  crudRoutes("cm_testimonials", "testimonials");
+  crudRoutes("cm_appointment_types", "appointment-types");
+  crudRoutes("cm_reactivation_offers", "reactivation-offers");
+
+  // Singleton routes for 1-per-client tables (cm_ads_config, cm_ai_bot_config)
+  function singletonRoutes(table: string, entityName: string) {
+    router.get(`/clients/:clientId/${entityName}`, async (req, res) => {
+      try {
+        const { rows } = await query(`SELECT * FROM ${table} WHERE client_id = $1 LIMIT 1`, [req.params.clientId]);
+        res.json(rows[0] ? toCamel(rows[0]) : null);
+      } catch (err) { console.error(`Get ${entityName} error:`, err); res.status(500).json({ error: "Failed" }); }
+    });
+
+    router.put(`/clients/:clientId/${entityName}`, async (req, res) => {
+      const clientId = parseInt(String(req.params.clientId));
+      const b = req.body;
+      try {
+        const cols: string[] = [];
+        const placeholders: string[] = [];
+        const updates: string[] = [];
+        const vals: unknown[] = [clientId];
+        let i = 2;
+        for (const [key, val] of Object.entries(b)) {
+          if (key === "id" || key === "clientId" || val === undefined) continue;
+          const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+          // Auto-stringify objects (JSONB columns)
+          const v = (val !== null && typeof val === "object") ? JSON.stringify(val) : val;
+          cols.push(snakeKey);
+          placeholders.push(`$${i}`);
+          updates.push(`${snakeKey} = $${i}`);
+          vals.push(v);
+          i++;
+        }
+        if (cols.length === 0) { res.status(400).json({ error: "No fields to update" }); return; }
+        const { rows } = await query(
+          `INSERT INTO ${table} (client_id, ${cols.join(", ")}) VALUES ($1, ${placeholders.join(", ")})
+           ON CONFLICT (client_id) DO UPDATE SET ${updates.join(", ")}, updated_at = NOW()
+           RETURNING *`,
+          vals
+        );
+        res.json(toCamel(rows[0]));
+      } catch (err) { console.error(`Upsert ${entityName} error:`, err); res.status(500).json({ error: "Failed" }); }
+    });
+  }
+
+  singletonRoutes("cm_ads_config", "ads-config");
+  singletonRoutes("cm_ai_bot_config", "ai-bot-config");
 
   // ════════════════════════════════════════════════════════
   //  CONTENT GUIDELINES (upsert — one per client)
