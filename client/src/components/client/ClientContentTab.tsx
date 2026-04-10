@@ -311,6 +311,16 @@ function GenerateTab({ slug }: { slug: string }) {
 
 // ── Sheet Tab ──────────────────────────────────
 
+interface BigFiveArticle { title: string; category: string; type: string; }
+interface TayaQuestion { question: string; stage: string; }
+interface ContentSuggestionsResponse {
+  articles: BigFiveArticle[];
+  questions: TayaQuestion[];
+  hasGenerated: boolean;
+  bigFiveTotal: number;
+  tayaTotal: number;
+}
+
 function SheetTab({ slug }: { slug: string }) {
   const [subtab, setSubtab] = useState<string>("content-tracking");
   const [rows, setRows] = useState<PlanningRow[]>([]);
@@ -320,6 +330,14 @@ function SheetTab({ slug }: { slug: string }) {
   const [importing, setImporting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ total: number; sheetsProcessed: number; imported: Record<string, number> } | null>(null);
+
+  // Suggestions state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<ContentSuggestionsResponse | null>(null);
+  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
+  const [addingSuggestions, setAddingSuggestions] = useState(false);
+  const [addResult, setAddResult] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -352,12 +370,58 @@ function SheetTab({ slug }: { slug: string }) {
     setUploading(false);
   };
 
+  const loadSuggestions = async () => {
+    setLoadingSuggestions(true);
+    setShowSuggestions(true);
+    setSelectedTitles(new Set());
+    setAddResult(null);
+    try {
+      const data = await api<ContentSuggestionsResponse>(`/cm/clients/${slug}/content-suggestions`);
+      setSuggestions(data);
+      // Pre-select all articles by default
+      setSelectedTitles(new Set(data.articles.map((a) => a.title)));
+    } catch (err) { console.error(err); setSuggestions({ articles: [], questions: [], hasGenerated: false, bigFiveTotal: 0, tayaTotal: 0 }); }
+    setLoadingSuggestions(false);
+  };
+
+  const toggleSuggestion = (title: string) => {
+    const next = new Set(selectedTitles);
+    if (next.has(title)) next.delete(title); else next.add(title);
+    setSelectedTitles(next);
+  };
+
+  const addSelected = async () => {
+    if (!suggestions || selectedTitles.size === 0) return;
+    setAddingSuggestions(true);
+    setAddResult(null);
+    try {
+      const payload = suggestions.articles
+        .filter((a) => selectedTitles.has(a.title))
+        .map((a) => ({ title: a.title, type: a.type, category: a.category }));
+      const res = await api<{ added: number }>(`/cm/clients/${slug}/content-suggestions/add-to-tracking`, {
+        method: "POST",
+        body: JSON.stringify({ suggestions: payload }),
+      });
+      setAddResult(`✓ Added ${res.added} article${res.added === 1 ? "" : "s"} to Content Tracking sheet`);
+      // Switch to content-tracking tab and refresh
+      setSubtab("content-tracking");
+      setTimeout(() => fetchData(), 300);
+    } catch (err) {
+      console.error(err);
+      setAddResult("Failed to add suggestions");
+    }
+    setAddingSuggestions(false);
+  };
+
   return (
     <div>
       <div className="flex flex-col gap-3 mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-1 flex-wrap">{SHEET_SUBTABS.map((st) => (<button key={st} onClick={() => setSubtab(st)} className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors capitalize", subtab === st ? "bg-accent text-white" : "bg-surface-2 text-muted hover:bg-surface-3")}>{st.replace(/-/g, " ")}</button>))}</div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            <button onClick={loadSuggestions} className="px-3 py-1.5 rounded-md text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20">
+              ✨ Suggest from Brand Strategy
+            </button>
             <label className={cn("px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors", uploading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>
               {uploading ? "Uploading..." : "Upload Excel"}
               <input type="file" accept=".xlsx,.xls" className="hidden" disabled={uploading}
@@ -370,6 +434,11 @@ function SheetTab({ slug }: { slug: string }) {
         {uploadResult && (
           <div className="text-xs px-3 py-2 rounded bg-success/10 text-success border border-success/20">
             Imported {uploadResult.total} rows across {uploadResult.sheetsProcessed} sheets: {Object.entries(uploadResult.imported).map(([k, v]) => `${k} (${v})`).join(", ")}
+          </div>
+        )}
+        {addResult && (
+          <div className={cn("text-xs px-3 py-2 rounded border", addResult.startsWith("✓") ? "bg-success/10 text-success border-success/20" : "bg-destructive/10 text-destructive border-destructive/20")}>
+            {addResult}
           </div>
         )}
       </div>
@@ -386,6 +455,114 @@ function SheetTab({ slug }: { slug: string }) {
             <tbody>{rows.map((row) => (<tr key={row.id} className="border-b border-border last:border-0 hover:bg-surface-2/50">{headers.map((h) => (<td key={h} className="px-3 py-2 text-xs text-foreground whitespace-nowrap max-w-[200px] truncate">{row.data[h] || ""}</td>))}</tr>))}</tbody>
           </table>
           {rows.length === 0 && headers.length > 0 && <div className="p-8 text-center text-muted text-sm">Sheet structure imported but no data rows. Check the source spreadsheet.</div>}
+        </div>
+      )}
+
+      {/* Brand Strategy Suggestions Modal */}
+      {showSuggestions && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowSuggestions(false)}>
+          <div className="bg-surface rounded-lg border border-border w-full max-w-4xl max-h-[85vh] flex flex-col p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Content Suggestions from Brand Strategy</h3>
+                <p className="text-xs text-muted mt-1">
+                  Generated from the client's brand story (Big 5 Content Topics + They Ask You Answer questions).
+                  Select articles to add to the Content Tracking sheet.
+                </p>
+              </div>
+              <button onClick={() => setShowSuggestions(false)} className="text-dim hover:text-foreground text-2xl leading-none">×</button>
+            </div>
+
+            {loadingSuggestions ? (
+              <div className="text-sm text-muted py-12 text-center">Loading suggestions...</div>
+            ) : !suggestions ? (
+              <div className="text-sm text-muted py-12 text-center">No suggestions yet</div>
+            ) : !suggestions.hasGenerated ? (
+              <div className="bg-warning/10 border border-warning/20 rounded-md p-4 text-sm text-warning">
+                ⚠️ This client doesn't have an Endless Customers brand story yet. Generate the brand story first
+                (the new Big 5 / TAYA sections will be created automatically).
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-6">
+                {/* Big 5 Articles */}
+                <div>
+                  <div className="flex items-center justify-between mb-3 sticky top-0 bg-surface py-2 z-10">
+                    <h4 className="text-sm font-semibold text-foreground">📚 Big 5 Article Suggestions ({suggestions.articles.length})</h4>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSelectedTitles(new Set(suggestions.articles.map((a) => a.title)))}
+                        className="text-xs text-accent hover:underline">Select all</button>
+                      <button onClick={() => setSelectedTitles(new Set())}
+                        className="text-xs text-dim hover:underline">Clear</button>
+                    </div>
+                  </div>
+                  {suggestions.articles.length === 0 ? (
+                    <p className="text-xs text-muted">No Big 5 articles parsed from brand story.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {/* Group by category */}
+                      {Array.from(new Set(suggestions.articles.map((a) => a.category))).map((cat) => {
+                        const items = suggestions.articles.filter((a) => a.category === cat);
+                        return (
+                          <div key={cat} className="mb-3">
+                            <div className="text-xs font-semibold text-dim uppercase tracking-wider mb-1">{cat} ({items.length})</div>
+                            <div className="space-y-0.5 pl-2">
+                              {items.map((a, i) => (
+                                <label key={`${cat}-${i}`} className="flex items-start gap-2 p-1.5 rounded hover:bg-surface-2 cursor-pointer">
+                                  <input type="checkbox"
+                                    checked={selectedTitles.has(a.title)}
+                                    onChange={() => toggleSuggestion(a.title)}
+                                    className="mt-0.5" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-foreground">{a.title}</div>
+                                    <div className="text-xs text-dim mt-0.5">{a.type}</div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* TAYA Questions */}
+                {suggestions.questions.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-3">❓ They Ask, You Answer Questions ({suggestions.questions.length})</h4>
+                    <p className="text-xs text-muted mb-2">These can become FAQ pages, blog posts, or training data for AI agents. Currently view-only.</p>
+                    <div className="space-y-2 bg-surface-2 rounded p-3 max-h-64 overflow-y-auto">
+                      {Array.from(new Set(suggestions.questions.map((q) => q.stage))).map((stage) => {
+                        const items = suggestions.questions.filter((q) => q.stage === stage);
+                        return (
+                          <div key={stage}>
+                            <div className="text-xs font-semibold text-dim uppercase tracking-wider mb-1">{stage} ({items.length})</div>
+                            <ul className="text-xs text-foreground list-disc pl-5 space-y-0.5">
+                              {items.map((q, i) => <li key={`${stage}-${i}`}>{q.question}</li>)}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {suggestions && suggestions.hasGenerated && (
+              <div className="flex justify-between items-center mt-4 pt-3 border-t border-border">
+                <span className="text-sm text-muted">{selectedTitles.size} selected</span>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowSuggestions(false)} className="px-4 py-2 rounded-md text-sm font-medium bg-surface-2 text-muted hover:bg-surface-3">Cancel</button>
+                  <button onClick={addSelected} disabled={addingSuggestions || selectedTitles.size === 0}
+                    className={cn("px-4 py-2 rounded-md text-sm font-medium",
+                      addingSuggestions || selectedTitles.size === 0 ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>
+                    {addingSuggestions ? "Adding..." : `Add ${selectedTitles.size} to Content Tracking`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

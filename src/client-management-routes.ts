@@ -17,6 +17,128 @@ import { importIntakeTemplate } from "./intake-importer.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
 
+// ── Brand story content parsing helpers ─────────────────────
+
+/**
+ * Extract markdown content from a brand story section JSONB field.
+ * Section data is stored as { content: "markdown...", generated: bool, edited: bool }
+ */
+function extractContent(section: unknown): string {
+  if (!section) return "";
+  if (typeof section === "string") {
+    try {
+      const parsed = JSON.parse(section);
+      return parsed?.content || "";
+    } catch {
+      return section;
+    }
+  }
+  if (typeof section === "object" && section !== null) {
+    const obj = section as Record<string, unknown>;
+    if (typeof obj.content === "string") return obj.content;
+  }
+  return "";
+}
+
+/**
+ * Parse Big 5 article titles from the bigFiveSection markdown.
+ * The generator outputs sections like "### 1. Cost & Pricing" followed by bullet titles.
+ * Returns array of { title, category, type }.
+ */
+function parseBigFiveArticles(markdown: string): Array<{ title: string; category: string; type: string }> {
+  if (!markdown) return [];
+  const articles: Array<{ title: string; category: string; type: string }> = [];
+
+  // Map heading text to a category label
+  const categoryMatchers: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /cost\s*&?\s*pricing|pricing/i, label: "Cost & Pricing" },
+    { pattern: /problems?\s*&?\s*risks?|side effects/i, label: "Problems & Risks" },
+    { pattern: /comparisons?|vs\.?\s*[a-z]/i, label: "Comparisons" },
+    { pattern: /reviews?|best.?of/i, label: "Reviews & Best-of" },
+    { pattern: /best\s+(in\s+)?class/i, label: "Best in Class" },
+  ];
+
+  let currentCategory = "Big 5";
+  const lines = markdown.split("\n");
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Detect headings (### or ## or numbered sections like "### 1. Cost")
+    if (line.startsWith("#")) {
+      const headingText = line.replace(/^#+\s*\d*\.?\s*/, "").trim();
+      const matched = categoryMatchers.find((m) => m.pattern.test(headingText));
+      if (matched) currentCategory = matched.label;
+      continue;
+    }
+
+    // Detect bullet titles — strip leading "- " or "* " or quoted strings
+    let title = line.replace(/^[-*•]\s*/, "").trim();
+    // Strip surrounding quotes
+    title = title.replace(/^["'`]+|["'`]+$/g, "").trim();
+    // Strip leading numbering like "1. " or "1) "
+    title = title.replace(/^\d+[.)]\s*/, "").trim();
+
+    // Skip if it doesn't look like a title (too short, ends with colon, looks like prose)
+    if (title.length < 12 || title.length > 200) continue;
+    if (title.endsWith(":") || title.endsWith(".") && title.split(" ").length > 20) continue;
+    // Skip if it's wrapped in markdown formatting only
+    if (title === title.toUpperCase() && title.length < 30) continue;
+
+    articles.push({
+      title,
+      category: currentCategory,
+      type: currentCategory.includes("Cost") || currentCategory.includes("Comparison") ? "Long-form with PR" : "Standard Article",
+    });
+  }
+
+  return articles;
+}
+
+/**
+ * Parse TAYA questions from the tayaQuestionsSection markdown.
+ * The generator outputs questions organized by buyer journey stage.
+ * Returns array of { question, stage }.
+ */
+function parseTayaQuestions(markdown: string): Array<{ question: string; stage: string }> {
+  if (!markdown) return [];
+  const questions: Array<{ question: string; stage: string }> = [];
+
+  const stageMatchers: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /awareness/i, label: "Awareness" },
+    { pattern: /consideration/i, label: "Consideration" },
+    { pattern: /decision/i, label: "Decision" },
+    { pattern: /post.?purchase|retention/i, label: "Post-Purchase" },
+  ];
+
+  let currentStage = "General";
+  const lines = markdown.split("\n");
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (line.startsWith("#")) {
+      const headingText = line.replace(/^#+\s*/, "").trim();
+      const matched = stageMatchers.find((m) => m.pattern.test(headingText));
+      if (matched) currentStage = matched.label;
+      continue;
+    }
+
+    let question = line.replace(/^[-*•]\s*/, "").trim();
+    question = question.replace(/^["'`]+|["'`]+$/g, "").trim();
+    question = question.replace(/^\d+[.)]\s*/, "").trim();
+
+    // Only keep things that look like questions (contain ? or start with question words)
+    if (question.length < 8 || question.length > 250) continue;
+    const looksLikeQuestion = /[?]/.test(question) || /^(how|what|why|when|where|who|which|do|does|is|are|can|should)\b/i.test(question);
+    if (!looksLikeQuestion) continue;
+
+    questions.push({ question, stage: currentStage });
+  }
+
+  return questions;
+}
+
 export function clientManagementRouter(): Router {
   const router = Router();
 
@@ -513,6 +635,132 @@ export function clientManagementRouter(): Router {
       const { rows } = await query("UPDATE cm_brand_story SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *", [status, req.params.id]);
       res.json(rows[0] ? toCamel(rows[0]) : null);
     } catch (err) { console.error("Update status error:", err); res.status(500).json({ error: "Failed" }); }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  CONTENT SUGGESTIONS — parsed from Big 5 + TAYA brand story sections
+  // ════════════════════════════════════════════════════════
+
+  /**
+   * GET /clients/:clientId/content-suggestions
+   * Parses Big 5 article titles + TAYA questions from the client's brand story
+   * and returns structured content suggestions ready to add to the planning sheet.
+   * Accepts either numeric client ID or slug.
+   */
+  router.get("/clients/:clientId/content-suggestions", async (req, res) => {
+    const param = String(req.params.clientId);
+    let clientId: number;
+    try {
+      if (/^\d+$/.test(param)) {
+        clientId = parseInt(param);
+      } else {
+        const { rows: r } = await query("SELECT id FROM cm_clients WHERE slug = $1", [param]);
+        if (!r[0]) { res.status(404).json({ error: "Client not found" }); return; }
+        clientId = r[0].id;
+      }
+    } catch (err) {
+      res.status(500).json({ error: "Failed to resolve client" });
+      return;
+    }
+    try {
+      const { rows } = await query(
+        "SELECT big_five_section, taya_questions, endless_customers_section FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
+        [clientId]
+      );
+      if (!rows[0]) {
+        res.json({ articles: [], questions: [], hasGenerated: false });
+        return;
+      }
+
+      const story = rows[0] as Record<string, unknown>;
+      const articles = parseBigFiveArticles(extractContent(story.big_five_section));
+      const questions = parseTayaQuestions(extractContent(story.taya_questions));
+
+      res.json({
+        articles,
+        questions,
+        hasGenerated: !!(story.big_five_section || story.taya_questions),
+        bigFiveTotal: articles.length,
+        tayaTotal: questions.length,
+      });
+    } catch (err) {
+      console.error("Content suggestions error:", err);
+      res.status(500).json({ error: "Failed to load content suggestions" });
+    }
+  });
+
+  /**
+   * POST /clients/:clientId/content-suggestions/add-to-tracking
+   * Body: { suggestions: [{ title, type, primaryKeyword?, category? }] }
+   * Adds selected suggestions to the planning sheet's "New Content Tracking" tab.
+   * If the planning_sheets row doesn't exist for this client+tab, creates it.
+   */
+  router.post("/clients/:clientId/content-suggestions/add-to-tracking", async (req, res) => {
+    const clientSlug = req.params.clientId; // can be slug or id — try both
+    const suggestions: Array<{ title: string; type?: string; primaryKeyword?: string; category?: string }> = req.body.suggestions || [];
+    if (!Array.isArray(suggestions) || suggestions.length === 0) {
+      res.status(400).json({ error: "suggestions array required" });
+      return;
+    }
+    try {
+      // Resolve to slug if numeric id was passed
+      let slug = clientSlug;
+      if (/^\d+$/.test(clientSlug)) {
+        const { rows } = await query("SELECT slug FROM cm_clients WHERE id = $1", [clientSlug]);
+        if (!rows[0]) { res.status(404).json({ error: "Client not found" }); return; }
+        slug = rows[0].slug;
+      }
+
+      const tabName = "New Content Tracking";
+      const headers = ["Service Topic", "Scheduled (m/yyyy)", "Type", "Title (<65 Characters)", "Article Description", "Focus SEO Keyword(s)", "URL Handle", "Standard PR Sources", "Advanced PR Sources", "Assigned To", "Completed", "Info Added to Topical Sitemap", "Notes"];
+
+      // Find or create the planning sheet
+      const { rows: sheetRows } = await query(
+        `INSERT INTO planning_sheets (client_slug, tab_name, headers)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (client_slug, tab_name) DO UPDATE SET updated_at = NOW()
+         RETURNING id`,
+        [slug, tabName, JSON.stringify(headers)]
+      );
+      const sheetId = sheetRows[0].id;
+
+      // Get current max row_index
+      const { rows: maxRows } = await query(
+        "SELECT COALESCE(MAX(row_index), -1) AS max_idx FROM planning_rows WHERE sheet_id = $1",
+        [sheetId]
+      );
+      let nextIdx = (maxRows[0]?.max_idx ?? -1) + 1;
+
+      // Insert each suggestion as a new row
+      const inserted = [];
+      for (const s of suggestions) {
+        const data = {
+          "Service Topic": s.category || "",
+          "Scheduled (m/yyyy)": "",
+          "Type": s.type || "Standard Article",
+          "Title (<65 Characters)": s.title || "",
+          "Article Description": "",
+          "Focus SEO Keyword(s)": s.primaryKeyword || "",
+          "URL Handle": s.title ? s.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) : "",
+          "Standard PR Sources": "",
+          "Advanced PR Sources": "",
+          "Assigned To": "",
+          "Completed": "",
+          "Info Added to Topical Sitemap": "",
+          "Notes": "Suggested from Brand Strategy (Big 5)",
+        };
+        const { rows: r } = await query(
+          "INSERT INTO planning_rows (sheet_id, row_index, data) VALUES ($1, $2, $3) RETURNING id",
+          [sheetId, nextIdx++, JSON.stringify(data)]
+        );
+        inserted.push(r[0].id);
+      }
+
+      res.json({ added: inserted.length, sheetId, slug });
+    } catch (err) {
+      console.error("Add suggestions to tracking error:", err);
+      res.status(500).json({ error: "Failed to add suggestions" });
+    }
   });
 
   // ════════════════════════════════════════════════════════

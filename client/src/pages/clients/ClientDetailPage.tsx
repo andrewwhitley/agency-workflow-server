@@ -1698,18 +1698,44 @@ ${sectionsHtml}
           {/* Brand Colors */}
           {brandColors && <ColorSwatches colorStr={brandColors} />}
 
-          {/* Sections */}
-          <div className="space-y-3">
-        {BRAND_STORY_SECTIONS.map((def) => {
-          const sectionData = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
-          if (!sectionData?.content) return null;
-          const isExpanded = expandedSections.has(def.key);
-          const isEditing = editingSection === def.key;
-          const isRegenerating = regeneratingSection === def.key;
-          const Icon = sectionIcons[def.key] || BookOpen;
-          const iconColor = sectionColors[def.key] || "text-dim";
+          {/* Sections — grouped by framework with section headers */}
+          <div className="space-y-6">
+        {(() => {
+          // Group sections by framework, preserving order
+          const groups: Array<{ framework: string; sections: typeof BRAND_STORY_SECTIONS[number][] }> = [];
+          for (const def of BRAND_STORY_SECTIONS) {
+            const last = groups[groups.length - 1];
+            if (last && last.framework === def.framework) {
+              last.sections.push(def);
+            } else {
+              groups.push({ framework: def.framework, sections: [def] });
+            }
+          }
+          // Filter out groups where no section has content
+          const visibleGroups = groups.filter((g) =>
+            g.sections.some((def) => {
+              const sd = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
+              return sd?.content;
+            })
+          );
+          return visibleGroups.map((group) => (
+            <div key={group.framework} className="space-y-3">
+              <div className="flex items-center gap-3 pb-1 border-b border-border">
+                <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">{group.framework}</h3>
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded border", frameworkBadgeColors[group.framework] || "")}>
+                  {group.sections.filter((def) => ((story as Record<string, unknown>)[def.key] as SectionData | undefined)?.content).length} sections
+                </span>
+              </div>
+              {group.sections.map((def) => {
+                const sectionData = (story as Record<string, unknown>)[def.key] as SectionData | undefined;
+                if (!sectionData?.content) return null;
+                const isExpanded = expandedSections.has(def.key);
+                const isEditing = editingSection === def.key;
+                const isRegenerating = regeneratingSection === def.key;
+                const Icon = sectionIcons[def.key] || BookOpen;
+                const iconColor = sectionColors[def.key] || "text-dim";
 
-          return (
+                return (
             <div key={def.key} className={cn("border border-border rounded-md bg-surface transition-all", isExpanded && "ring-1 ring-blue-500/30")}>
               <button onClick={() => toggleSection(def.key)} className="w-full p-4 text-left hover:bg-surface-2 transition-colors">
                 <div className="flex items-center justify-between">
@@ -1785,7 +1811,10 @@ ${sectionsHtml}
               )}
             </div>
           );
-        })}
+              })}
+            </div>
+          ));
+        })()}
           </div>
         </>
       )}
