@@ -642,6 +642,82 @@ export function clientManagementRouter(): Router {
   // ════════════════════════════════════════════════════════
 
   /**
+   * GET /clients/:clientId/brand-story/freshness
+   * Returns whether the brand story is up-to-date relative to client data
+   * (services, personas, content guide, basic client info).
+   * Used to display a "refresh" banner when source data has changed.
+   */
+  router.get("/clients/:clientId/brand-story/freshness", async (req, res) => {
+    const clientId = parseInt(String(req.params.clientId));
+    try {
+      // Get brand story generation timestamp
+      const { rows: storyRows } = await query(
+        "SELECT generated_at, updated_at, status FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
+        [clientId]
+      );
+      if (!storyRows[0] || !storyRows[0].generated_at) {
+        res.json({ hasStory: false, isStale: false, changes: [] });
+        return;
+      }
+      const generatedAt = new Date(storyRows[0].generated_at);
+
+      // Check timestamps from related tables
+      const [clientRes, servicesRes, personasRes, guidelineRes, competitorsRes] = await Promise.all([
+        query("SELECT updated_at FROM cm_clients WHERE id = $1", [clientId]),
+        query("SELECT MAX(updated_at) AS max_at, COUNT(*) AS cnt FROM cm_services WHERE client_id = $1", [clientId]),
+        query("SELECT MAX(updated_at) AS max_at, COUNT(*) AS cnt FROM cm_buyer_personas WHERE client_id = $1", [clientId]),
+        query("SELECT updated_at FROM cm_content_guidelines WHERE client_id = $1", [clientId]),
+        query("SELECT MAX(updated_at) AS max_at, COUNT(*) AS cnt FROM cm_competitors WHERE client_id = $1", [clientId]),
+      ]);
+
+      const changes: Array<{ source: string; changedAt: string; type: "newer" | "added" }> = [];
+
+      const clientUpdatedAt = clientRes.rows[0]?.updated_at;
+      if (clientUpdatedAt && new Date(clientUpdatedAt) > generatedAt) {
+        changes.push({ source: "Client info", changedAt: clientUpdatedAt, type: "newer" });
+      }
+
+      const servicesMax = servicesRes.rows[0]?.max_at;
+      if (servicesMax && new Date(servicesMax) > generatedAt) {
+        changes.push({ source: "Services", changedAt: servicesMax, type: "newer" });
+      }
+
+      const personasMax = personasRes.rows[0]?.max_at;
+      if (personasMax && new Date(personasMax) > generatedAt) {
+        changes.push({ source: "Buyer personas", changedAt: personasMax, type: "newer" });
+      }
+
+      const guidelineUpdatedAt = guidelineRes.rows[0]?.updated_at;
+      if (guidelineUpdatedAt && new Date(guidelineUpdatedAt) > generatedAt) {
+        changes.push({ source: "Content guidelines", changedAt: guidelineUpdatedAt, type: "newer" });
+      }
+
+      const competitorsMax = competitorsRes.rows[0]?.max_at;
+      if (competitorsMax && new Date(competitorsMax) > generatedAt) {
+        changes.push({ source: "Competitors", changedAt: competitorsMax, type: "newer" });
+      }
+
+      // Age check: stale after 90 days regardless
+      const ageMs = Date.now() - generatedAt.getTime();
+      const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+      const ageStale = ageDays > 90;
+
+      res.json({
+        hasStory: true,
+        generatedAt: storyRows[0].generated_at,
+        ageDays,
+        ageStale,
+        isStale: changes.length > 0 || ageStale,
+        changes,
+        changeCount: changes.length,
+      });
+    } catch (err) {
+      console.error("Brand story freshness error:", err);
+      res.status(500).json({ error: "Failed to compute freshness" });
+    }
+  });
+
+  /**
    * GET /clients/:clientId/content-suggestions
    * Parses Big 5 article titles + TAYA questions from the client's brand story
    * and returns structured content suggestions ready to add to the planning sheet.

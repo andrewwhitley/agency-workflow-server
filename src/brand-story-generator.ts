@@ -510,6 +510,150 @@ function isDataSparse(data: ClientData): boolean {
   return !hasGuidelines && !hasCompetitors && !hasPersonas && intakeFieldCount < 5;
 }
 
+// ── Confidence scoring ──────────────────────────────────────
+// Each section gets a 0-100 score based on what data signals were available
+// during generation. Higher score = more grounded in real client data.
+
+function val(x: unknown): boolean {
+  if (x === null || x === undefined) return false;
+  if (typeof x === "string") return x.trim() !== "";
+  if (Array.isArray(x)) return x.length > 0;
+  if (typeof x === "object") return Object.keys(x as object).length > 0;
+  return true;
+}
+
+/**
+ * Compute confidence scores per brand story section based on input data quality.
+ * Returns map of sectionKey → score (0-100).
+ */
+export function computeConfidenceScores(data: ClientData): Record<string, number> {
+  const scores: Record<string, number> = {};
+  const c = data.client || {};
+  const g = data.guidelines || {};
+  const intake = (data.intakeData as Record<string, unknown>) || {};
+  const intakeCount = Object.values(intake).filter(val).length;
+  const hasIntakeRichness = intakeCount >= 8;
+
+  // ── heroSection: needs persona + audience data ──
+  let hero = 30; // baseline
+  if (data.personas.length > 0) hero += 25;
+  if (data.personas.length >= 2) hero += 10;
+  if (val(g.target_audience_summary) || val(g.demographics) || val(g.psychographics)) hero += 15;
+  if (val(c.demographics_pain_points) || val(c.demographics_age) || val(intake.idealCustomerDescription)) hero += 10;
+  if (val(intake.customerFrustrations) || val(intake.customerDesires)) hero += 10;
+  scores.heroSection = Math.min(100, hero);
+
+  // ── problemSection: needs pain points, frustrations ──
+  let problem = 30;
+  if (val(c.demographics_pain_points)) problem += 15;
+  if (val(intake.customerFrustrations) || val(intake.biggestFrustration)) problem += 15;
+  if (val(intake.practicalProblem) || val(intake.emotionalProblem)) problem += 15;
+  if (val(intake.whyItMatters)) problem += 10;
+  if (data.personas.length > 0 && data.personas.some((p) => val(p.pain_points))) problem += 15;
+  scores.problemSection = Math.min(100, problem);
+
+  // ── guideSection: authority + empathy ──
+  let guide = 30;
+  if (val(c.combined_years_experience)) guide += 15;
+  if (val(c.certifications_trainings)) guide += 10;
+  if (val(c.awards_recognitions)) guide += 10;
+  if (val(c.notable_mentions)) guide += 10;
+  if (val(g.unique_selling_points) || val(c.what_makes_us_unique)) guide += 15;
+  if (val(c.year_founded)) guide += 10;
+  scores.guideSection = Math.min(100, guide);
+
+  // ── planSection: needs services + process info ──
+  let plan = 30;
+  if (data.services.length > 0) plan += 20;
+  if (data.services.some((s) => val(s.description) || val(s.description_long))) plan += 15;
+  if (val(intake.threeStepProcess)) plan += 20;
+  if (val(g.guarantees) || val(intake.guarantees)) plan += 15;
+  scores.planSection = Math.min(100, plan);
+
+  // ── ctaSection: needs CTAs + user action strategy ──
+  let cta = 40;
+  if (val(intake.directCTA)) cta += 20;
+  if (val(intake.transitionalCTA)) cta += 15;
+  if (val(g.user_action_strategy) || val(g.preferred_ctas)) cta += 20;
+  scores.ctaSection = Math.min(100, cta);
+
+  // ── successSection: needs outcomes ──
+  let success = 35;
+  if (val(intake.customerFeelsAfter)) success += 20;
+  if (val(intake.successStory) || val(g.success_stories)) success += 20;
+  if (val(intake.expectedOutcomes) || data.services.some((s) => val(s.expected_outcomes))) success += 15;
+  scores.successSection = Math.min(100, success);
+
+  // ── failureSection: needs stakes + concerns ──
+  let failure = 40;
+  if (val(intake.whatHappensIfTheyDontAct)) failure += 25;
+  if (val(c.demographics_pain_points)) failure += 15;
+  if (data.services.some((s) => val(s.common_concerns))) failure += 15;
+  scores.failureSection = Math.min(100, failure);
+
+  // ── brandVoiceSection: needs voice/tone data ──
+  let voice = 25;
+  if (val(g.tone)) voice += 20;
+  if (val(g.brand_voice)) voice += 20;
+  if (val(g.writing_style)) voice += 15;
+  if (val(g.dos_and_donts)) voice += 15;
+  if (val(intake.brandPersonality) || val(intake.brandTone)) voice += 10;
+  scores.brandVoiceSection = Math.min(100, voice);
+
+  // ── visualIdentitySection: needs colors, fonts ──
+  let visual = 20;
+  if (val(g.brand_colors)) visual += 30;
+  if (val(g.fonts) || val(intake.brandFonts)) visual += 20;
+  if (val(g.logo_guidelines) || val(intake.logoDescription)) visual += 15;
+  if (val(g.design_inspiration)) visual += 15;
+  scores.visualIdentitySection = Math.min(100, visual);
+
+  // ── contentStrategySection: needs topics ──
+  let content = 35;
+  if (val(g.focus_topics)) content += 20;
+  if (val(g.content_themes)) content += 15;
+  if (val(g.seo_keywords)) content += 15;
+  if (val(intake.contentTopicsExcited) || val(intake.expertiseAreas)) content += 15;
+  scores.contentStrategySection = Math.min(100, content);
+
+  // ── messagingSection: needs USPs + differentiation ──
+  let messaging = 30;
+  if (val(g.unique_selling_points) || val(c.what_makes_us_unique)) messaging += 20;
+  if (val(g.competitive_advantages)) messaging += 15;
+  if (data.competitors.length > 0) messaging += 15;
+  if (val(g.messaging_priorities)) messaging += 10;
+  if (val(c.slogans_mottos)) messaging += 10;
+  scores.messagingSection = Math.min(100, messaging);
+
+  // ── implementationSection: roadmap is mostly generated ──
+  scores.implementationSection = hasIntakeRichness ? 75 : 60;
+
+  // ── Endless Customers sections ──
+  let big5 = 35;
+  if (data.services.length > 0) big5 += 20;
+  if (data.competitors.length > 0) big5 += 15;
+  if (val(g.focus_topics)) big5 += 15;
+  if (val(intake.willingToDiscussPricing)) big5 += 10;
+  if (val(intake.willingToCompare)) big5 += 5;
+  scores.bigFiveSection = Math.min(100, big5);
+
+  let taya = 35;
+  if (val(intake.topQuestionsCustomersAsk)) taya += 30;
+  if (val(c.demographics_pain_points) || val(intake.customerFrustrations)) taya += 15;
+  if (val(intake.willingToAddressProblems)) taya += 10;
+  if (data.personas.length > 0) taya += 10;
+  scores.tayaQuestionsSection = Math.min(100, taya);
+
+  let endless = 40;
+  if (val(intake.willingToDiscussPricing)) endless += 15;
+  if (val(intake.willingToCompare)) endless += 15;
+  if (val(intake.willingToAddressProblems)) endless += 15;
+  if (val(g.unique_selling_points)) endless += 15;
+  scores.endlessCustomersSection = Math.min(100, endless);
+
+  return scores;
+}
+
 function buildContextBlock(data: ClientData): string {
   const parts: string[] = [];
 
@@ -825,11 +969,23 @@ export async function generateBrandStory(
   // 6. Build full markdown
   const fullStory = buildFullStoryMarkdown(allSections);
 
+  // 6b. Compute confidence scores per section based on input data quality
+  const confidenceScores = computeConfidenceScores(data);
+
   // 7. Upsert to cm_brand_story
+  const generatedAtIso = new Date().toISOString();
   const sectionColumns = BRAND_STORY_SECTIONS.map((s) => SECTION_KEY_TO_COLUMN[s.key]);
   const sectionValues = BRAND_STORY_SECTIONS.map((s) => {
     const content = allSections[s.key] ?? null;
-    return content ? JSON.stringify({ content, generated: true, edited: false }) : null;
+    if (!content) return null;
+    return JSON.stringify({
+      content,
+      generated: true,
+      edited: false,
+      generatedAt: generatedAtIso,
+      editedAt: null,
+      confidence: confidenceScores[s.key] ?? null,
+    });
   });
 
   const columnList = sectionColumns.join(", ");
@@ -923,9 +1079,17 @@ export async function regenerateBrandStorySection(
   const response = await callClaudeWithRetry(GENERATION_SYSTEM_PROMPT, prompt);
   const content = response.trim();
 
-  // 5. Update the single section column
+  // 5. Update the single section column with confidence score + new timestamp
   const column = SECTION_KEY_TO_COLUMN[typedKey];
-  const sectionData = JSON.stringify({ content, generated: true, edited: false });
+  const confidenceScores = computeConfidenceScores(data);
+  const sectionData = JSON.stringify({
+    content,
+    generated: true,
+    edited: false,
+    generatedAt: new Date().toISOString(),
+    editedAt: null,
+    confidence: confidenceScores[typedKey] ?? null,
+  });
 
   await query(
     `UPDATE cm_brand_story
@@ -954,7 +1118,19 @@ export async function updateBrandStorySection(
 
   const typedKey = sectionKey as SectionKey;
   const column = SECTION_KEY_TO_COLUMN[typedKey];
-  const sectionData = JSON.stringify({ content, generated: false, edited: true });
+
+  // Preserve existing generatedAt and confidence if any; just bump editedAt
+  const { rows: existingRows } = await query(`SELECT ${column} FROM cm_brand_story WHERE client_id = $1`, [clientId]);
+  const existing = existingRows[0]?.[column] || {};
+
+  const sectionData = JSON.stringify({
+    content,
+    generated: false,
+    edited: true,
+    generatedAt: existing.generatedAt || existing.generated_at || null,
+    editedAt: new Date().toISOString(),
+    confidence: existing.confidence ?? null,
+  });
 
   await query(
     `UPDATE cm_brand_story

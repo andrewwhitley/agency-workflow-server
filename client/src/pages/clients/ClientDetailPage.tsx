@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, relativeTime, freshnessLevel } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/FormDialog";
 import {
@@ -777,7 +777,7 @@ const frameworkBadgeColors: Record<string, string> = {
   "Endless Customers": "bg-orange-500/10 text-orange-400 border-orange-500/20",
 };
 
-interface SectionData { title: string; framework: string; content: string; generatedAt: string | null; editedAt: string | null; isEdited: boolean; }
+interface SectionData { title: string; framework: string; content: string; generatedAt: string | null; editedAt: string | null; isEdited: boolean; confidence?: number | null; }
 interface BrandStoryData {
   story: BrandStory | null;
   buyerPersonas: Array<Record<string, unknown>>;
@@ -874,6 +874,16 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [savingOutline, setSavingOutline] = useState(false);
   const [showResearchFlow, setShowResearchFlow] = useState(false);
 
+  // Freshness state
+  const [freshness, setFreshness] = useState<{
+    hasStory: boolean;
+    isStale: boolean;
+    ageDays?: number;
+    ageStale?: boolean;
+    changes: Array<{ source: string; changedAt: string; type: string }>;
+    changeCount: number;
+  } | null>(null);
+
   const reload = useCallback(() => {
     api<BrandStoryData>(`/cm/clients/${clientId}/brand-story`).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
     // Also load existing intake outline if any
@@ -883,6 +893,10 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
         if (r.outlineFields) setOutlineFields(r.outlineFields);
       })
       .catch(() => {});
+    // Load freshness check
+    api<typeof freshness>(`/cm/clients/${clientId}/brand-story/freshness`)
+      .then(setFreshness)
+      .catch(() => setFreshness(null));
   }, [clientId]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -1335,6 +1349,31 @@ ${sectionsHtml}
 
       {statusMsg && <p className="text-sm text-accent">{statusMsg}</p>}
 
+      {/* Refresh banner — shown when client data has changed since brand story was generated */}
+      {freshness && freshness.hasStory && freshness.isStale && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-300">
+                Brand story may be out of date
+              </p>
+              <p className="text-xs text-amber-200/80 mt-1">
+                {freshness.changeCount > 0 && `${freshness.changeCount} thing${freshness.changeCount === 1 ? "" : "s"} changed since the brand story was generated: `}
+                {freshness.changes.slice(0, 3).map((c) => c.source).join(", ")}
+                {freshness.changes.length > 3 && `, +${freshness.changes.length - 3} more`}
+                {freshness.ageStale && (freshness.changeCount > 0 ? ". Also, " : "") + `it's ${freshness.ageDays} days old`}
+                . Consider regenerating to capture the latest data.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" onClick={handleGenerate} disabled={generating} className="shrink-0">
+            {generating ? <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
+            Regenerate
+          </Button>
+        </div>
+      )}
+
       {/* ═══ BRANDSCRIPT VIEW ═══ */}
       {viewMode === "brandscript" && (
         <>
@@ -1735,6 +1774,24 @@ ${sectionsHtml}
                 const Icon = sectionIcons[def.key] || BookOpen;
                 const iconColor = sectionColors[def.key] || "text-dim";
 
+                const lastTouchedAt = sectionData.editedAt || sectionData.generatedAt;
+                const fresh = freshnessLevel(lastTouchedAt);
+                const ago = relativeTime(lastTouchedAt);
+                const freshClass = fresh === "stale" ? "bg-red-500/10 text-red-400 border-red-500/20"
+                  : fresh === "aging" ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-success/10 text-success border-success/20";
+
+                // Confidence badge
+                const confidence = sectionData.confidence;
+                const confidenceClass = confidence == null ? null
+                  : confidence >= 75 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  : confidence >= 50 ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-red-500/10 text-red-400 border-red-500/20";
+                const confidenceLabel = confidence == null ? null
+                  : confidence >= 75 ? `${confidence}% (high)`
+                  : confidence >= 50 ? `${confidence}% (med)`
+                  : `${confidence}% (low — add intake data)`;
+
                 return (
             <div key={def.key} className={cn("border border-border rounded-md bg-surface transition-all", isExpanded && "ring-1 ring-blue-500/30")}>
               <button onClick={() => toggleSection(def.key)} className="w-full p-4 text-left hover:bg-surface-2 transition-colors">
@@ -1743,9 +1800,11 @@ ${sectionsHtml}
                     <div className={cn("p-1.5 rounded-md bg-surface-2", iconColor)}><Icon className="h-4 w-4" /></div>
                     <div>
                       <div className="text-sm font-medium text-foreground">{def.title}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={cn("text-[10px] px-1.5 py-0 rounded border", frameworkBadgeColors[def.framework] || "")}>{def.framework}</span>
                         {sectionData.isEdited && <span className="text-[10px] px-1.5 py-0 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">Edited</span>}
+                        {ago && <span className={cn("text-[10px] px-1.5 py-0 rounded border", freshClass)} title={lastTouchedAt ? new Date(lastTouchedAt).toLocaleString() : ""}>{ago}</span>}
+                        {confidence != null && <span className={cn("text-[10px] px-1.5 py-0 rounded border", confidenceClass)} title="Data confidence — based on how much real client data was available during generation">{confidenceLabel}</span>}
                       </div>
                     </div>
                   </div>
