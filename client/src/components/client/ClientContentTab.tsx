@@ -18,19 +18,13 @@ interface CalendarItem {
 interface CalendarStrategy { calendar: CalendarItem[]; summary?: { totalPages?: number; blogPosts?: number; caseStudies?: number; }; }
 interface PlanningRow { id: string; row_index: number; data: Record<string, string>; }
 interface KeywordResult { keyword: string; searchVolume?: number; keywordDifficulty?: number; cpc?: number; competitionLevel?: string; }
-interface SerpItem { position?: number; title?: string; type?: string; url?: string; domain?: string; }
-interface DomainKeyword { keyword: string; position: number; searchVolume?: number; cpc?: number; url?: string; }
-interface DomainCompetitor { domain: string; avgPosition?: number; keywordIntersections?: number; organicTraffic?: number; }
-interface ContentResult { title?: string; url?: string; datePublished?: string; contentLength?: number; }
-interface BusinessListing { title?: string; rating?: number; reviewCount?: number; address?: string; phone?: string; category?: string; url?: string; }
+
 interface ContentStatus { hasContentProfile?: boolean; hasProfile?: boolean; hasFulfillmentFolder?: boolean; hasPlanningSheet?: boolean; hasOutputFolder?: boolean; }
 
-const TABS = ["plan", "calendar", "generate", "sheet", "seo", "runs", "settings"] as const;
+const TABS = ["plan", "calendar", "generate", "sheet", "runs", "settings"] as const;
 type Tab = typeof TABS[number];
-const TAB_LABELS: Record<string, string> = { plan: "Content Plan", calendar: "Calendar", generate: "Generate", sheet: "Planning Sheet", seo: "SEO Research", runs: "Runs", settings: "Settings" };
+const TAB_LABELS: Record<string, string> = { plan: "Content Plan", calendar: "Calendar", generate: "Generate", sheet: "Planning Sheet", runs: "Runs", settings: "Settings" };
 const SHEET_SUBTABS = ["content-tracking", "topical-sitemap", "deliverables", "completed"] as const;
-const SEO_SUBTABS = ["serp", "domain", "onpage", "content", "business"] as const;
-const SEO_LABELS: Record<string, string> = { serp: "SERP Analysis", domain: "Domain Analytics", onpage: "On-Page Audit", content: "Content Analysis", business: "Business Listings" };
 
 // ── Helpers ──────────────────────────────────
 
@@ -96,7 +90,7 @@ export function ClientContentTab({ clientSlug }: { clientSlug: string }) {
       {tab === "calendar" && <CalendarTab slug={clientSlug} />}
       {tab === "generate" && <GenerateTab slug={clientSlug} />}
       {tab === "sheet" && <SheetTab slug={clientSlug} />}
-      {tab === "seo" && <SeoResearchTab />}
+
       {tab === "runs" && <RunsTab slug={clientSlug} />}
       {tab === "settings" && <SettingsTab slug={clientSlug} />}
     </div>
@@ -569,129 +563,7 @@ function SheetTab({ slug }: { slug: string }) {
   );
 }
 
-// ── SEO Research Tab ──────────────────────────
-
-function SeoResearchTab() {
-  const [subtab, setSubtab] = useState<string>("serp");
-  return (
-    <div>
-      <div className="flex gap-1 mb-6">{SEO_SUBTABS.map((st) => (<button key={st} onClick={() => setSubtab(st)} className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors", subtab === st ? "bg-accent text-white" : "bg-surface-2 text-muted hover:bg-surface-3")}>{SEO_LABELS[st]}</button>))}</div>
-      {subtab === "serp" && <SerpPanel />}
-      {subtab === "domain" && <DomainPanel />}
-      {subtab === "onpage" && <OnPagePanel />}
-      {subtab === "content" && <ContentAnalysisPanel />}
-      {subtab === "business" && <BusinessPanel />}
-    </div>
-  );
-}
-
-function SerpPanel() {
-  const [keyword, setKeyword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<{ totalResults?: number; items?: SerpItem[]; peopleAlsoAsk?: string[]; relatedSearches?: string[] } | null>(null);
-
-  const search = async () => { if (!keyword.trim()) return; setLoading(true); try { setData(await api("/seo/serp", { method: "POST", body: JSON.stringify({ keyword: keyword.trim() }) })); } catch (err) { console.error(err); } setLoading(false); };
-  const searchRelated = (term: string) => { setKeyword(term); setLoading(true); api<typeof data>("/seo/serp", { method: "POST", body: JSON.stringify({ keyword: term }) }).then(setData).catch(console.error).finally(() => setLoading(false)); };
-
-  return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <input type="text" value={keyword} onChange={(e) => setKeyword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Enter a search query..." className="flex-1 px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" />
-        <button onClick={search} disabled={loading} className={cn("px-4 py-2 rounded-md text-sm font-medium", loading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>{loading ? "Searching..." : "Search"}</button>
-      </div>
-      {data && (<div className="space-y-4">
-        <div className="text-xs text-muted">{(data.totalResults || 0).toLocaleString()} results</div>
-        {data.peopleAlsoAsk?.length ? (<div className="bg-surface-2 rounded-md p-3"><div className="text-sm font-semibold text-foreground mb-2">People Also Ask</div><ul className="text-sm text-muted space-y-1 ml-4 list-disc">{data.peopleAlsoAsk.map((q, i) => <li key={i}>{q}</li>)}</ul></div>) : null}
-        <div className="bg-surface border border-border rounded-md overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-border bg-surface-2"><th className="text-center px-3 py-2 font-medium text-dim w-12">#</th><th className="text-left px-3 py-2 font-medium text-dim">Title</th><th className="text-left px-3 py-2 font-medium text-dim">Type</th><th className="text-left px-3 py-2 font-medium text-dim">URL</th></tr></thead>
-          <tbody>{(data.items || []).map((item, i) => (<tr key={i} className="border-b border-border last:border-0 hover:bg-surface-2/50"><td className="px-3 py-2 text-center font-semibold text-dim">{item.position}</td><td className="px-3 py-2 font-medium text-foreground">{item.title}</td><td className="px-3 py-2"><TypeBadge type={item.type === "organic" ? "core" : item.type === "local_pack" ? "area" : "support"} /></td><td className="px-3 py-2 text-xs max-w-[300px] truncate">{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{item.domain || item.url}</a>}</td></tr>))}</tbody></table></div>
-        {data.relatedSearches?.length ? (<div className="bg-surface-2 rounded-md p-3"><div className="text-sm font-semibold text-foreground mb-2">Related Searches</div><div className="flex flex-wrap gap-2">{data.relatedSearches.map((rs, i) => (<button key={i} onClick={() => searchRelated(rs)} className="px-2 py-1 rounded text-xs bg-surface border border-border text-foreground hover:border-accent transition-colors">{rs}</button>))}</div></div>) : null}
-      </div>)}
-    </div>
-  );
-}
-
-function DomainPanel() {
-  const [domain, setDomain] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [overview, setOverview] = useState<{ organicTraffic?: number; organicKeywords?: number; rank?: number } | null>(null);
-  const [keywords, setKeywords] = useState<DomainKeyword[]>([]);
-  const [competitors, setCompetitors] = useState<DomainCompetitor[]>([]);
-
-  const analyze = async (d?: string) => {
-    const target = d || domain.trim(); if (!target) return; if (d) setDomain(d); setLoading(true);
-    try {
-      const [ov, kw, comp] = await Promise.all([
-        api<typeof overview>("/seo/domain/overview", { method: "POST", body: JSON.stringify({ domain: target }) }),
-        api<{ keywords?: DomainKeyword[] }>("/seo/domain/keywords", { method: "POST", body: JSON.stringify({ domain: target, limit: 20 }) }),
-        api<{ competitors?: DomainCompetitor[] }>("/seo/domain/competitors", { method: "POST", body: JSON.stringify({ domain: target, limit: 10 }) }),
-      ]);
-      setOverview(ov); setKeywords(kw.keywords || []); setCompetitors(comp.competitors || []);
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  };
-
-  return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <input type="text" value={domain} onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => e.key === "Enter" && analyze()} placeholder="Enter a domain (e.g. example.com)" className="flex-1 px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" />
-        <button onClick={() => analyze()} disabled={loading} className={cn("px-4 py-2 rounded-md text-sm font-medium", loading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>{loading ? "Analyzing..." : "Analyze"}</button>
-      </div>
-      {overview && (<div className="space-y-6">
-        <div className="flex gap-4 flex-wrap"><StatCard value={(overview.organicTraffic || 0).toLocaleString()} label="Est. Monthly Traffic" /><StatCard value={(overview.organicKeywords || 0).toLocaleString()} label="Ranked Keywords" /><StatCard value={(overview.rank || 0).toLocaleString()} label="Domain Rank" /></div>
-        {keywords.length > 0 && (<div><h3 className="text-sm font-semibold text-foreground mb-2">Top Ranked Keywords</h3><div className="bg-surface border border-border rounded-md overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-border bg-surface-2"><th className="text-left px-3 py-2 font-medium text-dim">Keyword</th><th className="text-center px-3 py-2 font-medium text-dim">Pos</th><th className="text-left px-3 py-2 font-medium text-dim">Vol</th><th className="text-left px-3 py-2 font-medium text-dim">CPC</th><th className="text-left px-3 py-2 font-medium text-dim">URL</th></tr></thead>
-          <tbody>{keywords.map((kw, i) => (<tr key={i} className="border-b border-border last:border-0 hover:bg-surface-2/50"><td className="px-3 py-2 font-medium text-foreground">{kw.keyword}</td><td className="px-3 py-2 text-center font-semibold">{kw.position}</td><td className={cn("px-3 py-2 text-xs", volClass(kw.searchVolume))}>{(kw.searchVolume || 0).toLocaleString()}</td><td className="px-3 py-2 text-xs text-muted">${(kw.cpc || 0).toFixed(2)}</td><td className="px-3 py-2 text-xs max-w-[200px] truncate">{kw.url && <a href={kw.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{kw.url.replace(/^https?:\/\/[^/]+/, "")}</a>}</td></tr>))}</tbody></table></div></div>)}
-        {competitors.length > 0 && (<div><h3 className="text-sm font-semibold text-foreground mb-2">Competitors</h3><div className="bg-surface border border-border rounded-md overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-border bg-surface-2"><th className="text-left px-3 py-2 font-medium text-dim">Domain</th><th className="text-center px-3 py-2 font-medium text-dim">Avg Position</th><th className="text-left px-3 py-2 font-medium text-dim">Keyword Overlap</th><th className="text-left px-3 py-2 font-medium text-dim">Est. Traffic</th></tr></thead>
-          <tbody>{competitors.map((c, i) => (<tr key={i} className="border-b border-border last:border-0 hover:bg-surface-2/50"><td className="px-3 py-2"><button onClick={() => analyze(c.domain)} className="text-accent hover:underline font-medium">{c.domain}</button></td><td className="px-3 py-2 text-center">{(c.avgPosition || 0).toFixed(1)}</td><td className="px-3 py-2">{(c.keywordIntersections || 0).toLocaleString()}</td><td className="px-3 py-2">{c.organicTraffic ? c.organicTraffic.toLocaleString() : "—"}</td></tr>))}</tbody></table></div></div>)}
-      </div>)}
-    </div>
-  );
-}
-
-function OnPagePanel() {
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<{ onpageScore?: number; statusCode?: number; loadTime?: number; size?: number; title?: string; description?: string; h1?: string[]; brokenLinks?: number; brokenResources?: number; duplicateTitle?: boolean; duplicateDescription?: boolean; checks?: Record<string, boolean>; } | null>(null);
-  const audit = async () => { if (!url.trim()) return; setLoading(true); try { setData(await api("/seo/onpage", { method: "POST", body: JSON.stringify({ url: url.trim() }) })); } catch (err) { console.error(err); } setLoading(false); };
-  const scoreColor = (score?: number) => { if (!score) return "text-muted"; if (score >= 80) return "text-success"; if (score >= 50) return "text-warning"; return "text-destructive"; };
-
-  return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && audit()} placeholder="Enter a full URL (e.g. https://example.com/)" className="flex-1 px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" />
-        <button onClick={audit} disabled={loading} className={cn("px-4 py-2 rounded-md text-sm font-medium", loading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>{loading ? "Auditing..." : "Audit"}</button>
-      </div>
-      {data && (<div className="space-y-6">
-        <div className="flex gap-4 flex-wrap"><div className="bg-surface border border-border rounded-md p-4 flex-1 min-w-[120px]"><div className={cn("text-4xl font-bold", scoreColor(data.onpageScore))}>{(data.onpageScore || 0).toFixed(0)}</div><div className="text-xs text-muted">SEO Score</div></div><StatCard value={data.statusCode || 0} label="Status Code" /><StatCard value={`${((data.loadTime || 0) * 1000).toFixed(0)}ms`} label="Load Time" /><StatCard value={`${((data.size || 0) / 1024).toFixed(0)}KB`} label="Page Size" /></div>
-        <div><h3 className="text-sm font-semibold text-foreground mb-2">Meta Tags</h3><div className="bg-surface-2 rounded-md p-4 text-sm space-y-2"><div><span className="font-semibold">Title:</span> {data.title || "Missing"}</div><div><span className="font-semibold">Description:</span> {data.description || "Missing"}</div><div><span className="font-semibold">H1:</span> {data.h1?.length ? data.h1.join(", ") : "Missing"}</div></div></div>
-        {(data.brokenLinks || data.brokenResources || data.duplicateTitle || data.duplicateDescription) && (<div><h3 className="text-sm font-semibold text-destructive mb-2">Issues Found</h3><div className="flex flex-wrap gap-2">{!!data.brokenLinks && <span className="text-xs px-2 py-1 rounded bg-destructive/10 text-destructive">{data.brokenLinks} broken links</span>}{!!data.brokenResources && <span className="text-xs px-2 py-1 rounded bg-destructive/10 text-destructive">{data.brokenResources} broken resources</span>}{data.duplicateTitle && <span className="text-xs px-2 py-1 rounded bg-warning/10 text-warning">Duplicate title</span>}{data.duplicateDescription && <span className="text-xs px-2 py-1 rounded bg-warning/10 text-warning">Duplicate description</span>}</div></div>)}
-        {data.checks && (<div><h3 className="text-sm font-semibold text-foreground mb-2">Technical Checks</h3><div className="flex flex-wrap gap-2">{Object.entries(data.checks).map(([key, val]) => { const isGood = (key === "is_https" || key === "has_meta_title" || key === "has_meta_description") ? val : !val; const label = key.replace(/_/g, " ").replace(/^is /, "").replace(/^has /, "").replace(/^no /, "missing "); return (<span key={key} className={cn("text-xs px-2 py-1 rounded", isGood ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>{isGood ? "✓" : "✗"} {label}</span>); })}</div></div>)}
-      </div>)}
-    </div>
-  );
-}
-
-function ContentAnalysisPanel() {
-  const [keyword, setKeyword] = useState(""); const [loading, setLoading] = useState(false); const [results, setResults] = useState<ContentResult[]>([]);
-  const search = async () => { if (!keyword.trim()) return; setLoading(true); try { setResults((await api<{ results?: ContentResult[] }>("/seo/content", { method: "POST", body: JSON.stringify({ keyword: keyword.trim(), limit: 20 }) })).results || []); } catch (err) { console.error(err); } setLoading(false); };
-  return (
-    <div>
-      <div className="flex gap-2 mb-4"><input type="text" value={keyword} onChange={(e) => setKeyword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Search for content about..." className="flex-1 px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" /><button onClick={search} disabled={loading} className={cn("px-4 py-2 rounded-md text-sm font-medium", loading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>{loading ? "Searching..." : "Search"}</button></div>
-      {results.length > 0 && (<div className="bg-surface border border-border rounded-md overflow-hidden"><table className="w-full text-sm"><thead><tr className="border-b border-border bg-surface-2"><th className="text-left px-3 py-2 font-medium text-dim">Title</th><th className="text-left px-3 py-2 font-medium text-dim">URL</th><th className="text-left px-3 py-2 font-medium text-dim">Published</th><th className="text-left px-3 py-2 font-medium text-dim">Length</th></tr></thead>
-        <tbody>{results.map((item, i) => (<tr key={i} className="border-b border-border last:border-0 hover:bg-surface-2/50"><td className="px-3 py-2 font-medium text-foreground max-w-[300px] truncate">{item.title}</td><td className="px-3 py-2 text-xs max-w-[250px] truncate">{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{item.url.replace(/^https?:\/\//, "").slice(0, 60)}</a>}</td><td className="px-3 py-2 text-xs text-muted">{item.datePublished ? new Date(item.datePublished).toLocaleDateString() : "—"}</td><td className="px-3 py-2 text-xs text-muted">{item.contentLength ? (item.contentLength > 1000 ? `${(item.contentLength / 1000).toFixed(1)}K` : item.contentLength) + " chars" : "—"}</td></tr>))}</tbody></table></div>)}
-    </div>
-  );
-}
-
-function BusinessPanel() {
-  const [keyword, setKeyword] = useState(""); const [loading, setLoading] = useState(false); const [listings, setListings] = useState<BusinessListing[]>([]);
-  const search = async () => { if (!keyword.trim()) return; setLoading(true); try { setListings((await api<{ listings?: BusinessListing[] }>("/seo/business", { method: "POST", body: JSON.stringify({ keyword: keyword.trim(), limit: 20 }) })).listings || []); } catch (err) { console.error(err); } setLoading(false); };
-  return (
-    <div>
-      <div className="flex gap-2 mb-4"><input type="text" value={keyword} onChange={(e) => setKeyword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Search businesses (e.g. chiropractor phoenix az)" className="flex-1 px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm focus:outline-none focus:border-accent" /><button onClick={search} disabled={loading} className={cn("px-4 py-2 rounded-md text-sm font-medium", loading ? "bg-surface-2 text-dim" : "bg-accent text-white hover:bg-accent/90")}>{loading ? "Searching..." : "Search"}</button></div>
-      {listings.length > 0 && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{listings.map((biz, i) => (<div key={i} className="bg-surface border border-border rounded-md p-4"><div className="font-semibold text-sm text-foreground mb-1">{biz.title}</div>{biz.rating != null && (<div className="flex items-center gap-1 mb-2">{[1,2,3,4,5].map((s)=>(<span key={s} className={s<=Math.round(biz.rating!)?"text-warning":"text-dim"}>&#9733;</span>))}<span className="text-xs text-muted ml-1">{biz.rating.toFixed(1)} ({biz.reviewCount||0})</span></div>)}{biz.address && <div className="text-xs text-muted mb-1">{biz.address}</div>}{biz.phone && <div className="text-xs text-muted mb-1">{biz.phone}</div>}{biz.category && <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">{biz.category}</span>}{biz.url && <div className="mt-2"><a href={biz.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">Website</a></div>}</div>))}</div>)}
-    </div>
-  );
-}
+// (SEO Research tab removed — now lives in the client SEO tab)
 
 // ── Runs Tab ──────────────────────────────────
 
