@@ -215,7 +215,8 @@ async function importGeneralCompanyInfo(
     "Business Time Zone:": "time_zone",
     "Payment Types Accepted:": "payment_types_accepted",
     "Combined years of experience between your leadership team members:": "combined_years_experience",
-    "Other Business Facts (Review/BBB Ratings, # of Specialists, # of clients/projects completed, etc):": "business_facts",
+    // "Other Business Facts" → merged into notable_mentions (handled specially below)
+    // "Other Business Facts (Review/BBB Ratings, ...)" is NOT in directMap — handled after the loop
     "Notable Mentions:": "notable_mentions",
     // "Guarantees / Pledges:" lives in cm_content_guidelines, handled separately below
     "What Makes Your Company Unique From Your Competitors?:": "what_makes_us_unique",
@@ -228,12 +229,8 @@ async function importGeneralCompanyInfo(
     "Company Mission Statement:": "mission_statement",
     "Company Core Values:": "core_values",
     "Company Slogans or Mottos to include in marketing materials:": "slogans_mottos",
-    "Gender Breakdown (Male%/Female%):": "demographics_gender",
-    "Age Breakdown (What percent in each age group):": "demographics_age",
-    "Location:": "demographics_location",
-    "Income Range:": "demographics_income",
-    "Main Pain Points:": "demographics_pain_points",
-    "Education Level:": "demographics_education",
+    // Demographics fields → routed to a "General Client Demographics" buyer persona (handled below)
+    // NOT stored as flat fields on cm_clients — buyer personas are the single source of truth
     "Languages Spoken:": "languages_spoken",
   };
 
@@ -305,6 +302,68 @@ async function importGeneralCompanyInfo(
     const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(", ");
     const params = [clientId, ...Object.values(updates)];
     await query(`UPDATE cm_clients SET ${sets}, updated_at = NOW() WHERE id = $1`, params);
+  }
+
+  // ── Business Facts → merge into notable_mentions ──
+  const businessFacts = nz(fields.get("Other Business Facts (Review/BBB Ratings, # of Specialists, # of clients/projects completed, etc):"));
+  if (businessFacts) {
+    // Append to notable_mentions if it already has content, otherwise set it
+    const { rows: currentClient } = await query("SELECT notable_mentions FROM cm_clients WHERE id = $1", [clientId]);
+    const existing = nz(currentClient[0]?.notable_mentions);
+    const merged = existing ? `${existing}\n${businessFacts}` : businessFacts;
+    await query("UPDATE cm_clients SET notable_mentions = $1, updated_at = NOW() WHERE id = $2", [merged, clientId]);
+    count++;
+  }
+
+  // ── Demographics → create "General Client Demographics" buyer persona ──
+  const demoGender = nz(fields.get("Gender Breakdown (Male%/Female%):"));
+  const demoAge = nz(fields.get("Age Breakdown (What percent in each age group):"));
+  const demoLocation = nz(fields.get("Location:"));
+  const demoIncome = nz(fields.get("Income Range:"));
+  const demoPainPoints = nz(fields.get("Main Pain Points:"));
+  const demoEducation = nz(fields.get("Education Level:"));
+
+  if (demoGender || demoAge || demoLocation || demoIncome || demoPainPoints || demoEducation) {
+    const personaName = "General Client Demographics";
+    const { rows: existingPersona } = await query(
+      "SELECT id FROM cm_buyer_personas WHERE client_id = $1 AND persona_name = $2 LIMIT 1",
+      [clientId, personaName]
+    );
+
+    // Build a summary description (age column is INT for individual personas,
+    // so we put the demographic breakdown into needs_description instead)
+    const demoSummary = [
+      demoGender && `Gender: ${demoGender}`,
+      demoAge && `Age: ${demoAge}`,
+      demoLocation && `Location: ${demoLocation}`,
+      demoIncome && `Income: ${demoIncome}`,
+      demoEducation && `Education: ${demoEducation}`,
+    ].filter(Boolean).join("\n");
+
+    if (existingPersona.length > 0) {
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      let pi = 1;
+      if (demoGender) { sets.push(`gender = $${++pi}`); vals.push(demoGender); }
+      if (demoLocation) { sets.push(`location = $${++pi}`); vals.push(demoLocation); }
+      if (demoIncome) { sets.push(`income_level = $${++pi}`); vals.push(demoIncome); }
+      if (demoPainPoints) { sets.push(`pain_points = $${++pi}`); vals.push(demoPainPoints); }
+      if (demoEducation) { sets.push(`education_level = $${++pi}`); vals.push(demoEducation); }
+      if (demoSummary) { sets.push(`needs_description = $${++pi}`); vals.push(demoSummary); }
+      if (sets.length > 0) {
+        await query(
+          `UPDATE cm_buyer_personas SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`,
+          [existingPersona[0].id, ...vals]
+        );
+      }
+    } else {
+      await query(
+        `INSERT INTO cm_buyer_personas (client_id, persona_name, gender, location, income_level, pain_points, education_level, needs_description, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'intake_import')`,
+        [clientId, personaName, demoGender, demoLocation, demoIncome, demoPainPoints, demoEducation, demoSummary]
+      );
+    }
+    count++;
   }
 
   // Some intake fields actually map to cm_content_guidelines (USPs, guarantees)

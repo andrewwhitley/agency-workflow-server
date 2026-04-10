@@ -1074,8 +1074,7 @@ Only include fields where you can extract real data. Be specific — use actual 
       if (extracted.companyBackground && typeof extracted.companyBackground === "string") { clientUpdates.company_background = extracted.companyBackground; fieldsUpdated++; }
       if (extracted.missionStatement && typeof extracted.missionStatement === "string") { clientUpdates.mission_statement = extracted.missionStatement; fieldsUpdated++; }
       if (extracted.coreValues && typeof extracted.coreValues === "string") { clientUpdates.core_values = extracted.coreValues; fieldsUpdated++; }
-      if (extracted.targetAudience && typeof extracted.targetAudience === "string") { clientUpdates.demographics_pain_points = extracted.painPoints as string || ""; fieldsUpdated++; }
-      if (extracted.brandVoice && typeof extracted.brandVoice === "string") { clientUpdates.what_makes_us_unique = extracted.uniqueSellingPoints as string || ""; fieldsUpdated++; }
+      if (extracted.uniqueSellingPoints && typeof extracted.uniqueSellingPoints === "string") { clientUpdates.what_makes_us_unique = extracted.uniqueSellingPoints as string; fieldsUpdated++; }
 
       if (Object.keys(clientUpdates).length > 0) {
         const sets = Object.keys(clientUpdates).map((k, i) => `${k} = COALESCE(NULLIF($${i + 2}, ''), ${k})`);
@@ -1083,6 +1082,36 @@ Only include fields where you can extract real data. Be specific — use actual 
           `UPDATE cm_clients SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`,
           [clientId, ...Object.values(clientUpdates)]
         );
+      }
+
+      // Demographics + target audience → create/update "General Client Demographics" buyer persona
+      if (extracted.targetAudience || extracted.painPoints || extracted.demographics) {
+        const personaName = "General Client Demographics";
+        const { rows: existingPersona } = await query(
+          "SELECT id FROM cm_buyer_personas WHERE client_id = $1 AND persona_name = $2 LIMIT 1",
+          [clientId, personaName]
+        );
+        const needsDesc = [extracted.targetAudience, extracted.demographics].filter(Boolean).join("\n");
+        const painPts = extracted.painPoints ? String(extracted.painPoints) : null;
+
+        if (existingPersona.length > 0) {
+          const sets: string[] = [];
+          const vals: unknown[] = [existingPersona[0].id];
+          let idx = 2;
+          if (needsDesc) { sets.push(`needs_description = $${idx++}`); vals.push(needsDesc); }
+          if (painPts) { sets.push(`pain_points = $${idx++}`); vals.push(painPts); }
+          if (sets.length > 0) {
+            await query(`UPDATE cm_buyer_personas SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`, vals);
+          }
+        } else {
+          await query(
+            `INSERT INTO cm_buyer_personas (client_id, persona_name, needs_description, pain_points, source)
+             VALUES ($1, $2, $3, $4, 'transcript')`,
+            [clientId, personaName, needsDesc || "Extracted from discovery call transcript", painPts]
+          );
+        }
+        fieldsUpdated++;
+        entitiesCreated.personas = (entitiesCreated.personas || 0) + 1;
       }
 
       // Update content guidelines if USPs / voice extracted

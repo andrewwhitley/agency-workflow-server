@@ -539,13 +539,13 @@ export function computeConfidenceScores(data: ClientData): Record<string, number
   if (data.personas.length > 0) hero += 25;
   if (data.personas.length >= 2) hero += 10;
   if (val(g.target_audience_summary) || val(g.demographics) || val(g.psychographics)) hero += 15;
-  if (val(c.demographics_pain_points) || val(c.demographics_age) || val(intake.idealCustomerDescription)) hero += 10;
+  if (data.personas.some((p) => val(p.pain_points) || val(p.age)) || val(intake.idealCustomerDescription)) hero += 10;
   if (val(intake.customerFrustrations) || val(intake.customerDesires)) hero += 10;
   scores.heroSection = Math.min(100, hero);
 
   // ── problemSection: needs pain points, frustrations ──
   let problem = 30;
-  if (val(c.demographics_pain_points)) problem += 15;
+  if (data.personas.some((p) => val(p.pain_points))) problem += 15;
   if (val(intake.customerFrustrations) || val(intake.biggestFrustration)) problem += 15;
   if (val(intake.practicalProblem) || val(intake.emotionalProblem)) problem += 15;
   if (val(intake.whyItMatters)) problem += 10;
@@ -587,7 +587,7 @@ export function computeConfidenceScores(data: ClientData): Record<string, number
   // ── failureSection: needs stakes + concerns ──
   let failure = 40;
   if (val(intake.whatHappensIfTheyDontAct)) failure += 25;
-  if (val(c.demographics_pain_points)) failure += 15;
+  if (data.personas.some((p) => val(p.pain_points))) failure += 15;
   if (data.services.some((s) => val(s.common_concerns))) failure += 15;
   scores.failureSection = Math.min(100, failure);
 
@@ -639,7 +639,7 @@ export function computeConfidenceScores(data: ClientData): Record<string, number
 
   let taya = 35;
   if (val(intake.topQuestionsCustomersAsk)) taya += 30;
-  if (val(c.demographics_pain_points) || val(intake.customerFrustrations)) taya += 15;
+  if (data.personas.some((p) => val(p.pain_points)) || val(intake.customerFrustrations)) taya += 15;
   if (val(intake.willingToAddressProblems)) taya += 10;
   if (data.personas.length > 0) taya += 10;
   scores.tayaQuestionsSection = Math.min(100, taya);
