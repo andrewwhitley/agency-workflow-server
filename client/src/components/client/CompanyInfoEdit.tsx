@@ -98,7 +98,6 @@ const SECTIONS: SectionConfig[] = [
     title: "Background & Credentials",
     fields: [
       { key: "combinedYearsExperience", label: "Combined Years Experience", type: "number" },
-      { key: "businessFacts", label: "Business Facts", type: "textarea" },
       { key: "affiliationsAssociations", label: "Affiliations & Associations", type: "textarea" },
       { key: "certificationsTrainings", label: "Certifications & Trainings", type: "textarea" },
       { key: "awardsRecognitions", label: "Awards & Recognitions", type: "textarea" },
@@ -116,17 +115,6 @@ const SECTIONS: SectionConfig[] = [
       { key: "companyBackground", label: "Company Background Story", type: "textarea" },
       { key: "foundingInspiration", label: "Founding Inspiration", type: "textarea" },
       { key: "whatMakesUsUnique", label: "What Makes Us Unique", type: "textarea" },
-    ],
-  },
-  {
-    title: "Audience Demographics",
-    fields: [
-      { key: "demographicsGender", label: "Gender Breakdown" },
-      { key: "demographicsAge", label: "Age Breakdown" },
-      { key: "demographicsLocation", label: "Geographic Distribution" },
-      { key: "demographicsIncome", label: "Income Range" },
-      { key: "demographicsEducation", label: "Education Level" },
-      { key: "demographicsPainPoints", label: "Main Pain Points", type: "textarea" },
     ],
   },
   {
