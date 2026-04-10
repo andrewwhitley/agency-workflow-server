@@ -31,6 +31,7 @@ import { WeeklyCheckInPage } from "./pages/clients/WeeklyCheckInPage";
 import { TrafficLightSettingsPage } from "./pages/clients/TrafficLightSettingsPage";
 import { EnrichmentPage } from "./pages/sales/EnrichmentPage";
 import { SharedBrandStoryPage } from "./pages/SharedBrandStoryPage";
+import { PrintBrandStoryPage } from "./pages/PrintBrandStoryPage";
 import { MarketingGuidesPage } from "./pages/MarketingGuidesPage";
 import { MarketingGuideEditorPage } from "./pages/MarketingGuideEditorPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
@@ -41,6 +42,7 @@ export default function App() {
     <Routes>
       {/* Public pages (no auth, no sidebar) */}
       <Route path="/brand-story/:token" element={<SharedBrandStoryPage />} />
+      <Route path="/brand-story-print/:token" element={<PrintBrandStoryPage />} />
       <Route path="/onboarding/intake" element={<PublicOnboardingPage />} />
 
       <Route element={<DashboardLayout />}>

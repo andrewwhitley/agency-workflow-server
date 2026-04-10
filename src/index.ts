@@ -1402,8 +1402,11 @@ async function main(): Promise<void> {
 
   // ─── React SPA catch-all ──────────────────────
   // Must be AFTER all API routes, health check, and MCP endpoints
-  // Public pages (brand-story) skip auth; all others require it
+  // Public pages (brand-story, brand-story-print) skip auth; all others require it
   app.get("/brand-story/*", (_req, res) => {
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+  app.get("/brand-story-print/*", (_req, res) => {
     res.sendFile(path.join(clientDistPath, "index.html"));
   });
   app.get("/onboarding/*", (_req, res) => {
