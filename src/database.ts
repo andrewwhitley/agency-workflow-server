@@ -1849,6 +1849,14 @@ Build recovery game plan with specific action items and timeline', 'Within 24 ho
     `,
   },
   {
+    id: "054_client_coordinates",
+    sql: `
+      -- Lat/lng coordinates for client locations (used by heatmap auto-fill)
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,7);
+      ALTER TABLE cm_clients ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,7);
+    `,
+  },
+  {
     id: "053_intake_field_completeness",
     sql: `
       -- ─── Pillar 1: Foundation gaps ─────────────────────────

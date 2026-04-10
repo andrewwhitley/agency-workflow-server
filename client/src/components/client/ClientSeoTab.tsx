@@ -63,7 +63,7 @@ function safeDate(d: string | null | undefined): string {
 
 // ── Main Component ──────────────────────────────────
 
-export function ClientSeoTab({ clientSlug, clientDomain }: { clientSlug: string; clientDomain: string }) {
+export function ClientSeoTab({ clientSlug, clientDomain, clientId }: { clientSlug: string; clientDomain: string; clientId?: number }) {
   const [tab, setTab] = useState<SeoTab>("overview");
 
   if (!clientDomain) {
@@ -89,7 +89,7 @@ export function ClientSeoTab({ clientSlug, clientDomain }: { clientSlug: string;
 
       {tab === "overview" && <OverviewTab slug={clientSlug} domain={clientDomain} />}
       {tab === "keywords" && <KeywordsTab slug={clientSlug} domain={clientDomain} />}
-      {tab === "heatmap" && <HeatmapTab slug={clientSlug} />}
+      {tab === "heatmap" && <HeatmapTab slug={clientSlug} clientId={clientId} />}
       {tab === "audits" && <AuditsTab slug={clientSlug} domain={clientDomain} />}
       {tab === "research" && <ResearchTab domain={clientDomain} />}
     </div>
@@ -102,6 +102,7 @@ function OverviewTab({ slug, domain }: { slug: string; domain: string }) {
   const [snapshots, setSnapshots] = useState<DomainSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [snapshotting, setSnapshotting] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
   useEffect(() => {
     api<DomainSnapshot[]>(`/seo/clients/${slug}/domain/history`).then(setSnapshots).catch(() => []).finally(() => setLoading(false));
@@ -109,10 +110,14 @@ function OverviewTab({ slug, domain }: { slug: string; domain: string }) {
 
   const takeSnapshot = async () => {
     setSnapshotting(true);
+    setSnapshotError(null);
     try {
-      await api(`/seo/clients/${slug}/domain/snapshot`, { method: "POST" });
+      await api(`/seo/clients/${slug}/domain/snapshot`, { method: "POST", body: JSON.stringify({ domain }) });
       setSnapshots(await api<DomainSnapshot[]>(`/seo/clients/${slug}/domain/history`));
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setSnapshotError(err instanceof Error ? err.message : "Snapshot failed. Check if DataForSEO is configured.");
+    }
     setSnapshotting(false);
   };
 
@@ -129,6 +134,9 @@ function OverviewTab({ slug, domain }: { slug: string; domain: string }) {
         </Button>
         {latest && <span className="text-xs text-dim">Last: {safeDate(latest.snapshot_date)}</span>}
       </div>
+      {snapshotError && (
+        <div className="bg-destructive/10 text-destructive text-sm rounded-md px-3 py-2 mb-4">{snapshotError}</div>
+      )}
       {latest ? (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           {[
@@ -366,7 +374,7 @@ function KeywordsTab({ slug, domain }: { slug: string; domain: string }) {
 
 // ── Heatmap Tab ──────────────────────────────────
 
-function HeatmapTab({ slug }: { slug: string }) {
+function HeatmapTab({ slug, clientId }: { slug: string; clientId?: number }) {
   const [scans, setScans] = useState<HeatmapScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -377,27 +385,20 @@ function HeatmapTab({ slug }: { slug: string }) {
   const [radiusMiles, setRadiusMiles] = useState(1.5);
   const [scanning, setScanning] = useState(false);
   const [selectedScan, setSelectedScan] = useState<{ scan: HeatmapScan; points: HeatmapPoint[] } | null>(null);
-  const [geoLoading, setGeoLoading] = useState(false);
 
   useEffect(() => {
     api<HeatmapScan[]>(`/seo/clients/${slug}/heatmap/scans`).then(setScans).catch(() => []).finally(() => setLoading(false));
-  }, [slug]);
-
-  // Auto-fetch client location for pre-filling lat/lng
-  const autoFillLocation = async () => {
-    setGeoLoading(true);
-    try {
-      const client = await api<Record<string, unknown>>(`/cm/clients/${slug}`);
-      // Try GBP coordinates, then geocode from address
-      if (client.location && typeof client.location === "string") {
-        // Use a free geocoding approach — search the location text
-        // For now, prompt user to get from Google Maps
-      }
-      // Check if we have a stored lat/lng from GBP
-      // TODO: Store lat/lng when GBP data is available
-    } catch (err) { console.error(err); }
-    setGeoLoading(false);
-  };
+    // Auto-load client coordinates if available
+    const endpoint = clientId ? `/cm/clients/${clientId}` : `/cm/clients/${slug}`;
+    api<Record<string, unknown>>(endpoint)
+      .then((client) => {
+        if (client.latitude && client.longitude) {
+          setCenterLat(String(client.latitude));
+          setCenterLng(String(client.longitude));
+        }
+      })
+      .catch(() => {});
+  }, [slug, clientId]);
 
   const runScan = async () => {
     if (!keyword || !centerLat || !centerLng) return;
@@ -527,15 +528,17 @@ function AuditsTab({ slug, domain }: { slug: string; domain: string }) {
   const [audits, setAudits] = useState<AuditResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditing, setAuditing] = useState(false);
+  const [auditUrl, setAuditUrl] = useState(`https://${domain}/`);
 
   useEffect(() => {
     api<AuditResult[]>(`/seo/clients/${slug}/audits`).then(setAudits).catch(() => []).finally(() => setLoading(false));
   }, [slug]);
 
   const runAudit = async () => {
+    if (!auditUrl.trim()) return;
     setAuditing(true);
     try {
-      await api(`/seo/clients/${slug}/audit`, { method: "POST", body: JSON.stringify({ url: `https://${domain}` }) });
+      await api(`/seo/clients/${slug}/audit`, { method: "POST", body: JSON.stringify({ url: auditUrl.trim() }) });
       setAudits(await api<AuditResult[]>(`/seo/clients/${slug}/audits`));
     } catch (err) { console.error(err); }
     setAuditing(false);
@@ -552,10 +555,14 @@ function AuditsTab({ slug, domain }: { slug: string; domain: string }) {
         Technical SEO audit checks the client's website for common issues that affect search rankings: page speed, meta tags, broken links, mobile-friendliness, and more.
         The score is 0-100 where 80+ is good. Run audits monthly to catch issues early.
       </p>
-      <div className="flex items-center gap-3 mb-4">
-        <Button size="sm" onClick={runAudit} disabled={auditing}>{auditing ? "Running audit..." : "Run Audit"}</Button>
-        <span className="text-xs text-dim">Audits https://{domain}</span>
+      <div className="flex items-center gap-2 mb-4">
+        <input value={auditUrl} onChange={(e) => setAuditUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && runAudit()}
+          placeholder={`https://${domain}/services`}
+          className="flex-1 max-w-lg px-3 py-2 rounded-md border border-border bg-surface text-foreground text-sm" />
+        <Button size="sm" onClick={runAudit} disabled={auditing || !auditUrl.trim()}>{auditing ? "Running..." : "Run Audit"}</Button>
       </div>
+      <p className="text-xs text-dim mb-4">Audit any page on the site — enter the full URL above. Common pages to audit: homepage, top service pages, about page, blog.</p>
       {audits.length === 0 ? (
         <div className="bg-surface border border-border rounded-md p-8 text-center text-sm text-muted">
           No audits yet. Click "Run Audit" to analyze the website for technical SEO issues.

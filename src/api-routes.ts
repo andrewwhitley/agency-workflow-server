@@ -1554,8 +1554,15 @@ export function apiRouter(engine: WorkflowEngine, knowledgeBase: KnowledgeBase, 
   router.post("/seo/clients/:slug/domain/snapshot", async (req, res) => {
     if (!seoService?.isAuthenticated()) { res.status(503).json({ error: "DataForSEO not configured" }); return; }
     try {
-      const config = loadClientConfig(req.params.slug);
-      const domain = config?.domain || (req.body as { domain?: string })?.domain;
+      // Try file config first, then DB client
+      let domain = loadClientConfig(req.params.slug)?.domain || (req.body as { domain?: string })?.domain;
+      if (!domain) {
+        const { rows } = await query("SELECT domain, company_website FROM cm_clients WHERE slug = $1", [req.params.slug]);
+        if (rows[0]) {
+          domain = (rows[0].domain as string) || ((rows[0].company_website as string) || "")
+            .replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+        }
+      }
       if (!domain) { res.status(400).json({ error: "Client has no domain configured" }); return; }
 
       const overview = await seoService.getDomainOverview(domain);

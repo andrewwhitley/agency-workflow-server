@@ -159,7 +159,7 @@ export function ClientDetailPage() {
 
       {section === "info" && <InfoTab client={client} onClientUpdate={(c) => setClient(c as Client)} />}
       {section === "services" && <ServicesSection clientId={client.id} />}
-      {section === "seo" && <ClientSeoTab clientSlug={client.slug} clientDomain={(client.domain || client.companyWebsite || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")} />}
+      {section === "seo" && <ClientSeoTab clientSlug={client.slug} clientDomain={(client.domain || client.companyWebsite || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "")} clientId={client.id} />}
       {section === "content" && <ClientContentTab clientSlug={client.slug} />}
       {section === "campaigns" && <CampaignsSection clientId={client.id} />}
       {section === "deliverables" && <MarketingPlanSection clientId={client.id} />}

@@ -130,11 +130,13 @@ const SECTIONS: SectionConfig[] = [
     ],
   },
   {
-    title: "Google Business Profile",
+    title: "Google Business Profile & Location",
     fields: [
       { key: "gbpUrl", label: "GBP URL" },
       { key: "gbpReviewLink", label: "Review Link" },
       { key: "gbpLocationId", label: "GBP Location ID" },
+      { key: "latitude", label: "Latitude", type: "number" },
+      { key: "longitude", label: "Longitude", type: "number" },
     ],
   },
   {

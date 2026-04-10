@@ -235,6 +235,7 @@ export function clientManagementRouter(): Router {
         "what_makes_us_unique",
         "demographics_gender", "demographics_age", "demographics_location",
         "demographics_income", "demographics_education", "demographics_pain_points",
+        "latitude", "longitude",
       ];
       for (const [key, val] of Object.entries(b)) {
         const snakeKey = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
