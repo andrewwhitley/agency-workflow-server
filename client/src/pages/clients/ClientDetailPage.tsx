@@ -171,6 +171,7 @@ export function ClientDetailPage() {
             <IntakeUploadSection clientId={client.id} onComplete={() => {}} />
             <ImportDocumentsSection clientId={client.id} onComplete={() => {}} />
             <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
+            <TranscriptIngestSection clientId={client.id} />
           </div>
 
           {/* Market Intelligence */}
@@ -649,6 +650,101 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
   );
 }
 
+// ── Discovery Call Transcript Ingest ─────────────────
+
+function TranscriptIngestSection({ clientId }: { clientId: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [result, setResult] = useState<{
+    fieldsUpdated: number;
+    entitiesCreated: Record<string, number>;
+    extracted: Record<string, unknown>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleIngest = async () => {
+    if (transcript.trim().length < 50) return;
+    setProcessing(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api<typeof result>(`/cm/clients/${clientId}/transcript-ingest`, {
+        method: "POST",
+        body: JSON.stringify({ transcript }),
+      });
+      setResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Processing failed");
+    }
+    setProcessing(false);
+  };
+
+  if (!isOpen) {
+    return (
+      <div className="flex items-center gap-3">
+        <Button size="sm" variant="outline" onClick={() => setIsOpen(true)}>
+          <MessageSquare className="h-3 w-3 mr-1.5" /> Import from Call Transcript
+        </Button>
+        <span className="text-xs text-dim">Paste a discovery call transcript to auto-extract client data</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-green-400" /> Discovery Call Transcript
+        </h3>
+        <Button size="sm" variant="ghost" onClick={() => { setIsOpen(false); setResult(null); setError(null); }}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <p className="text-xs text-dim">
+        Paste a discovery/sales call transcript. AI will extract USPs, mission, services, personas,
+        pain points, top questions, and more — auto-filling the client profile.
+      </p>
+      <textarea
+        value={transcript}
+        onChange={(e) => setTranscript(e.target.value)}
+        placeholder="Paste the full call transcript here..."
+        className="w-full min-h-[200px] text-sm bg-surface-2 text-foreground border border-border rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+      />
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={handleIngest} disabled={processing || transcript.trim().length < 50}>
+          {processing ? (
+            <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" /> Extracting data...</>
+          ) : (
+            <><Sparkles className="h-3 w-3 mr-1.5" /> Extract & Import</>
+          )}
+        </Button>
+        {processing && <span className="text-xs text-dim">This may take 15-30 seconds...</span>}
+        <span className="text-xs text-dim ml-auto">{transcript.length.toLocaleString()} chars</span>
+      </div>
+      {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
+      {result && (
+        <div className="text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2 text-success space-y-1">
+          <div className="font-medium">
+            ✓ Extracted {result.fieldsUpdated} fields
+            {Object.entries(result.entitiesCreated).length > 0 && (
+              <> + created {Object.entries(result.entitiesCreated).map(([k, v]) => `${v} ${k}`).join(", ")}</>
+            )}
+          </div>
+          {result.extracted && (
+            <details className="text-xs text-success/80">
+              <summary className="cursor-pointer">View extracted data</summary>
+              <pre className="mt-2 max-h-60 overflow-y-auto text-xs whitespace-pre-wrap bg-surface rounded p-2 text-foreground">
+                {JSON.stringify(result.extracted, null, 2)}
+              </pre>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Intake Template Upload Section ────────────────
 
 function IntakeUploadSection({ clientId, onComplete }: { clientId: number; onComplete: () => void }) {
@@ -863,7 +959,7 @@ function BrandStoryTab({ clientId, clientName }: { clientId: number; clientName:
   const [savingSection, setSavingSection] = useState(false);
   const [regenSectionLoading, setRegenSectionLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"brandscript" | "full">("brandscript");
+  const [viewMode, setViewMode] = useState<"brandscript" | "full">("full");
 
   // Research outline state
   const [researchUrl, setResearchUrl] = useState("");
@@ -1377,6 +1473,18 @@ ${sectionsHtml}
       {/* ═══ BRANDSCRIPT VIEW ═══ */}
       {viewMode === "brandscript" && (
         <>
+          {/* Staleness warning */}
+          {hasBrandScript && story?.generatedAt && (story as any)?.brandscriptGeneratedAt && new Date((story as any).brandscriptGeneratedAt) < new Date(story.generatedAt) && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-3 mb-4 flex items-center gap-3">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-300">
+                This BrandScript was generated before the full brand story was last updated. Consider regenerating to stay in sync.
+              </p>
+              <Button size="sm" variant="outline" onClick={handleGenerateScript} disabled={generatingScript} className="shrink-0">
+                {generatingScript ? "..." : "Regenerate"}
+              </Button>
+            </div>
+          )}
           {!hasBrandScript ? (
             <div className="border-2 border-dashed border-blue-500/30 rounded-lg bg-blue-500/5 p-8 text-center space-y-4">
               <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">

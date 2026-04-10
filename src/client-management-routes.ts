@@ -992,6 +992,188 @@ Return ONLY the JSON object, no markdown fences.`
   });
 
   // ════════════════════════════════════════════════════════
+  //  DISCOVERY CALL TRANSCRIPT INGEST
+  // ════════════════════════════════════════════════════════
+
+  /**
+   * POST /clients/:clientId/transcript-ingest
+   * Body: { transcript: string } — full text of a discovery call transcript
+   * Uses Claude to extract intake-style fields and updates the client profile.
+   * Returns: { extracted: Record<string, string>, fieldsUpdated: number, entitiesCreated: Record<string, number> }
+   */
+  router.post("/clients/:clientId/transcript-ingest", async (req, res) => {
+    const clientId = parseInt(String(req.params.clientId));
+    const { transcript } = req.body as { transcript?: string };
+    if (!transcript || transcript.trim().length < 50) {
+      res.status(400).json({ error: "transcript is required (at least 50 characters)" });
+      return;
+    }
+
+    try {
+      // Get client info for context
+      const { rows: clientRows } = await query("SELECT company_name, industry FROM cm_clients WHERE id = $1", [clientId]);
+      if (!clientRows[0]) { res.status(404).json({ error: "Client not found" }); return; }
+      const clientName = clientRows[0].company_name || "Unknown";
+      const industry = clientRows[0].industry || "Unknown";
+
+      // Use Claude to extract structured data from the transcript
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const anthropic = new Anthropic();
+
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        system: `You are an expert at extracting structured business data from discovery call transcripts. The client is ${clientName} in the ${industry} industry.
+
+Extract as many fields as possible from the transcript. Return a JSON object with these fields (omit any that can't be confidently extracted):
+
+{
+  "companyBackground": "How the company was started / founding story",
+  "missionStatement": "Company mission / purpose statement",
+  "coreValues": "Core values mentioned",
+  "uniqueSellingPoints": "What makes them unique / USPs / differentiators",
+  "guarantees": "Guarantees or pledges mentioned",
+  "targetAudience": "Description of ideal customers",
+  "painPoints": "Customer pain points discussed",
+  "services": ["Service 1", "Service 2", ...],
+  "serviceAreas": "Cities/regions they serve",
+  "competitors": ["Competitor 1", "Competitor 2", ...],
+  "testimonialQuotes": ["Direct client quote 1", "Quote 2", ...],
+  "topQuestionsCustomersAsk": ["Question 1", "Question 2", ...],
+  "marketingGoals": "Their marketing goals discussed",
+  "currentChallenges": "Current business challenges",
+  "brandVoice": "How they want to sound / their personality",
+  "pricing": "Pricing information mentioned",
+  "demographics": "Demographic info about their clients"
+}
+
+Only include fields where you can extract real data. Be specific — use actual names, numbers, and details from the transcript. Do not fabricate.`,
+        messages: [{ role: "user", content: `Here is the discovery call transcript:\n\n${transcript.slice(0, 30000)}` }],
+      });
+
+      // Parse Claude's response
+      const text = response.content[0].type === "text" ? response.content[0].text : "";
+      let extracted: Record<string, unknown> = {};
+      try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) extracted = JSON.parse(jsonMatch[0]);
+      } catch { /* parse failed */ }
+
+      if (Object.keys(extracted).length === 0) {
+        res.status(500).json({ error: "Failed to extract data from transcript. Please try again." });
+        return;
+      }
+
+      // Apply extracted data to client profile
+      let fieldsUpdated = 0;
+      const entitiesCreated: Record<string, number> = {};
+
+      // Update cm_clients direct fields
+      const clientUpdates: Record<string, string> = {};
+      if (extracted.companyBackground && typeof extracted.companyBackground === "string") { clientUpdates.company_background = extracted.companyBackground; fieldsUpdated++; }
+      if (extracted.missionStatement && typeof extracted.missionStatement === "string") { clientUpdates.mission_statement = extracted.missionStatement; fieldsUpdated++; }
+      if (extracted.coreValues && typeof extracted.coreValues === "string") { clientUpdates.core_values = extracted.coreValues; fieldsUpdated++; }
+      if (extracted.targetAudience && typeof extracted.targetAudience === "string") { clientUpdates.demographics_pain_points = extracted.painPoints as string || ""; fieldsUpdated++; }
+      if (extracted.brandVoice && typeof extracted.brandVoice === "string") { clientUpdates.what_makes_us_unique = extracted.uniqueSellingPoints as string || ""; fieldsUpdated++; }
+
+      if (Object.keys(clientUpdates).length > 0) {
+        const sets = Object.keys(clientUpdates).map((k, i) => `${k} = COALESCE(NULLIF($${i + 2}, ''), ${k})`);
+        await query(
+          `UPDATE cm_clients SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`,
+          [clientId, ...Object.values(clientUpdates)]
+        );
+      }
+
+      // Update content guidelines if USPs / voice extracted
+      if (extracted.uniqueSellingPoints || extracted.brandVoice) {
+        const guideUpdates: Record<string, string> = {};
+        if (extracted.uniqueSellingPoints) guideUpdates.unique_selling_points = String(extracted.uniqueSellingPoints);
+        if (extracted.brandVoice) guideUpdates.brand_voice = String(extracted.brandVoice);
+
+        const { rows: existingGuide } = await query("SELECT id FROM cm_content_guidelines WHERE client_id = $1", [clientId]);
+        if (existingGuide.length > 0) {
+          const sets = Object.keys(guideUpdates).map((k, i) => `${k} = COALESCE(NULLIF($${i + 2}, ''), ${k})`);
+          await query(`UPDATE cm_content_guidelines SET ${sets.join(", ")}, updated_at = NOW() WHERE client_id = $1`,
+            [clientId, ...Object.values(guideUpdates)]);
+        } else {
+          const cols = ["client_id", ...Object.keys(guideUpdates)];
+          const placeholders = cols.map((_, i) => `$${i + 1}`).join(", ");
+          await query(`INSERT INTO cm_content_guidelines (${cols.join(", ")}) VALUES (${placeholders})`,
+            [clientId, ...Object.values(guideUpdates)]);
+        }
+        fieldsUpdated += Object.keys(guideUpdates).length;
+      }
+
+      // Create services if extracted
+      if (Array.isArray(extracted.services)) {
+        let count = 0;
+        for (const svc of extracted.services) {
+          if (typeof svc !== "string" || !svc.trim()) continue;
+          const { rows: existing } = await query(
+            "SELECT 1 FROM cm_services WHERE client_id = $1 AND service_name = $2 LIMIT 1",
+            [clientId, svc.trim()]
+          );
+          if (existing.length === 0) {
+            await query(
+              "INSERT INTO cm_services (client_id, service_name, category, source) VALUES ($1, $2, 'Primary', 'transcript')",
+              [clientId, svc.trim()]
+            );
+            count++;
+          }
+        }
+        if (count > 0) entitiesCreated.services = count;
+      }
+
+      // Create competitors if extracted
+      if (Array.isArray(extracted.competitors)) {
+        let count = 0;
+        for (const comp of extracted.competitors) {
+          if (typeof comp !== "string" || !comp.trim()) continue;
+          const { rows: existing } = await query(
+            "SELECT 1 FROM cm_competitors WHERE client_id = $1 AND company_name = $2 LIMIT 1",
+            [clientId, comp.trim()]
+          );
+          if (existing.length === 0) {
+            await query(
+              "INSERT INTO cm_competitors (client_id, company_name, source) VALUES ($1, $2, 'transcript')",
+              [clientId, comp.trim()]
+            );
+            count++;
+          }
+        }
+        if (count > 0) entitiesCreated.competitors = count;
+      }
+
+      // Store top questions as intake_data for future brand story generation
+      if (Array.isArray(extracted.topQuestionsCustomersAsk) && extracted.topQuestionsCustomersAsk.length > 0) {
+        const { rows: storyRows } = await query(
+          "SELECT id, intake_data FROM cm_brand_story WHERE client_id = $1 LIMIT 1", [clientId]
+        );
+        const existingIntake = (storyRows[0]?.intake_data as Record<string, unknown>) || {};
+        existingIntake.topQuestionsCustomersAsk = (extracted.topQuestionsCustomersAsk as string[]).join("\n");
+        if (storyRows[0]) {
+          await query("UPDATE cm_brand_story SET intake_data = $1, updated_at = NOW() WHERE id = $2",
+            [JSON.stringify(existingIntake), storyRows[0].id]);
+        } else {
+          await query("INSERT INTO cm_brand_story (client_id, status, intake_data) VALUES ($1, 'draft', $2)",
+            [clientId, JSON.stringify(existingIntake)]);
+        }
+        fieldsUpdated++;
+      }
+
+      res.json({
+        extracted,
+        fieldsUpdated,
+        entitiesCreated,
+        transcriptLength: transcript.length,
+      });
+    } catch (err) {
+      console.error("Transcript ingest error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Transcript ingest failed" });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════
   //  INTAKE TEMPLATE — Excel upload
   // ════════════════════════════════════════════════════════
 
