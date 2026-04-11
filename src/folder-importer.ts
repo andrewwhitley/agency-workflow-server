@@ -565,11 +565,13 @@ async function writeToDatabase(
 
 /**
  * Download and read content from Google Drive file URLs/IDs.
- * Supports Google Docs (exported as text) and regular files (.docx, .xlsx).
+ * Uses the actual GoogleDriveService.readFile() method which handles
+ * Google Docs, Sheets, .docx, .xlsx, and PDFs.
  */
 export async function readFromDriveFiles(
   fileUrls: string[],
-  driveService: { exportDocAsText(fileId: string): Promise<string>; downloadFile(fileId: string): Promise<Buffer>; getFileMetadata(fileId: string): Promise<{ name: string; mimeType: string }> }
+  driveService: { readFile(fileId: string, mimeType: string): Promise<string> },
+  driveRaw: { files: { get(params: { fileId: string; fields: string }): Promise<{ data: { name?: string | null; mimeType?: string | null } }> } }
 ): Promise<{ files: string[]; texts: string[] }> {
   const files: string[] = [];
   const texts: string[] = [];
@@ -578,49 +580,35 @@ export async function readFromDriveFiles(
     const url = rawUrl.trim();
     if (!url) continue;
 
-    // Extract file ID from various URL formats
+    // Extract file ID from various Google Drive URL formats
     let fileId = url;
-    const docMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (docMatch) fileId = docMatch[1];
-    const spreadsheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-    if (spreadsheetMatch) fileId = spreadsheetMatch[1];
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) fileId = match[1];
+    const spreadMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (spreadMatch) fileId = spreadMatch[1];
     // Plain ID (no URL)
-    if (!url.includes("/")) fileId = url;
+    if (!url.includes("/") && url.length > 10) fileId = url;
 
     try {
-      const meta = await driveService.getFileMetadata(fileId);
-      const fileName = meta.name || fileId;
+      // Get file metadata to determine type and name
+      const meta = await driveRaw.files.get({ fileId, fields: "name,mimeType" });
+      const fileName = meta.data.name || fileId;
+      const mimeType = meta.data.mimeType || "application/octet-stream";
       files.push(fileName);
 
-      if (meta.mimeType === "application/vnd.google-apps.document") {
-        // Google Doc — export as plain text
-        const text = await driveService.exportDocAsText(fileId);
-        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
-      } else if (meta.mimeType === "application/vnd.google-apps.spreadsheet") {
-        // Google Sheet — export as xlsx and parse
-        // For now, export as CSV text
-        const text = await driveService.exportDocAsText(fileId);
-        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
-      } else if (fileName.endsWith(".docx")) {
-        const buf = await driveService.downloadFile(fileId);
-        const result = await mammoth.extractRawText({ buffer: buf });
-        if (result.value.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${result.value}`);
-      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-        const buf = await driveService.downloadFile(fileId);
-        const text = readXlsxFromBuffer(buf);
-        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
+      console.log(`[folder-import] Reading Drive file: ${fileName} (${mimeType})`);
+
+      // Use the service's readFile which handles all types
+      const text = await driveService.readFile(fileId, mimeType);
+      if (text.trim()) {
+        texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
       } else {
-        // Try downloading as binary and reading as docx
-        try {
-          const buf = await driveService.downloadFile(fileId);
-          const result = await mammoth.extractRawText({ buffer: buf });
-          if (result.value.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${result.value}`);
-        } catch {
-          console.warn(`[folder-import] Skipping unsupported file: ${fileName} (${meta.mimeType})`);
-        }
+        console.warn(`[folder-import] Empty content from: ${fileName}`);
       }
     } catch (err) {
-      console.error(`[folder-import] Failed to read Drive file ${fileId}:`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[folder-import] Failed to read Drive file ${fileId}: ${msg}`);
+      // Don't throw — continue with other files
     }
   }
 
@@ -650,10 +638,11 @@ function readXlsxFromBuffer(buf: Buffer): string {
 
 export async function extractDraftFromDrive(
   fileUrls: string[],
-  driveService: Parameters<typeof readFromDriveFiles>[1]
+  driveService: { readFile(fileId: string, mimeType: string): Promise<string> },
+  driveRaw: { files: { get(params: { fileId: string; fields: string }): Promise<{ data: { name?: string | null; mimeType?: string | null } }> } }
 ): Promise<{ files: string[]; totalTextLength: number; extracted: ExtractedClientData }> {
   console.log(`[folder-import] Reading ${fileUrls.length} Drive files...`);
-  const { files, texts } = await readFromDriveFiles(fileUrls, driveService);
+  const { files, texts } = await readFromDriveFiles(fileUrls, driveService, driveRaw);
 
   if (texts.length === 0) {
     throw new Error("No readable content found in the provided files");

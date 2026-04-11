@@ -1248,27 +1248,47 @@ Only include fields where you can extract real data. Be specific — use actual 
   //  DRAFT IMPORT — extract → review → approve workflow
   // ════════════════════════════════════════════════════════
 
-  /** Step 1: Extract from Google Drive file URLs → create draft */
+  /** Step 1: Extract from Google Drive file URLs or folder → create draft */
   router.post("/clients/:clientId/import-draft", async (req, res) => {
     const clientId = parseInt(String(req.params.clientId));
-    const { fileUrls, folderPath } = req.body as { fileUrls?: string[]; folderPath?: string };
+    const { fileUrls, folderPath, driveFolderId } = req.body as { fileUrls?: string[]; folderPath?: string; driveFolderId?: string };
 
-    if (!fileUrls?.length && !folderPath) {
-      res.status(400).json({ error: "fileUrls array or folderPath required" });
+    if (!fileUrls?.length && !folderPath && !driveFolderId) {
+      res.status(400).json({ error: "fileUrls array, driveFolderId, or folderPath required" });
       return;
     }
 
     try {
       let extraction;
-      if (fileUrls?.length) {
-        // Google Drive files
+      if (fileUrls?.length || driveFolderId) {
+        // Google Drive
         const authService = new GoogleAuthService();
         if (!authService.isAuthenticated()) {
           res.status(503).json({ error: "Google Drive not configured" });
           return;
         }
         const driveService = new GoogleDriveService(authService.getClient());
-        extraction = await extractDraftFromDrive(fileUrls, driveService as any);
+
+        let urls = fileUrls || [];
+
+        // If folder ID provided, list all files in it and add to urls
+        if (driveFolderId) {
+          const folderId = driveFolderId.includes("/") ? driveFolderId.match(/\/folders\/([a-zA-Z0-9_-]+)/)?.[1] || driveFolderId : driveFolderId;
+          const files = await driveService.listFiles(folderId);
+          urls = [...urls, ...files.map((f) => f.id)];
+          console.log(`[draft-import] Found ${files.length} files in Drive folder ${folderId}`);
+        }
+
+        if (urls.length === 0) {
+          res.status(400).json({ error: "No files found in the provided folder or URLs" });
+          return;
+        }
+
+        // Access the raw drive API for metadata lookups
+        const { google } = await import("googleapis");
+        const driveRaw = google.drive({ version: "v3", auth: authService.getClient() });
+
+        extraction = await extractDraftFromDrive(urls, driveService, driveRaw);
       } else {
         // Local folder
         extraction = await extractDraftFromFolder(folderPath!);

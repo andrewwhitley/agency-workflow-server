@@ -663,15 +663,23 @@ function AIDraftImportSection({ clientId, onComplete }: { clientId: number; onCo
   const [approved, setApproved] = useState(false);
 
   const handleExtract = async () => {
-    const urls = fileUrls.split("\n").map((u) => u.trim()).filter(Boolean);
-    if (urls.length === 0) return;
+    const lines = fileUrls.split("\n").map((u) => u.trim()).filter(Boolean);
+    if (lines.length === 0) return;
     setExtracting(true);
     setError(null);
     setDraft(null);
     try {
+      // Detect if any line is a folder link
+      const folderLinks = lines.filter((l) => l.includes("/folders/") || l.includes("folderview"));
+      const fileLinks = lines.filter((l) => !l.includes("/folders/") && !l.includes("folderview"));
+
+      const body: Record<string, unknown> = {};
+      if (fileLinks.length > 0) body.fileUrls = fileLinks;
+      if (folderLinks.length > 0) body.driveFolderId = folderLinks[0]; // use first folder
+
       const res = await api<{ draftId: string; extracted: Record<string, unknown>; filesProcessed: string[] }>(
         `/cm/clients/${clientId}/import-draft`,
-        { method: "POST", body: JSON.stringify({ fileUrls: urls }) }
+        { method: "POST", body: JSON.stringify(body) }
       );
       setDraft(res);
     } catch (e) {
@@ -730,13 +738,13 @@ function AIDraftImportSection({ clientId, onComplete }: { clientId: number; onCo
       ) : !draft ? (
         <>
           <p className="text-xs text-dim">
-            Paste Google Drive file URLs (one per line) — documents, spreadsheets, intake sheets, marketing guides, style guides, campaign briefs.
-            AI will read all files and extract structured client data for your review.
+            Paste Google Drive file or folder URLs (one per line). Supports documents, spreadsheets, uploaded .docx/.xlsx files, and entire folders.
+            AI will read all files, extract structured client data, and create a draft for your review before importing.
           </p>
           <textarea
             value={fileUrls}
             onChange={(e) => setFileUrls(e.target.value)}
-            placeholder={"https://docs.google.com/document/d/abc123\nhttps://docs.google.com/spreadsheets/d/xyz789\nhttps://drive.google.com/file/d/def456"}
+            placeholder={"https://drive.google.com/drive/folders/abc123\nhttps://docs.google.com/document/d/xyz789\nhttps://docs.google.com/spreadsheets/d/def456"}
             className="w-full min-h-[120px] text-sm bg-surface-2 text-foreground border border-border rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent font-mono"
           />
           <div className="flex items-center gap-3">
