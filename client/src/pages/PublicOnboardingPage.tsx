@@ -340,6 +340,43 @@ export function PublicOnboardingPage() {
     }
   };
 
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  /** Save progress without completing — can be called from any step */
+  const handleSave = async () => {
+    // Must have a client linked (either verified or new)
+    if (!data.clientId && !data.companyName.trim()) {
+      alert("Please enter a company name or client ID first.");
+      return;
+    }
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const numericId = verifiedNumericId || (data.clientId ? parseInt(data.clientId) : NaN);
+      const body: Record<string, unknown> = { intakeData: data };
+      if (!isNaN(numericId)) body.clientId = numericId;
+      else if (data.clientId) body.clientSlug = data.clientId;
+
+      const res = await fetch("/api/public/onboarding/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || "Save failed");
+      }
+      const result = await res.json();
+      if (result.clientId && !verifiedNumericId) setVerifiedNumericId(result.clientId);
+      setSaveMsg("Progress saved!");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      alert(`Failed to save: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+    setSaving(false);
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
@@ -762,9 +799,17 @@ export function PublicOnboardingPage() {
             <Button variant="ghost" onClick={goBack} disabled={step === 0} className="text-slate-400 hover:text-white">
               <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
-            <Button onClick={goNext} disabled={!canGoNext()} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
-              {step === 0 ? "Get Started" : "Continue"} <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+            <div className="flex items-center gap-3">
+              {saveMsg && <span className="text-xs text-emerald-400">{saveMsg}</span>}
+              {step > 0 && (
+                <Button variant="ghost" onClick={handleSave} disabled={saving} className="text-slate-400 hover:text-white border border-slate-600">
+                  <Save className="h-4 w-4 mr-1" /> {saving ? "Saving..." : "Save Progress"}
+                </Button>
+              )}
+              <Button onClick={goNext} disabled={!canGoNext()} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
+                {step === 0 ? "Get Started" : "Continue"} <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
