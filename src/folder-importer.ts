@@ -334,6 +334,22 @@ function nz(v: unknown): string | null {
   return s === "" ? null : s;
 }
 
+/** Safely parse a numeric value from a string that may contain text.
+ *  Extracts the first number found, returns null if none. */
+function safeInt(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  const match = s.match(/\d+/);
+  return match ? parseInt(match[0]) : null;
+}
+
+function safeFloat(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/[^0-9.]/g, "").trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
 async function writeToDatabase(
   clientId: number,
   data: ExtractedClientData,
@@ -358,19 +374,19 @@ async function writeToDatabase(
   if (nz(c.dateFounded)) clientFields.date_founded = c.dateFounded;
   if (nz(c.ein)) clientFields.ein = c.ein;
   if (nz(c.businessType)) clientFields.business_type = c.businessType;
-  if (nz(c.numberOfEmployees)) clientFields.number_of_employees = c.numberOfEmployees;
-  if (nz(c.numberOfCustomers)) clientFields.number_of_customers = c.numberOfCustomers;
-  if (nz(c.desiredNewClients)) clientFields.desired_new_clients = c.desiredNewClients;
-  if (nz(c.avgClientLifetimeValue)) clientFields.avg_client_lifetime_value = parseFloat(String(c.avgClientLifetimeValue).replace(/[^0-9.]/g, "")) || null;
-  if (nz(c.estimatedAnnualRevenue)) clientFields.estimated_annual_revenue = parseFloat(String(c.estimatedAnnualRevenue).replace(/[^0-9.]/g, "")) || null;
-  if (nz(c.targetRevenue)) clientFields.target_revenue = parseFloat(String(c.targetRevenue).replace(/[^0-9.]/g, "")) || null;
-  if (nz(c.currentMarketingSpend)) clientFields.current_marketing_spend = parseFloat(String(c.currentMarketingSpend).replace(/[^0-9.]/g, "")) || null;
+  if (nz(c.numberOfEmployees)) { const n = safeInt(c.numberOfEmployees); if (n) clientFields.number_of_employees = n; }
+  if (nz(c.numberOfCustomers)) { const n = safeInt(c.numberOfCustomers); if (n) clientFields.number_of_customers = n; }
+  if (nz(c.desiredNewClients)) { const n = safeInt(c.desiredNewClients); if (n) clientFields.desired_new_clients = n; }
+  if (nz(c.avgClientLifetimeValue)) { const n = safeFloat(c.avgClientLifetimeValue); if (n) clientFields.avg_client_lifetime_value = n; }
+  if (nz(c.estimatedAnnualRevenue)) { const n = safeFloat(c.estimatedAnnualRevenue); if (n) clientFields.estimated_annual_revenue = n; }
+  if (nz(c.targetRevenue)) { const n = safeFloat(c.targetRevenue); if (n) clientFields.target_revenue = n; }
+  if (nz(c.currentMarketingSpend)) { const n = safeFloat(c.currentMarketingSpend); if (n) clientFields.current_marketing_spend = n; }
   if (nz(c.crmSystem)) clientFields.crm_system = c.crmSystem;
   if (nz(c.domainRegistrar)) clientFields.domain_registrar = c.domainRegistrar;
   if (nz(c.businessHours)) clientFields.business_hours = c.businessHours;
   if (nz(c.timeZone)) clientFields.time_zone = c.timeZone;
   if (nz(c.paymentTypes)) clientFields.payment_types_accepted = c.paymentTypes;
-  if (nz(c.combinedYearsExperience)) clientFields.combined_years_experience = c.combinedYearsExperience;
+  if (nz(c.combinedYearsExperience)) { const n = safeInt(c.combinedYearsExperience); if (n) clientFields.combined_years_experience = n; }
   if (nz(c.missionStatement)) clientFields.mission_statement = c.missionStatement;
   if (nz(c.coreValues)) clientFields.core_values = c.coreValues;
   if (nz(c.companyBackground)) clientFields.company_background = c.companyBackground;
