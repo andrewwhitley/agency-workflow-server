@@ -1849,6 +1849,24 @@ Build recovery game plan with specific action items and timeline', 'Within 24 ho
     `,
   },
   {
+    id: "055_import_drafts",
+    sql: `
+      CREATE TABLE IF NOT EXISTS cm_import_drafts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        client_id INT NOT NULL REFERENCES cm_clients(id) ON DELETE CASCADE,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        source_type VARCHAR(50) NOT NULL DEFAULT 'google_drive',
+        source_files JSONB DEFAULT '[]',
+        extracted_data JSONB NOT NULL,
+        review_notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reviewed_at TIMESTAMPTZ,
+        reviewed_by VARCHAR(255)
+      );
+      CREATE INDEX IF NOT EXISTS idx_cm_import_drafts_client ON cm_import_drafts(client_id, status);
+    `,
+  },
+  {
     id: "054_client_coordinates",
     sql: `
       -- Lat/lng coordinates for client locations (used by heatmap auto-fill)

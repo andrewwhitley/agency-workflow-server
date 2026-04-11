@@ -561,7 +561,152 @@ async function writeToDatabase(
   result.tablesUpdated.push("cm_brand_story.intake_data");
 }
 
-// ── Main Export ──────────────────────────────────
+// ── Google Drive Reading ──────────────────────────
+
+/**
+ * Download and read content from Google Drive file URLs/IDs.
+ * Supports Google Docs (exported as text) and regular files (.docx, .xlsx).
+ */
+export async function readFromDriveFiles(
+  fileUrls: string[],
+  driveService: { exportDocAsText(fileId: string): Promise<string>; downloadFile(fileId: string): Promise<Buffer>; getFileMetadata(fileId: string): Promise<{ name: string; mimeType: string }> }
+): Promise<{ files: string[]; texts: string[] }> {
+  const files: string[] = [];
+  const texts: string[] = [];
+
+  for (const rawUrl of fileUrls) {
+    const url = rawUrl.trim();
+    if (!url) continue;
+
+    // Extract file ID from various URL formats
+    let fileId = url;
+    const docMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (docMatch) fileId = docMatch[1];
+    const spreadsheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (spreadsheetMatch) fileId = spreadsheetMatch[1];
+    // Plain ID (no URL)
+    if (!url.includes("/")) fileId = url;
+
+    try {
+      const meta = await driveService.getFileMetadata(fileId);
+      const fileName = meta.name || fileId;
+      files.push(fileName);
+
+      if (meta.mimeType === "application/vnd.google-apps.document") {
+        // Google Doc — export as plain text
+        const text = await driveService.exportDocAsText(fileId);
+        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
+      } else if (meta.mimeType === "application/vnd.google-apps.spreadsheet") {
+        // Google Sheet — export as xlsx and parse
+        // For now, export as CSV text
+        const text = await driveService.exportDocAsText(fileId);
+        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
+      } else if (fileName.endsWith(".docx")) {
+        const buf = await driveService.downloadFile(fileId);
+        const result = await mammoth.extractRawText({ buffer: buf });
+        if (result.value.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${result.value}`);
+      } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+        const buf = await driveService.downloadFile(fileId);
+        const text = readXlsxFromBuffer(buf);
+        if (text.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${text}`);
+      } else {
+        // Try downloading as binary and reading as docx
+        try {
+          const buf = await driveService.downloadFile(fileId);
+          const result = await mammoth.extractRawText({ buffer: buf });
+          if (result.value.trim()) texts.push(`\n\n========== FILE: ${fileName} ==========\n${result.value}`);
+        } catch {
+          console.warn(`[folder-import] Skipping unsupported file: ${fileName} (${meta.mimeType})`);
+        }
+      }
+    } catch (err) {
+      console.error(`[folder-import] Failed to read Drive file ${fileId}:`, err);
+    }
+  }
+
+  return { files, texts };
+}
+
+function readXlsxFromBuffer(buf: Buffer): string {
+  try {
+    const wb = XLSX.read(buf, { type: "buffer" });
+    const parts: string[] = [];
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: "" });
+      parts.push(`\n=== Sheet: ${sheetName} ===`);
+      for (const row of rows) {
+        const cells = (row as string[]).filter((c) => c !== "" && c !== null && c !== undefined);
+        if (cells.length > 0) parts.push(cells.join(" | "));
+      }
+    }
+    return parts.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+// ── Draft-based import (extract only, don't write to DB) ──
+
+export async function extractDraftFromDrive(
+  fileUrls: string[],
+  driveService: Parameters<typeof readFromDriveFiles>[1]
+): Promise<{ files: string[]; totalTextLength: number; extracted: ExtractedClientData }> {
+  console.log(`[folder-import] Reading ${fileUrls.length} Drive files...`);
+  const { files, texts } = await readFromDriveFiles(fileUrls, driveService);
+
+  if (texts.length === 0) {
+    throw new Error("No readable content found in the provided files");
+  }
+
+  const combinedText = texts.join("\n\n");
+  console.log(`[folder-import] Read ${files.length} files, ${combinedText.length} chars total`);
+  console.log(`[folder-import] Sending to Claude for extraction...`);
+
+  const extracted = await extractWithClaude(combinedText);
+  return { files, totalTextLength: combinedText.length, extracted };
+}
+
+export async function extractDraftFromFolder(
+  folderPath: string
+): Promise<{ files: string[]; totalTextLength: number; extracted: ExtractedClientData }> {
+  console.log(`[folder-import] Reading files from ${folderPath}...`);
+  const { files, texts } = await readAllFiles(folderPath);
+
+  if (texts.length === 0) {
+    throw new Error("No readable documents found in the folder (.docx, .xlsx)");
+  }
+
+  const combinedText = texts.join("\n\n");
+  console.log(`[folder-import] Read ${files.length} files, ${combinedText.length} chars total`);
+  console.log(`[folder-import] Sending to Claude for extraction...`);
+
+  const extracted = await extractWithClaude(combinedText);
+  return { files, totalTextLength: combinedText.length, extracted };
+}
+
+/**
+ * Apply an approved draft to the database.
+ * The extractedData may have been edited by the user during review.
+ */
+export async function applyApprovedDraft(
+  clientId: number,
+  extractedData: ExtractedClientData
+): Promise<FolderImportResult> {
+  const result: FolderImportResult = {
+    clientId,
+    filesProcessed: [],
+    totalTextLength: 0,
+    extracted: extractedData,
+    tablesUpdated: [],
+    warnings: [],
+  };
+
+  await writeToDatabase(clientId, extractedData, result);
+  return result;
+}
+
+// ── Main Export (legacy — direct import without draft) ──
 
 export async function importFromFolder(
   clientId: number,

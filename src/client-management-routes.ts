@@ -14,7 +14,7 @@ import { generateContentPillars, generateCustomerJourney, generateContentPlan, g
 import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection, researchOutlineFromUrl, RESEARCH_OUTLINE_FIELDS } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { importIntakeTemplate } from "./intake-importer.js";
-import { importFromFolder } from "./folder-importer.js";
+import { importFromFolder, extractDraftFromDrive, extractDraftFromFolder, applyApprovedDraft } from "./folder-importer.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
 
@@ -1242,6 +1242,142 @@ Only include fields where you can extract real data. Be specific — use actual 
       console.error("Folder import error:", err);
       res.status(500).json({ error: message });
     }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  DRAFT IMPORT — extract → review → approve workflow
+  // ════════════════════════════════════════════════════════
+
+  /** Step 1: Extract from Google Drive file URLs → create draft */
+  router.post("/clients/:clientId/import-draft", async (req, res) => {
+    const clientId = parseInt(String(req.params.clientId));
+    const { fileUrls, folderPath } = req.body as { fileUrls?: string[]; folderPath?: string };
+
+    if (!fileUrls?.length && !folderPath) {
+      res.status(400).json({ error: "fileUrls array or folderPath required" });
+      return;
+    }
+
+    try {
+      let extraction;
+      if (fileUrls?.length) {
+        // Google Drive files
+        const authService = new GoogleAuthService();
+        if (!authService.isAuthenticated()) {
+          res.status(503).json({ error: "Google Drive not configured" });
+          return;
+        }
+        const driveService = new GoogleDriveService(authService.getClient());
+        extraction = await extractDraftFromDrive(fileUrls, driveService as any);
+      } else {
+        // Local folder
+        extraction = await extractDraftFromFolder(folderPath!);
+      }
+
+      // Store as draft
+      const { rows } = await query(
+        `INSERT INTO cm_import_drafts (client_id, status, source_type, source_files, extracted_data)
+         VALUES ($1, 'draft', $2, $3, $4) RETURNING id, created_at`,
+        [clientId, fileUrls?.length ? "google_drive" : "folder",
+         JSON.stringify(extraction.files), JSON.stringify(extraction.extracted)]
+      );
+
+      res.json({
+        draftId: rows[0].id,
+        createdAt: rows[0].created_at,
+        filesProcessed: extraction.files,
+        totalTextLength: extraction.totalTextLength,
+        extracted: extraction.extracted,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Draft extraction failed";
+      console.error("Draft import error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** List drafts for a client */
+  router.get("/clients/:clientId/import-drafts", async (req, res) => {
+    try {
+      const { rows } = await query(
+        "SELECT id, status, source_type, source_files, created_at, reviewed_at FROM cm_import_drafts WHERE client_id = $1 ORDER BY created_at DESC LIMIT 20",
+        [req.params.clientId]
+      );
+      res.json(rowsToCamel(rows));
+    } catch (err) { res.status(500).json({ error: "Failed to list drafts" }); }
+  });
+
+  /** Get a specific draft with full extracted data */
+  router.get("/import-drafts/:draftId", async (req, res) => {
+    try {
+      const { rows } = await query("SELECT * FROM cm_import_drafts WHERE id = $1", [req.params.draftId]);
+      if (!rows[0]) { res.status(404).json({ error: "Draft not found" }); return; }
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed to get draft" }); }
+  });
+
+  /** Update draft extracted data (user edits during review) */
+  router.put("/import-drafts/:draftId", async (req, res) => {
+    const { extractedData, reviewNotes } = req.body;
+    try {
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      let i = 1;
+      if (extractedData) { sets.push(`extracted_data = $${i++}`); vals.push(JSON.stringify(extractedData)); }
+      if (reviewNotes !== undefined) { sets.push(`review_notes = $${i++}`); vals.push(reviewNotes); }
+      if (sets.length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+      vals.push(req.params.draftId);
+      const { rows } = await query(
+        `UPDATE cm_import_drafts SET ${sets.join(", ")} WHERE id = $${i} AND status = 'draft' RETURNING *`,
+        vals
+      );
+      if (!rows[0]) { res.status(404).json({ error: "Draft not found or already approved" }); return; }
+      res.json(toCamel(rows[0]));
+    } catch (err) { res.status(500).json({ error: "Failed to update draft" }); }
+  });
+
+  /** Step 2: Approve draft → write to all dashboard tables */
+  router.post("/import-drafts/:draftId/approve", async (req, res) => {
+    try {
+      const { rows: drafts } = await query(
+        "SELECT * FROM cm_import_drafts WHERE id = $1 AND status = 'draft'",
+        [req.params.draftId]
+      );
+      if (!drafts[0]) { res.status(404).json({ error: "Draft not found or already processed" }); return; }
+
+      const draft = drafts[0];
+      const extractedData = draft.extracted_data;
+
+      // Apply to database
+      const result = await applyApprovedDraft(draft.client_id, extractedData);
+
+      // Mark draft as approved
+      await query(
+        "UPDATE cm_import_drafts SET status = 'approved', reviewed_at = NOW(), reviewed_by = $1 WHERE id = $2",
+        [req.body?.reviewedBy || null, req.params.draftId]
+      );
+
+      res.json({
+        success: true,
+        draftId: req.params.draftId,
+        tablesUpdated: result.tablesUpdated,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Approval failed";
+      console.error("Draft approval error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /** Reject/discard a draft */
+  router.post("/import-drafts/:draftId/reject", async (req, res) => {
+    try {
+      await query(
+        "UPDATE cm_import_drafts SET status = 'rejected', reviewed_at = NOW(), review_notes = $1 WHERE id = $2",
+        [req.body?.reason || null, req.params.draftId]
+      );
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed to reject draft" }); }
   });
 
   // ════════════════════════════════════════════════════════

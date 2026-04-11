@@ -168,6 +168,7 @@ export function ClientDetailPage() {
           {/* Data Sources */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-dim uppercase tracking-wider">Data Sources</h3>
+            <AIDraftImportSection clientId={client.id} onComplete={() => {}} />
             <IntakeUploadSection clientId={client.id} onComplete={() => {}} />
             <ImportDocumentsSection clientId={client.id} onComplete={() => {}} />
             <IntakeResponsesSection clientId={client.id} clientSlug={client.slug} />
@@ -646,6 +647,204 @@ function ImportDocumentsSection({ clientId, onComplete }: { clientId: number; on
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── AI Draft Import (Google Drive Files → Review → Approve) ─────
+
+function AIDraftImportSection({ clientId, onComplete }: { clientId: number; onComplete: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [fileUrls, setFileUrls] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [draft, setDraft] = useState<{ draftId: string; extracted: Record<string, unknown>; filesProcessed: string[] } | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [approved, setApproved] = useState(false);
+
+  const handleExtract = async () => {
+    const urls = fileUrls.split("\n").map((u) => u.trim()).filter(Boolean);
+    if (urls.length === 0) return;
+    setExtracting(true);
+    setError(null);
+    setDraft(null);
+    try {
+      const res = await api<{ draftId: string; extracted: Record<string, unknown>; filesProcessed: string[] }>(
+        `/cm/clients/${clientId}/import-draft`,
+        { method: "POST", body: JSON.stringify({ fileUrls: urls }) }
+      );
+      setDraft(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Extraction failed");
+    }
+    setExtracting(false);
+  };
+
+  const handleApprove = async () => {
+    if (!draft) return;
+    setApproving(true);
+    try {
+      await api(`/cm/import-drafts/${draft.draftId}/approve`, { method: "POST" });
+      setApproved(true);
+      onComplete();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Approval failed");
+    }
+    setApproving(false);
+  };
+
+  const handleReject = async () => {
+    if (!draft) return;
+    await api(`/cm/import-drafts/${draft.draftId}/reject`, { method: "POST", body: JSON.stringify({ reason: "Rejected by user" }) }).catch(() => {});
+    setDraft(null);
+  };
+
+  if (!isOpen) {
+    return (
+      <div className="flex items-center gap-3">
+        <Button size="sm" variant="outline" onClick={() => setIsOpen(true)}>
+          <Sparkles className="h-3 w-3 mr-1.5" /> AI Document Import
+        </Button>
+        <span className="text-xs text-dim">Paste Google Drive file links → AI extracts → review & approve</span>
+      </div>
+    );
+  }
+
+  const ext = draft?.extracted as Record<string, unknown> | undefined;
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-accent" /> AI Document Import
+        </h3>
+        <Button size="sm" variant="ghost" onClick={() => { setIsOpen(false); setDraft(null); setError(null); setApproved(false); }}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {approved ? (
+        <div className="text-sm bg-success/10 border border-success/20 rounded-md px-4 py-3 text-success">
+          <strong>Import approved!</strong> Data has been written to the client profile. Refresh to see the changes.
+        </div>
+      ) : !draft ? (
+        <>
+          <p className="text-xs text-dim">
+            Paste Google Drive file URLs (one per line) — documents, spreadsheets, intake sheets, marketing guides, style guides, campaign briefs.
+            AI will read all files and extract structured client data for your review.
+          </p>
+          <textarea
+            value={fileUrls}
+            onChange={(e) => setFileUrls(e.target.value)}
+            placeholder={"https://docs.google.com/document/d/abc123\nhttps://docs.google.com/spreadsheets/d/xyz789\nhttps://drive.google.com/file/d/def456"}
+            className="w-full min-h-[120px] text-sm bg-surface-2 text-foreground border border-border rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-accent font-mono"
+          />
+          <div className="flex items-center gap-3">
+            <Button size="sm" onClick={handleExtract} disabled={extracting || !fileUrls.trim()}>
+              {extracting ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" /> Extracting (30-60s)...</> : <><Sparkles className="h-3 w-3 mr-1.5" /> Extract & Create Draft</>}
+            </Button>
+            <span className="text-xs text-dim">{fileUrls.split("\n").filter((u) => u.trim()).length} file(s)</span>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Draft Review */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-xs text-amber-300">
+            Draft ready for review. Check the extracted data below, then approve to import into the client profile.
+          </div>
+
+          <div className="text-xs text-dim mb-2">
+            Extracted from {draft.filesProcessed.length} files: {draft.filesProcessed.slice(0, 5).join(", ")}
+            {draft.filesProcessed.length > 5 && ` +${draft.filesProcessed.length - 5} more`}
+          </div>
+
+          {/* Extracted data preview — organized by section */}
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            {ext?.company && (
+              <DraftSection title="Company Info" data={ext.company as Record<string, unknown>}
+                highlights={["companyName", "legalName", "industry", "location", "companyBackground", "whatMakesUsUnique"]} />
+            )}
+            {Array.isArray(ext?.services) && (ext.services as Array<Record<string, unknown>>).length > 0 && (
+              <DraftListSection title={`Services (${(ext.services as unknown[]).length})`}
+                items={(ext.services as Array<Record<string, unknown>>).map((s) => `[${s.tier || "primary"}] ${s.name}${s.description ? ` — ${String(s.description).slice(0, 80)}` : ""}`)} />
+            )}
+            {Array.isArray(ext?.contacts) && (ext.contacts as Array<Record<string, unknown>>).length > 0 && (
+              <DraftListSection title={`Team Members (${(ext.contacts as unknown[]).length})`}
+                items={(ext.contacts as Array<Record<string, unknown>>).map((c) => `${c.name} — ${c.role || ""}${c.credentials ? ` (${c.credentials})` : ""}`)} />
+            )}
+            {Array.isArray(ext?.buyerPersonas) && (ext.buyerPersonas as Array<Record<string, unknown>>).length > 0 && (
+              <DraftListSection title={`Buyer Personas (${(ext.buyerPersonas as unknown[]).length})`}
+                items={(ext.buyerPersonas as Array<Record<string, unknown>>).map((p) => `${p.name}${p.painPoints ? ` — ${String(p.painPoints).slice(0, 80)}` : ""}`)} />
+            )}
+            {Array.isArray(ext?.competitors) && (ext.competitors as Array<Record<string, unknown>>).length > 0 && (
+              <DraftListSection title={`Competitors (${(ext.competitors as unknown[]).length})`}
+                items={(ext.competitors as Array<Record<string, unknown>>).map((c) => `${c.name}${c.url ? ` (${c.url})` : ""}`)} />
+            )}
+            {ext?.contentGuidelines && (
+              <DraftSection title="Content Guidelines" data={ext.contentGuidelines as Record<string, unknown>}
+                highlights={["brandVoice", "tone", "writingStyle", "dosAndDonts", "uniqueSellingPoints"]} />
+            )}
+            {Array.isArray(ext?.campaigns) && (ext.campaigns as Array<Record<string, unknown>>).length > 0 && (
+              <DraftListSection title={`Campaigns (${(ext.campaigns as unknown[]).length})`}
+                items={(ext.campaigns as Array<Record<string, unknown>>).map((c) => `${c.name} (${c.platform || c.type || ""})`)} />
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 pt-3 border-t border-border">
+            <Button size="sm" onClick={handleApprove} disabled={approving}>
+              {approving ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" /> Importing...</> : <><Check className="h-3 w-3 mr-1.5" /> Approve & Import</>}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleReject}>
+              <X className="h-3 w-3 mr-1.5" /> Reject
+            </Button>
+          </div>
+        </>
+      )}
+
+      {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</div>}
+    </div>
+  );
+}
+
+function DraftSection({ title, data, highlights }: { title: string; data: Record<string, unknown>; highlights?: string[] }) {
+  const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return null;
+  const top = highlights ? entries.filter(([k]) => highlights.includes(k)) : entries.slice(0, 6);
+  const rest = highlights ? entries.filter(([k]) => !highlights.includes(k)) : entries.slice(6);
+
+  return (
+    <div className="bg-surface-2 rounded-md p-3">
+      <h4 className="text-xs font-semibold text-dim uppercase tracking-wider mb-2">{title}</h4>
+      <div className="space-y-1">
+        {top.map(([k, v]) => (
+          <div key={k} className="text-xs">
+            <span className="text-dim font-medium">{k.replace(/([A-Z])/g, " $1").trim()}:</span>{" "}
+            <span className="text-foreground">{String(v).slice(0, 200)}{String(v).length > 200 ? "..." : ""}</span>
+          </div>
+        ))}
+        {rest.length > 0 && (
+          <details className="text-xs">
+            <summary className="text-dim cursor-pointer">+{rest.length} more fields</summary>
+            <div className="mt-1 space-y-1">
+              {rest.map(([k, v]) => (
+                <div key={k}><span className="text-dim font-medium">{k.replace(/([A-Z])/g, " $1").trim()}:</span> <span className="text-foreground">{String(v).slice(0, 150)}</span></div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DraftListSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="bg-surface-2 rounded-md p-3">
+      <h4 className="text-xs font-semibold text-dim uppercase tracking-wider mb-2">{title}</h4>
+      <ul className="text-xs text-foreground space-y-0.5 list-disc pl-4">
+        {items.slice(0, 10).map((item, i) => <li key={i}>{item}</li>)}
+        {items.length > 10 && <li className="text-dim">+{items.length - 10} more</li>}
+      </ul>
     </div>
   );
 }
