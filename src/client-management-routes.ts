@@ -14,6 +14,7 @@ import { generateContentPillars, generateCustomerJourney, generateContentPlan, g
 import { generateBrandStory, generateBrandScript, regenerateBrandStorySection, updateBrandStorySection, researchOutlineFromUrl, RESEARCH_OUTLINE_FIELDS } from "./brand-story-generator.js";
 import { importClientData } from "./client-import.js";
 import { importIntakeTemplate } from "./intake-importer.js";
+import { importFromFolder } from "./folder-importer.js";
 import { GoogleDriveService } from "./google-drive.js";
 import { GoogleAuthService } from "./google-auth.js";
 
@@ -1219,6 +1220,26 @@ Only include fields where you can extract real data. Be specific — use actual 
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("Intake import error:", err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════
+  //  FOLDER IMPORT — AI-powered bulk document import
+  // ════════════════════════════════════════════════════════
+
+  router.post("/clients/:clientId/import-folder", async (req, res) => {
+    const clientId = parseInt(String(req.params.clientId));
+    const { folderPath } = req.body as { folderPath?: string };
+    if (!folderPath) { res.status(400).json({ error: "folderPath is required" }); return; }
+    if (isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
+
+    try {
+      const result = await importFromFolder(clientId, folderPath);
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Folder import failed";
+      console.error("Folder import error:", err);
       res.status(500).json({ error: message });
     }
   });
