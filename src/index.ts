@@ -385,69 +385,166 @@ async function main(): Promise<void> {
       } catch (err) { console.error("Public verify client error:", err); res.status(500).json({ error: "Failed" }); }
     });
 
-    // Public onboarding: submit intake
+    // Public onboarding: submit intake — writes to ALL dashboard tables
     app.post("/api/public/onboarding/submit", async (req, res) => {
       try {
         const { intakeData, clientId, clientSlug } = req.body;
         if (!intakeData) { res.status(400).json({ error: "intakeData is required" }); return; }
+        const d = intakeData as Record<string, string>;
+        const nz = (v: unknown) => (v && String(v).trim()) ? String(v).trim() : null;
 
         let resolvedClientId: number;
 
         if (clientId || clientSlug) {
-          // Find existing client
           const lookup = clientId
             ? await dbQuery("SELECT id FROM cm_clients WHERE id = $1", [clientId])
             : await dbQuery("SELECT id FROM cm_clients WHERE slug = $1", [clientSlug]);
           if (!lookup.rows[0]) { res.status(404).json({ error: "Client not found" }); return; }
           resolvedClientId = lookup.rows[0].id;
-
-          // Update client fields from intake data
-          const updates: string[] = [];
-          const vals: unknown[] = [];
-          let idx = 1;
-          const fieldMap: Record<string, string> = {
-            companyName: "company_name",
-            industry: "industry",
-            location: "location",
-            domain: "domain",
-            companyWebsite: "company_website",
-            companyPhone: "company_phone",
-            companyEmail: "company_email",
-            yearFounded: "year_founded",
-            numberOfEmployees: "number_of_employees",
-          };
-          for (const [jsKey, dbKey] of Object.entries(fieldMap)) {
-            const val = intakeData[jsKey];
-            if (val !== undefined && val !== null && val !== "") {
-              updates.push(`${dbKey} = $${idx++}`);
-              vals.push(val);
-            }
-          }
-          if (updates.length > 0) {
-            vals.push(resolvedClientId);
-            await dbQuery(`UPDATE cm_clients SET ${updates.join(", ")} WHERE id = $${idx}`, vals);
-          }
         } else {
-          // Create new client
-          const name = intakeData.companyName || "New Client";
+          const name = d.companyName || "New Client";
           const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
           const { rows: newClient } = await dbQuery(
-            `INSERT INTO cm_clients (slug, company_name, industry, location, domain, company_website, status)
-             VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id`,
-            [slug, name, intakeData.industry || null, intakeData.location || null, intakeData.domain || null, intakeData.companyWebsite || null]
+            "INSERT INTO cm_clients (slug, company_name, status) VALUES ($1, $2, 'active') RETURNING id",
+            [slug, name]
           );
           resolvedClientId = newClient[0].id;
         }
 
-        // Upsert brand_story with intake_data
-        const { rows: existing } = await dbQuery(
+        // ── 1. cm_clients — company info, mission, story, background ──
+        const clientFieldMap: Record<string, string> = {
+          companyName: "company_name", industry: "industry", location: "location",
+          companyWebsite: "company_website", companyPhone: "company_phone",
+          companyEmail: "company_email", yearFounded: "year_founded",
+          numberOfEmployees: "number_of_employees",
+          foundingStory: "company_background", businessGoals: "mission_statement",
+          serviceSeasonality: "service_seasonality",
+          currentMarketingSpend: "current_marketing_spend",
+          whatMakesUsUnique: "what_makes_us_unique",
+        };
+        const clientUpdates: string[] = [];
+        const clientVals: unknown[] = [];
+        let ci = 1;
+        for (const [jsKey, dbKey] of Object.entries(clientFieldMap)) {
+          const val = nz(d[jsKey]);
+          if (val) { clientUpdates.push(`${dbKey} = COALESCE(NULLIF($${ci}, ''), ${dbKey})`); clientVals.push(val); ci++; }
+        }
+        if (clientUpdates.length > 0) {
+          clientVals.push(resolvedClientId);
+          await dbQuery(`UPDATE cm_clients SET ${clientUpdates.join(", ")}, updated_at = NOW() WHERE id = $${ci}`, clientVals);
+        }
+
+        // ── 2. cm_content_guidelines — brand voice, colors, fonts, USPs ──
+        const guideFields: Record<string, string> = {
+          brandTone: "tone", brandPersonality: "brand_voice", brandColors: "brand_colors",
+          brandFonts: "fonts", designInspiration: "design_inspiration",
+          dosAndDonts: "dos_and_donts", logoDescription: "logo_guidelines",
+          howYouHelp: "unique_selling_points", guarantees: "guarantees",
+          contentTopicsExcited: "focus_topics", expertiseAreas: "content_themes",
+          visualStyle: "image_source_notes",
+          preferredContentFormats: "writing_style_guide",
+        };
+        const guideUpdates: Record<string, string> = {};
+        for (const [jsKey, dbKey] of Object.entries(guideFields)) {
+          const val = nz(d[jsKey]);
+          if (val) guideUpdates[dbKey] = val;
+        }
+        if (Object.keys(guideUpdates).length > 0) {
+          const { rows: existGuide } = await dbQuery("SELECT id FROM cm_content_guidelines WHERE client_id = $1", [resolvedClientId]);
+          if (existGuide.length > 0) {
+            const sets = Object.keys(guideUpdates).map((k, i) => `${k} = COALESCE(NULLIF($${i + 2}, ''), ${k})`).join(", ");
+            await dbQuery(`UPDATE cm_content_guidelines SET ${sets}, updated_at = NOW() WHERE client_id = $1`,
+              [resolvedClientId, ...Object.values(guideUpdates)]);
+          } else {
+            const cols = ["client_id", ...Object.keys(guideUpdates)];
+            const phs = cols.map((_, i) => `$${i + 1}`).join(", ");
+            await dbQuery(`INSERT INTO cm_content_guidelines (${cols.join(", ")}) VALUES (${phs})`,
+              [resolvedClientId, ...Object.values(guideUpdates)]);
+          }
+        }
+
+        // ── 3. cm_competitors ──
+        for (let i = 1; i <= 3; i++) {
+          const name = nz(d[`competitor${i}Name`]);
+          if (!name) continue;
+          const { rows: ex } = await dbQuery(
+            "SELECT 1 FROM cm_competitors WHERE client_id = $1 AND company_name = $2 LIMIT 1",
+            [resolvedClientId, name]
+          );
+          if (ex.length === 0) {
+            await dbQuery(
+              "INSERT INTO cm_competitors (client_id, rank, company_name, url, usps, source) VALUES ($1, $2, $3, $4, $5, 'intake')",
+              [resolvedClientId, i, name, nz(d[`competitor${i}Website`]), nz(d[`competitor${i}Strengths`])]
+            );
+          }
+        }
+
+        // ── 4. cm_buyer_personas — general demographics + ideal customer ──
+        const hasCustomerData = nz(d.idealCustomerDescription) || nz(d.customerFrustrations) || nz(d.customerGender);
+        if (hasCustomerData) {
+          const personaName = nz(d.idealCustomerDescription)?.slice(0, 50) || "Ideal Customer";
+          const { rows: ex } = await dbQuery(
+            "SELECT 1 FROM cm_buyer_personas WHERE client_id = $1 AND persona_name = $2 LIMIT 1",
+            [resolvedClientId, personaName]
+          );
+          if (ex.length === 0) {
+            await dbQuery(
+              `INSERT INTO cm_buyer_personas (client_id, persona_name, gender, age, location, income_level,
+               pain_points, gains, needs_description, source)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'intake')`,
+              [resolvedClientId, personaName, nz(d.customerGender),
+               nz(d.customerAge) ? parseInt(d.customerAge) || null : null,
+               nz(d.customerLocation), nz(d.customerIncome),
+               nz(d.customerFrustrations), nz(d.customerDesires),
+               nz(d.idealCustomerDescription)]
+            );
+          }
+        }
+
+        // ── 5. cm_testimonials ──
+        for (let i = 1; i <= 3; i++) {
+          const text = nz(d[`testimonial${i}`]);
+          if (!text) continue;
+          const { rows: ex } = await dbQuery(
+            "SELECT 1 FROM cm_testimonials WHERE client_id = $1 AND testimonial_text = $2 LIMIT 1",
+            [resolvedClientId, text]
+          );
+          if (ex.length === 0) {
+            await dbQuery(
+              "INSERT INTO cm_testimonials (client_id, testimonial_text, author, sort_order) VALUES ($1, $2, $3, $4)",
+              [resolvedClientId, text, nz(d[`testimonial${i}Author`]), i]
+            );
+          }
+        }
+
+        // ── 6. cm_services — from primaryServices text ──
+        const servicesText = nz(d.primaryServices);
+        if (servicesText) {
+          const serviceNames = servicesText.split(/[,\n]+/).map((s: string) => s.trim()).filter(Boolean);
+          for (let i = 0; i < serviceNames.length; i++) {
+            const svcName = serviceNames[i];
+            const { rows: ex } = await dbQuery(
+              "SELECT 1 FROM cm_services WHERE client_id = $1 AND service_name = $2 LIMIT 1",
+              [resolvedClientId, svcName]
+            );
+            if (ex.length === 0) {
+              await dbQuery(
+                "INSERT INTO cm_services (client_id, service_name, category, tier, sort_order, source) VALUES ($1, $2, 'Primary', 'primary', $3, 'intake')",
+                [resolvedClientId, svcName, i + 1]
+              );
+            }
+          }
+        }
+
+        // ── 7. cm_brand_story.intake_data — ALSO store the raw intake for brand story generation context ──
+        const { rows: storyExists } = await dbQuery(
           "SELECT id FROM cm_brand_story WHERE client_id = $1 ORDER BY created_at DESC LIMIT 1",
           [resolvedClientId]
         );
-        if (existing[0]) {
+        if (storyExists[0]) {
           await dbQuery(
             "UPDATE cm_brand_story SET intake_data = $1, intake_submitted_at = NOW(), updated_at = NOW() WHERE id = $2",
-            [JSON.stringify(intakeData), existing[0].id]
+            [JSON.stringify(intakeData), storyExists[0].id]
           );
         } else {
           await dbQuery(
