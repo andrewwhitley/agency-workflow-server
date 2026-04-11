@@ -294,19 +294,94 @@ async function main(): Promise<void> {
       } catch (err) { console.error("Public brand story error:", err); res.status(500).json({ error: "Failed" }); }
     });
 
-    // Public onboarding: verify client
+    // Public onboarding: verify client + return existing data for pre-fill
     app.get("/api/public/onboarding/verify/:clientId", async (req, res) => {
       try {
         const param = req.params.clientId;
         const isNumeric = /^\d+$/.test(param);
         const { rows } = await dbQuery(
           isNumeric
-            ? "SELECT id, slug, company_name FROM cm_clients WHERE id = $1"
-            : "SELECT id, slug, company_name FROM cm_clients WHERE slug = $1",
+            ? "SELECT * FROM cm_clients WHERE id = $1"
+            : "SELECT * FROM cm_clients WHERE slug = $1",
           [isNumeric ? parseInt(param) : param]
         );
         if (!rows[0]) { res.json({ found: false }); return; }
-        res.json({ found: true, companyName: rows[0].company_name, numericId: rows[0].id });
+        const c = rows[0] as Record<string, unknown>;
+        const clientId = c.id as number;
+
+        // Fetch related data for pre-filling
+        const [guideRes, personasRes, competitorsRes, storyRes] = await Promise.all([
+          dbQuery("SELECT * FROM cm_content_guidelines WHERE client_id = $1 LIMIT 1", [clientId]),
+          dbQuery("SELECT * FROM cm_buyer_personas WHERE client_id = $1 ORDER BY created_at", [clientId]),
+          dbQuery("SELECT * FROM cm_competitors WHERE client_id = $1 ORDER BY rank", [clientId]),
+          dbQuery("SELECT intake_data FROM cm_brand_story WHERE client_id = $1 LIMIT 1", [clientId]),
+        ]);
+        const g = (guideRes.rows[0] || {}) as Record<string, unknown>;
+        const personas = personasRes.rows as Record<string, unknown>[];
+        const competitors = competitorsRes.rows as Record<string, unknown>[];
+        const existingIntake = (storyRes.rows[0]?.intake_data || {}) as Record<string, unknown>;
+
+        // Map existing data to intake field names for pre-filling
+        const prefill: Record<string, string> = {};
+        if (c.company_name) prefill.companyName = String(c.company_name);
+        if (c.industry) prefill.industry = String(c.industry);
+        if (c.company_website) prefill.companyWebsite = String(c.company_website);
+        if (c.company_phone) prefill.companyPhone = String(c.company_phone);
+        if (c.company_email) prefill.companyEmail = String(c.company_email);
+        if (c.location) prefill.location = String(c.location);
+        if (c.year_founded) prefill.yearFounded = String(c.year_founded);
+        if (c.number_of_employees) prefill.numberOfEmployees = String(c.number_of_employees);
+        if (c.company_background) prefill.foundingStory = String(c.company_background);
+        if (c.mission_statement) prefill.businessGoals = String(c.mission_statement);
+        if (c.what_makes_us_unique) prefill.whyTrustYou = String(c.what_makes_us_unique);
+        if (c.service_seasonality) prefill.serviceSeasonality = String(c.service_seasonality);
+        if (c.current_marketing_spend) prefill.currentMarketingSpend = String(c.current_marketing_spend);
+        if (c.slogans_mottos) prefill.directCTA = String(c.slogans_mottos);
+        if (c.core_values) prefill.brandPersonality = String(c.core_values);
+
+        // Content guidelines
+        if (g.tone) prefill.brandTone = String(g.tone);
+        if (g.brand_voice) prefill.brandPersonality = prefill.brandPersonality || String(g.brand_voice);
+        if (g.brand_colors) prefill.brandColors = String(g.brand_colors);
+        if (g.fonts) prefill.brandFonts = String(g.fonts);
+        if (g.design_inspiration) prefill.designInspiration = String(g.design_inspiration);
+        if (g.dos_and_donts) prefill.dosAndDonts = String(g.dos_and_donts);
+        if (g.unique_selling_points) prefill.howYouHelp = String(g.unique_selling_points);
+        if (g.guarantees) prefill.guarantees = String(g.guarantees);
+        if (g.focus_topics) prefill.contentTopicsExcited = String(g.focus_topics);
+
+        // Competitors
+        for (let i = 0; i < Math.min(competitors.length, 3); i++) {
+          const comp = competitors[i];
+          prefill[`competitor${i + 1}Name`] = String(comp.company_name || "");
+          prefill[`competitor${i + 1}Website`] = String(comp.url || "");
+          prefill[`competitor${i + 1}Strengths`] = String(comp.usps || comp.description || "");
+        }
+
+        // Personas → customer description
+        if (personas.length > 0) {
+          const p = personas[0];
+          if (p.needs_description) prefill.idealCustomerDescription = String(p.needs_description);
+          if (p.pain_points) prefill.customerFrustrations = String(p.pain_points);
+          if (p.gender) prefill.customerGender = String(p.gender);
+          if (p.age) prefill.customerAge = String(p.age);
+          if (p.income_level) prefill.customerIncome = String(p.income_level);
+          if (p.location) prefill.customerLocation = String(p.location);
+          if (p.gains) prefill.customerDesires = String(p.gains);
+        }
+
+        // Merge with any existing intake_data (intake_data takes priority since it's user-provided)
+        const merged = { ...prefill };
+        for (const [k, v] of Object.entries(existingIntake)) {
+          if (v && String(v).trim()) merged[k] = String(v);
+        }
+
+        res.json({
+          found: true,
+          companyName: c.company_name,
+          numericId: clientId,
+          prefill: merged,
+        });
       } catch (err) { console.error("Public verify client error:", err); res.status(500).json({ error: "Failed" }); }
     });
 

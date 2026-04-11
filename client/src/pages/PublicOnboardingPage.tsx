@@ -299,9 +299,19 @@ export function PublicOnboardingPage() {
       const res = await fetch(`/api/public/onboarding/verify/${data.clientId}`);
       const result = await res.json();
       if (result.found) {
-        upd("clientVerified", true);
-        upd("clientName", result.companyName || "");
-        if (result.companyName && !data.companyName) upd("companyName", result.companyName);
+        // Pre-fill the form with existing client data
+        const updates: Partial<IntakeData> = {
+          clientVerified: true as unknown as string,
+          clientName: result.companyName || "",
+        };
+        if (result.prefill) {
+          for (const [key, val] of Object.entries(result.prefill)) {
+            if (key in defaultData && val && String(val).trim()) {
+              (updates as Record<string, unknown>)[key] = String(val);
+            }
+          }
+        }
+        setData((prev) => ({ ...prev, ...updates } as IntakeData));
         setVerifiedNumericId(result.numericId);
       } else {
         alert("Client ID not found. Please check and try again, or leave blank to create a new client.");
