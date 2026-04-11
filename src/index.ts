@@ -488,15 +488,22 @@ async function main(): Promise<void> {
             [resolvedClientId, personaName]
           );
           if (ex.length === 0) {
+            // Build needs_description with all customer details including age range
+            const descParts = [
+              nz(d.idealCustomerDescription),
+              nz(d.customerAge) && `Age: ${d.customerAge}`,
+              nz(d.customerFeelsBefore) && `Before: ${d.customerFeelsBefore}`,
+              nz(d.customerFeelsAfter) && `After: ${d.customerFeelsAfter}`,
+            ].filter(Boolean).join("\n");
+
             await dbQuery(
-              `INSERT INTO cm_buyer_personas (client_id, persona_name, gender, age, location, income_level,
+              `INSERT INTO cm_buyer_personas (client_id, persona_name, gender, location, income_level,
                pain_points, gains, needs_description, source)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'intake')`,
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'intake')`,
               [resolvedClientId, personaName, nz(d.customerGender),
-               nz(d.customerAge) ? parseInt(d.customerAge) || null : null,
                nz(d.customerLocation), nz(d.customerIncome),
                nz(d.customerFrustrations), nz(d.customerDesires),
-               nz(d.idealCustomerDescription)]
+               descParts || nz(d.idealCustomerDescription)]
             );
           }
         }
